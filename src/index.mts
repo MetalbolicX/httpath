@@ -36,7 +36,7 @@ const reloadHub = new EventEmitter();
 const sseClients = new Set<any>();
 
 // Parse CLI arguments
-function parseCliArgs() {
+const parseCliArgs = () => {
   const { values } = parseArgs({
     args: process.argv.slice(2),
     options: {
@@ -64,19 +64,19 @@ function parseCliArgs() {
     rootPath: resolve(values.path as string),
     reload: Boolean(values.reload),
   };
-}
+};
 
 // Security: Prevent directory traversal
-function isPathSafe(requestedPath: string, rootPath: string): boolean {
+const isPathSafe = (requestedPath: string, rootPath: string): boolean => {
   const resolvedPath = resolve(rootPath, requestedPath);
   return resolvedPath.startsWith(rootPath);
-}
+};
 
 // Generate directory listing HTML
-async function generateDirectoryListing(
+const generateDirectoryListing = async (
   dirPath: string,
   urlPath: string,
-): Promise<string> {
+): Promise<string> => {
   try {
     const entries = await readdir(dirPath);
     const files: Array<{ name: string; isDir: boolean }> = [];
@@ -136,10 +136,10 @@ async function generateDirectoryListing(
   } catch (error) {
     return "<h1>Error reading directory</h1>";
   }
-}
+};
 
 // Inject reload script into HTML content
-function injectReloadScript(htmlContent: string): string {
+const injectReloadScript = (htmlContent: string): string => {
   const reloadScript = `
 <script>
 (function() {
@@ -166,10 +166,10 @@ function injectReloadScript(htmlContent: string): string {
   } else {
     return htmlContent + reloadScript;
   }
-}
+};
 
 // Setup file watcher for hot-reload
-function setupFileWatcher(rootPath: string) {
+const setupFileWatcher = (rootPath: string) => {
   try {
     const watcher = watch(
       rootPath,
@@ -191,10 +191,10 @@ function setupFileWatcher(rootPath: string) {
   } catch (error) {
     console.warn("File watching not supported on this system");
   }
-}
+};
 
 // Handle Server-Sent Events for reload
-function handleReloadEndpoint(req: any, res: any) {
+const handleReloadEndpoint = (req: any, res: any) => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -217,10 +217,10 @@ function handleReloadEndpoint(req: any, res: any) {
   req.on("aborted", () => {
     sseClients.delete(res);
   });
-}
+};
 
 // Broadcast reload signal to all connected clients
-function broadcastReload() {
+const broadcastReload = () => {
   for (const client of sseClients) {
     try {
       client.write("data: reload\n\n");
@@ -228,14 +228,14 @@ function broadcastReload() {
       sseClients.delete(client);
     }
   }
-}
+};
 
 // Main server function
-async function createFileServer(config: {
+const createFileServer = async (config: {
   port: number;
   rootPath: string;
   reload: boolean;
-}) {
+}) => {
   const { port, rootPath, reload } = config;
 
   // Setup hot-reload if enabled
@@ -319,7 +319,7 @@ async function createFileServer(config: {
   });
 
   // Find available port
-  async function findAvailablePort(startPort: number): Promise<number> {
+  const findAvailablePort = async (startPort: number): Promise<number> => {
     return new Promise((resolve, reject) => {
       const testServer = createServer();
       testServer.listen(startPort, () => {
@@ -334,7 +334,7 @@ async function createFileServer(config: {
         }
       });
     });
-  }
+  };
 
   const availablePort = await findAvailablePort(port);
 
@@ -368,10 +368,10 @@ async function createFileServer(config: {
   });
 
   return server;
-}
+};
 
 // Main execution
-async function main() {
+const main = async () => {
   try {
     const config = parseCliArgs();
     await createFileServer(config);
@@ -379,7 +379,7 @@ async function main() {
     console.error("❌ Error starting server:", error);
     process.exit(1);
   }
-}
+};
 
 // Run the server if this file is executed directly
 if (
