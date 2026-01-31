@@ -1,0 +1,71 @@
+{
+  "name": "HTTPath Test JSON",
+  "description": "Test JSON file for verifying MIME type handling in HTTPath server",
+  "version": "1.0.0",
+  "server": {
+    "name": "HTTPath",
+    "features": [
+      "Static file streaming",
+      "MIME type mapping",
+      "Directory indexing",
+      "Path sanitization",
+      "Hot-reload functionality",
+      "CLI argument parsing",
+      "Automatic port finding",
+      "Graceful shutdown"
+    ],
+    "supported_mime_types": {
+      "html": "text/html",
+      "css": "text/css",
+      "js": "text/javascript",
+      "json": "application/json",
+      "png": "image/png",
+      "jpg": "image/jpeg",
+      "svg": "image/svg+xml",
+      "txt": "text/plain",
+      "xml": "application/xml",
+      "pdf": "application/pdf"
+    }
+  },
+  "test_data": {
+    "status": "success",
+    "timestamp": "2024-01-01T00:00:00Z",
+    "test_results": {
+      "mime_type_test": true,
+      "json_parsing_test": true,
+      "security_test": true,
+      "hot_reload_test": true
+    },
+    "sample_array": [
+      "item1",
+      "item2",
+      "item3"
+    ],
+    "nested_object": {
+      "level1": {
+        "level2": {
+          "message": "JSON nesting works correctly"
+        }
+      }
+    }
+  },
+  "usage_examples": [
+    "node dist/index.mjs",
+    "node dist/index.mjs --port 3000",
+    "node dist/index.mjs --reload",
+    "node dist/index.mjs --path ./public --port 8080 --reload"
+  ],
+  "unicode_test": "🚀 HTTPath supports Unicode! 中文 العربية ñáéíóú",
+  "special_characters": "Special chars: !@#$%^&*()[]{}|\\:;\"'<>,.?/~`",
+  "boolean_values": {
+    "is_working": true,
+    "has_errors": false
+  },
+  "numeric_values": {
+    "integer": 42,
+    "float": 3.14159,
+    "negative": -123,
+    "zero": 0
+  },
+  "null_value": null
+}

@@ -1,0 +1,109 @@
+{
+  "message": "Hello from HTTPath Demo Server!",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "server": {
+    "name": "HTTPath",
+    "version": "0.1.0",
+    "description": "A minimalist Node.js file server with hot-reload capabilities",
+    "author": "José Martínez Santana"
+  },
+  "features": [
+    {
+      "name": "Static File Streaming",
+      "description": "Efficient file serving using Node.js streams",
+      "status": "active"
+    },
+    {
+      "name": "MIME Type Detection",
+      "description": "Automatic content-type detection for common file types",
+      "status": "active"
+    },
+    {
+      "name": "Directory Indexing",
+      "description": "Beautiful directory listings with navigation",
+      "status": "active"
+    },
+    {
+      "name": "Path Sanitization",
+      "description": "Built-in security against directory traversal attacks",
+      "status": "active"
+    },
+    {
+      "name": "Hot-Reload",
+      "description": "Automatic browser refresh when files change",
+      "status": "conditional"
+    }
+  ],
+  "stats": {
+    "requestsServed": 1247,
+    "uptime": "3h 42m 15s",
+    "memoryUsage": "28.4 MB",
+    "filesServed": 156,
+    "directoriesListed": 23,
+    "hotReloadConnections": 2
+  },
+  "supportedMimeTypes": {
+    ".html": "text/html",
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain",
+    ".pdf": "application/pdf",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2"
+  },
+  "configuration": {
+    "port": 8080,
+    "rootPath": "./demo",
+    "hotReload": true,
+    "security": {
+      "pathTraversalProtection": true,
+      "inputSanitization": true,
+      "directoryListingEnabled": true
+    }
+  },
+  "testResults": {
+    "securityTests": {
+      "pathTraversal": "blocked",
+      "directoryEscape": "blocked",
+      "maliciousInput": "sanitized"
+    },
+    "performanceTests": {
+      "averageResponseTime": "12ms",
+      "concurrentConnections": 50,
+      "throughput": "2.3MB/s"
+    },
+    "functionalTests": {
+      "staticFileServing": "passed",
+      "directoryIndexing": "passed",
+      "hotReload": "passed",
+      "mimeTypeDetection": "passed"
+    }
+  },
+  "demoData": {
+    "colors": ["#667eea", "#4CAF50", "#ff9800", "#e91e63", "#9c27b0"],
+    "randomFacts": [
+      "HTTPath uses Server-Sent Events for hot-reload functionality",
+      "The server automatically finds available ports if the default is busy",
+      "Directory listings are generated dynamically with navigation support",
+      "All file paths are sanitized to prevent security vulnerabilities"
+    ],
+    "sampleArray": [
+      {"id": 1, "name": "index.html", "type": "file"},
+      {"id": 2, "name": "styles.css", "type": "file"},
+      {"id": 3, "name": "assets", "type": "directory"},
+      {"id": 4, "name": "demo.js", "type": "file"}
+    ]
+  },
+  "meta": {
+    "generatedAt": "2024-01-15T10:30:00.000Z",
+    "apiVersion": "1.0",
+    "dataFormat": "JSON",
+    "encoding": "UTF-8",
+    "source": "HTTPath Demo Server"
+  }
+}

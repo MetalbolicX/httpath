@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTPath Demo - Feature Showcase</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="hero">
+            <h1>🚀 HTTPath Demo</h1>
+            <p class="subtitle">A minimalist Node.js file server with hot-reload capabilities</p>
+            <div class="status-badge" id="serverStatus">
+                <span class="status-dot"></span>
+                Server Running
+            </div>
+        </header>
+
+        <section class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📁</div>
+                <h3>Static File Serving</h3>
+                <p>Efficient streaming of all file types with proper MIME type detection</p>
+                <div class="feature-demo">
+                    <a href="sample-image.png" class="demo-link">View Image</a>
+                    <a href="sample-data.json" class="demo-link">View JSON</a>
+                    <a href="styles.css" class="demo-link">View CSS</a>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📂</div>
+                <h3>Directory Indexing</h3>
+                <p>Beautiful directory listings with navigation and file type detection</p>
+                <div class="feature-demo">
+                    <a href="assets/" class="demo-link">Browse Assets Folder</a>
+                    <a href="../" class="demo-link">Go Up Directory</a>
+                </div>
+            </div>
+
+            <div class="feature-card hot-reload-card">
+                <div class="feature-icon">🔄</div>
+                <h3>Hot-Reload</h3>
+                <p id="reloadStatus">Enable with --reload flag for automatic browser refresh</p>
+                <div class="feature-demo">
+                    <button id="testReloadBtn" class="demo-button">Test Hot-Reload</button>
+                    <div id="reloadInfo" class="reload-info"></div>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <h3>Security Features</h3>
+                <p>Built-in protection against directory traversal and path injection</p>
+                <div class="feature-demo">
+                    <a href="../../../etc/passwd" class="demo-link security-test">Test Security (403)</a>
+                    <a href="/..%2F..%2Fwindows%2Fsystem32" class="demo-link security-test">Test Path Traversal</a>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Auto Port Detection</h3>
+                <p>Automatically finds available ports when default is busy</p>
+                <div class="feature-demo">
+                    <span class="demo-info">Current Port: <strong id="currentPort">8080</strong></span>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3>MIME Type Support</h3>
+                <p>Automatic content-type detection for 20+ file formats</p>
+                <div class="feature-demo">
+                    <div class="mime-examples">
+                        <span class="mime-type">.html → text/html</span>
+                        <span class="mime-type">.js → text/javascript</span>
+                        <span class="mime-type">.css → text/css</span>
+                        <span class="mime-type">.json → application/json</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="usage-section">
+            <h2>💻 Usage Examples</h2>
+            <div class="command-examples">
+                <div class="command-block">
+                    <div class="command-header">Basic Usage</div>
+                    <pre><code># Start server on port 8080
+httpath
+
+# Custom port and directory
+httpath --port 3000 --path ./public</code></pre>
+                </div>
+
+                <div class="command-block">
+                    <div class="command-header">Development Mode</div>
+                    <pre><code># Enable hot-reload for development
+httpath --reload
+
+# Full development setup
+httpath --port 3000 --path ./src --reload</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="live-demo">
+            <h2>🎮 Live Demo Features</h2>
+
+            <div class="demo-controls">
+                <button id="changeColorBtn" class="demo-button primary">Change Theme Color</button>
+                <button id="addElementBtn" class="demo-button">Add Dynamic Element</button>
+                <button id="fetchDataBtn" class="demo-button">Fetch JSON Data</button>
+            </div>
+
+            <div id="demoResults" class="demo-results">
+                <div class="demo-message">
+                    Try the buttons above to see dynamic features in action!
+                    <br>
+                    <small>If hot-reload is enabled, try editing this HTML file to see instant updates.</small>
+                </div>
+            </div>
+        </section>
+
+        <section class="performance-info">
+            <h2>📊 Server Information</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">Requests Served</div>
+                    <div class="info-value" id="requestCount">-</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Uptime</div>
+                    <div class="info-value" id="uptime">-</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Hot-Reload Status</div>
+                    <div class="info-value" id="hotReloadStatus">-</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">Node.js Version</div>
+                    <div class="info-value" id="nodeVersion">-</div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p></p>
+                <strong>HTTPath</strong> - Made with ❤️ by
+                <a href="https://github.com/MetalbolicX" target="_blank">José Martínez Santana</a>
+            </p>
+            <div class="footer-links">
+                <a href="https://github.com/MetalbolicX/httpath" target="_blank">GitHub</a>
+                <a href="https://www.npmjs.com/package/httpath" target="_blank">NPM</a>
+                <a href="../test/index.html">Test Suite</a>
+            </div>
+        </footer>
+    </div>
+
+    <script src="demo.js"></script>
+
+    <!-- This script will be automatically modified by HTTPath when hot-reload is enabled -->
+    <script>
+        // Display current timestamp
+        const timestamp = new Date().toLocaleString();
+        console.log(`HTTPath demo loaded at: ${timestamp}`);
+
+        // Show current port in URL
+        const currentPort = window.location.port || '80';
+        const portElement = document.getElementById('currentPort');
+        if (portElement) {
+            portElement.textContent = currentPort;
+        }
+
+        // Check for hot-reload capability
+        if (typeof EventSource !== 'undefined') {
+            const reloadStatus = document.getElementById('reloadStatus');
+            const hotReloadStatus = document.getElementById('hotReloadStatus');
+
+            // Check if reload endpoint exists by making a quick test
+            fetch('/__reload__', { method: 'HEAD' })
+                .then(() => {
+                    if (reloadStatus) {
+                        reloadStatus.innerHTML = '✅ Hot-reload is <strong>ACTIVE</strong> - Try editing this file!';
+                        reloadStatus.className += ' active';
+                    }
+                    if (hotReloadStatus) {
+                        hotReloadStatus.textContent = 'Active';
+                        hotReloadStatus.className += ' active';
+                    }
+                })
+                .catch(() => {
+                    if (reloadStatus) {
+                        reloadStatus.innerHTML = '⚠️ Hot-reload is <strong>DISABLED</strong> - Use --reload flag';
+                    }
+                    if (hotReloadStatus) {
+                        hotReloadStatus.textContent = 'Disabled';
+                        hotReloadStatus.className += ' disabled';
+                    }
+                });
+        }
+
+        // Simple uptime counter
+        const startTime = Date.now();
+        const uptimeElement = document.getElementById('uptime');
+        if (uptimeElement) {
+            setInterval(() => {
+                const uptime = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(uptime / 60);
+                const seconds = uptime % 60;
+                uptimeElement.textContent = `${minutes}m ${seconds}s`;
+            }, 1000);
+        }
+
+        // Display Node.js version (approximation based on features)
+        const nodeVersionElement = document.getElementById('nodeVersion');
+        if (nodeVersionElement) {
+            // This is just for demo purposes - real version would need server-side data
+            nodeVersionElement.textContent = 'v18+';
+        }
+    </script>
+</body>
+</html>

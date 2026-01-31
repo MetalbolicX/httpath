@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTPath Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .feature {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        ul {
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 HTTPath File Server Test Page</h1>
+
+        <div class="status success">
+            ✅ Server is running successfully!
+        </div>
+
+        <div class="feature">
+            <h3>Features Implemented:</h3>
+            <ul>
+                <li>✅ Static file streaming</li>
+                <li>✅ MIME type mapping</li>
+                <li>✅ Directory indexing</li>
+                <li>✅ Path sanitization (security)</li>
+                <li>✅ Hot-reload functionality</li>
+                <li>✅ CLI argument parsing</li>
+                <li>✅ Automatic port finding</li>
+                <li>✅ Graceful shutdown</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🔄 Hot-Reload Test</h3>
+            <p class="info">
+                If hot-reload is enabled (--reload flag), this page should automatically refresh when you save changes to any file in the served directory.
+            </p>
+            <p>Try editing this file and saving it - the page should reload automatically!</p>
+            <p><strong>Last modified:</strong> <span id="timestamp"></span></p>
+        </div>
+
+        <div class="test-section">
+            <h3>📁 Directory Navigation</h3>
+            <p>Test the directory indexing feature:</p>
+            <ul>
+                <li><a href="/">Go to root directory</a></li>
+                <li><a href="../">Go up one level</a></li>
+                <li><a href="./assets/">Visit assets folder</a> (if it exists)</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🛡️ Security Test</h3>
+            <p>The server should block these malicious requests:</p>
+            <ul>
+                <li><a href="/../../../etc/passwd">Try to access /etc/passwd</a> (should get 403)</li>
+                <li><a href="/..\\windows\\system32">Try directory traversal</a> (should get 403)</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>📄 MIME Type Test</h3>
+            <p>These links should be served with correct content types:</p>
+            <ul>
+                <li><a href="./test.css">CSS file</a> (create one to test)</li>
+                <li><a href="./test.js">JavaScript file</a> (create one to test)</li>
+                <li><a href="./test.json">JSON file</a> (create one to test)</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 Usage Examples</h3>
+            <pre>
+# Start server on default port (8080)
+node dist/index.mjs
+
+# Start with custom port
+node dist/index.mjs --port 3000
+
+# Start with hot-reload enabled
+node dist/index.mjs --reload
+
+# Start serving a different directory
+node dist/index.mjs --path /path/to/your/files
+
+# Combined options
+node dist/index.mjs --port 3000 --path ./public --reload
+            </pre>
+        </div>
+    </div>
+
+    <script>
+        // Display current timestamp
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+
+        // Simple test to verify JavaScript execution
+        console.log('HTTPath test page loaded successfully!');
+
+        // If hot-reload is active, this will be overridden by the injected script
+        console.log('Hot-reload script:', typeof EventSource !== 'undefined' ? 'Available' : 'Not available');
+    </script>
+</body>
+</html>

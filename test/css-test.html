@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS MIME Type Test - HTTPath</title>
+    <link rel="stylesheet" href="./test.css">
+</head>
+<body>
+    <div class="test-container pulse">
+        <h1>🎨 CSS MIME Type Test</h1>
+
+        <div class="success-message">
+            If you can see this styled page with animations and colors,
+            the CSS file is being served with the correct MIME type!
+        </div>
+
+        <div class="info-box">
+            <strong>Test Details:</strong>
+            <ul>
+                <li>CSS file: <code>test.css</code></li>
+                <li>Expected MIME type: <code>text/css</code></li>
+                <li>Features tested: Colors, animations, responsive design</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <strong>What you should see:</strong>
+            <ul>
+                <li>✅ Gradient background</li>
+                <li>✅ Semi-transparent containers</li>
+                <li>✅ Pulsing animation on this container</li>
+                <li>✅ Custom fonts and styling</li>
+                <li>✅ Proper layout and spacing</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <strong>Navigation:</strong>
+            <ul>
+                <li><a href="./index.html" style="color: #fff;">Back to main test page</a></li>
+                <li><a href="./test.js" style="color: #fff;">View JavaScript test file</a></li>
+                <li><a href="./test.json" style="color: #fff;">View JSON test file</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Verify CSS loaded by checking computed styles
+        setTimeout(() => {
+            const container = document.querySelector('.test-container');
+            const styles = window.getComputedStyle(container);
+            const hasAnimation = styles.animationName !== 'none';
+
+            if (hasAnimation) {
+                console.log('✅ CSS animation detected - MIME type test passed!');
+            } else {
+                console.log('❌ CSS animation not detected - check MIME type');
+            }
+        }, 100);
+    </script>
+</body>
+</html>
