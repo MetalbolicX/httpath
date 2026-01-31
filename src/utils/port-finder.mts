@@ -1,10 +1,9 @@
 // Port finder utility module
-import { createServer } from "http";
+import { createServer } from "node:http";
 import type { PortFinderOptions, Result } from "../types/index.mjs";
 import {
   success,
   failure,
-  tryCatchAsync,
   mapToNetworkError,
   isSuccess,
 } from "./result-pattern.mjs";

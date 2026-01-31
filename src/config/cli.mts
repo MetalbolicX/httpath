@@ -1,13 +1,8 @@
 // CLI argument parsing module
-import { parseArgs } from "util";
-import { resolve } from "path";
-import type { ServerConfig, CliOptions, Result } from "../types/index.mjs";
-import {
-  success,
-  failure,
-  tryCatch,
-  mapToConfigurationError,
-} from "../utils/result-pattern.mjs";
+import { parseArgs } from "node:util";
+import { resolve } from "node:path";
+import type { ServerConfig, Result } from "../types/index.mjs";
+import { tryCatch, mapToConfigurationError } from "../utils/result-pattern.mjs";
 
 /**
  * Default configuration values

@@ -1,19 +1,14 @@
 // HTTP server service with request handling
-import { createServer, Server } from "http";
-import { join, extname } from "path";
+import { createServer, Server } from "node:http";
+import { join, extname } from "node:path";
 import type {
   ServerConfig,
   ServerInstance,
   HttpRequest,
   HttpResponse,
-  PortFinderOptions,
-  Result,
 } from "../types/index.mjs";
 import { validatePath } from "../security/path-validator.mjs";
-import {
-  getMimeTypeFromFilename,
-  isTextMimeType,
-} from "../constants/mime-types.mjs";
+import { getMimeTypeFromFilename } from "../constants/mime-types.mjs";
 import {
   generateDirectoryListing,
   fileExists,
@@ -26,8 +21,6 @@ import { HotReloadService } from "./hot-reload.mjs";
 import { createLogger } from "../utils/logger.mjs";
 import { findAvailablePort } from "../utils/port-finder.mjs";
 import {
-  success,
-  failure,
   tryCatchAsync,
   mapToNetworkError,
   isSuccess,

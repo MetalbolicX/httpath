@@ -1,7 +1,7 @@
 // File system operations service
-import { readdir, stat, readFile, access } from "fs/promises";
-import { createReadStream } from "fs";
-import { join, extname, basename } from "path";
+import { readdir, stat, readFile, access } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { join, extname } from "node:path";
 import type {
   FileEntry,
   DirectoryListingOptions,

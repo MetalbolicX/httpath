@@ -27,7 +27,7 @@ export type Result<T, E = Error> = Success<T> | Failure<E>;
 /**
  * Create a success result
  */
-export const success = <T>(data: T): Success<T> => ({
+export const success = <T,>(data: T): Success<T> => ({
   success: true,
   data,
 });
@@ -35,7 +35,7 @@ export const success = <T>(data: T): Success<T> => ({
 /**
  * Create a failure result
  */
-export const failure = <E = Error>(error: E): Failure<E> => ({
+export const failure = <E = Error,>(error: E): Failure<E> => ({
   success: false,
   error,
 });
@@ -43,23 +43,21 @@ export const failure = <E = Error>(error: E): Failure<E> => ({
 /**
  * Type guard to check if result is success
  */
-export const isSuccess = <T, E>(result: Result<T, E>): result is Success<T> => {
-  return result.success === true;
-};
+export const isSuccess = <T, E>(result: Result<T, E>): result is Success<T> =>
+  result.success === true;
 
 /**
  * Type guard to check if result is failure
  */
-export const isFailure = <T, E>(result: Result<T, E>): result is Failure<E> => {
-  return result.success === false;
-};
+export const isFailure = <T, E>(result: Result<T, E>): result is Failure<E> =>
+  result.success === false;
 
 /**
  * Wrap a synchronous function that might throw
  */
 export const tryCatch = <T, E = Error>(
   fn: () => T,
-  errorMapper?: (error: unknown) => E
+  errorMapper?: (error: unknown) => E,
 ): Result<T, E> => {
   try {
     const data = fn();
@@ -75,7 +73,7 @@ export const tryCatch = <T, E = Error>(
  */
 export const tryCatchAsync = async <T, E = Error>(
   fn: () => Promise<T>,
-  errorMapper?: (error: unknown) => E
+  errorMapper?: (error: unknown) => E,
 ): Promise<Result<T, E>> => {
   try {
     const data = await fn();
@@ -91,7 +89,7 @@ export const tryCatchAsync = async <T, E = Error>(
  */
 export const map = <T, U, E>(
   result: Result<T, E>,
-  mapper: (value: T) => U
+  mapper: (value: T) => U,
 ): Result<U, E> => {
   if (isSuccess(result)) {
     return success(mapper(result.data));
@@ -104,7 +102,7 @@ export const map = <T, U, E>(
  */
 export const mapAsync = async <T, U, E>(
   result: Result<T, E>,
-  mapper: (value: T) => Promise<U>
+  mapper: (value: T) => Promise<U>,
 ): Promise<Result<U, E>> => {
   if (isSuccess(result)) {
     try {
@@ -122,7 +120,7 @@ export const mapAsync = async <T, U, E>(
  */
 export const mapError = <T, E, F>(
   result: Result<T, E>,
-  mapper: (error: E) => F
+  mapper: (error: E) => F,
 ): Result<T, F> => {
   if (isFailure(result)) {
     return failure(mapper(result.error));
@@ -135,7 +133,7 @@ export const mapError = <T, E, F>(
  */
 export const chain = <T, U, E>(
   result: Result<T, E>,
-  mapper: (value: T) => Result<U, E>
+  mapper: (value: T) => Result<U, E>,
 ): Result<U, E> => {
   if (isSuccess(result)) {
     return mapper(result.data);
@@ -148,7 +146,7 @@ export const chain = <T, U, E>(
  */
 export const chainAsync = async <T, U, E>(
   result: Result<T, E>,
-  mapper: (value: T) => Promise<Result<U, E>>
+  mapper: (value: T) => Promise<Result<U, E>>,
 ): Promise<Result<U, E>> => {
   if (isSuccess(result)) {
     return await mapper(result.data);
@@ -162,7 +160,7 @@ export const chainAsync = async <T, U, E>(
 export const match = <T, U, E>(
   result: Result<T, E>,
   onSuccess: (value: T) => U,
-  onFailure: (error: E) => U
+  onFailure: (error: E) => U,
 ): U => {
   if (isSuccess(result)) {
     return onSuccess(result.data);
@@ -176,7 +174,7 @@ export const match = <T, U, E>(
 export const matchAsync = async <T, U, E>(
   result: Result<T, E>,
   onSuccess: (value: T) => Promise<U>,
-  onFailure: (error: E) => Promise<U>
+  onFailure: (error: E) => Promise<U>,
 ): Promise<U> => {
   if (isSuccess(result)) {
     return await onSuccess(result.data);
@@ -209,7 +207,7 @@ export const unwrapOr = <T, E>(result: Result<T, E>, defaultValue: T): T => {
  */
 export const unwrapOrElse = <T, E>(
   result: Result<T, E>,
-  getDefault: (error: E) => T
+  getDefault: (error: E) => T,
 ): T => {
   if (isSuccess(result)) {
     return result.data;
@@ -236,7 +234,9 @@ export const all = <T, E>(results: Result<T, E>[]): Result<T[], E> => {
 /**
  * Combine multiple Results, collecting all errors
  */
-export const allSettled = <T, E>(results: Result<T, E>[]): {
+export const allSettled = <T, E>(
+  results: Result<T, E>[],
+): {
   successes: T[];
   failures: E[];
 } => {
@@ -273,25 +273,21 @@ export const any = <T, E>(results: Result<T, E>[]): Result<T, E> => {
 /**
  * Filter successful results
  */
-export const filterSuccess = <T, E>(results: Result<T, E>[]): T[] => {
-  return results
-    .filter(isSuccess)
-    .map(result => result.data);
-};
+export const filterSuccess = <T, E>(results: Result<T, E>[]): T[] =>
+  results.filter(isSuccess).map((result) => result.data);
 
 /**
  * Filter failed results
  */
-export const filterFailure = <T, E>(results: Result<T, E>[]): E[] => {
-  return results
-    .filter(isFailure)
-    .map(result => result.error);
-};
+export const filterFailure = <T, E>(results: Result<T, E>[]): E[] =>
+  results.filter(isFailure).map((result) => result.error);
 
 /**
  * Partition results into successes and failures
  */
-export const partition = <T, E>(results: Result<T, E>[]): {
+export const partition = <T, E>(
+  results: Result<T, E>[],
+): {
   successes: Success<T>[];
   failures: Failure<E>[];
 } => {
@@ -314,7 +310,7 @@ export const partition = <T, E>(results: Result<T, E>[]): {
  */
 export const fromPromise = async <T, E = Error>(
   promise: Promise<T>,
-  errorMapper?: (error: unknown) => E
+  errorMapper?: (error: unknown) => E,
 ): Promise<Result<T, E>> => {
   try {
     const data = await promise;
@@ -340,7 +336,7 @@ export const toPromise = <T, E>(result: Result<T, E>): Promise<T> => {
  */
 export const traverse = <T, U, E>(
   items: T[],
-  mapper: (item: T) => Result<U, E>
+  mapper: (item: T) => Result<U, E>,
 ): Result<U[], E> => {
   const results: U[] = [];
 
@@ -360,7 +356,7 @@ export const traverse = <T, U, E>(
  */
 export const traverseAsync = async <T, U, E>(
   items: T[],
-  mapper: (item: T) => Promise<Result<U, E>>
+  mapper: (item: T) => Promise<Result<U, E>>,
 ): Promise<Result<U[], E>> => {
   const results: U[] = [];
 
@@ -383,10 +379,10 @@ export class HTTPathError extends Error {
     message: string,
     public readonly code: string,
     public readonly statusCode?: number,
-    public readonly path?: string
+    public readonly path?: string,
   ) {
     super(message);
-    this.name = 'HTTPathError';
+    this.name = "HTTPathError";
   }
 }
 
@@ -395,8 +391,8 @@ export class HTTPathError extends Error {
  */
 export class FileSystemError extends HTTPathError {
   constructor(message: string, path?: string) {
-    super(message, 'FS_ERROR', 500, path);
-    this.name = 'FileSystemError';
+    super(message, "FS_ERROR", 500, path);
+    this.name = "FileSystemError";
   }
 }
 
@@ -405,8 +401,8 @@ export class FileSystemError extends HTTPathError {
  */
 export class SecurityError extends HTTPathError {
   constructor(message: string, path?: string) {
-    super(message, 'SECURITY_ERROR', 403, path);
-    this.name = 'SecurityError';
+    super(message, "SECURITY_ERROR", 403, path);
+    this.name = "SecurityError";
   }
 }
 
@@ -415,8 +411,8 @@ export class SecurityError extends HTTPathError {
  */
 export class ConfigurationError extends HTTPathError {
   constructor(message: string) {
-    super(message, 'CONFIG_ERROR', 500);
-    this.name = 'ConfigurationError';
+    super(message, "CONFIG_ERROR", 500);
+    this.name = "ConfigurationError";
   }
 }
 
@@ -425,8 +421,8 @@ export class ConfigurationError extends HTTPathError {
  */
 export class NetworkError extends HTTPathError {
   constructor(message: string) {
-    super(message, 'NETWORK_ERROR', 500);
-    this.name = 'NetworkError';
+    super(message, "NETWORK_ERROR", 500);
+    this.name = "NetworkError";
   }
 }
 
@@ -434,7 +430,7 @@ export class NetworkError extends HTTPathError {
  * Helper to create typed error mappers
  */
 export const createErrorMapper = <E extends HTTPathError>(
-  ErrorClass: new (message: string, ...args: any[]) => E
+  ErrorClass: new (message: string, ...args: any[]) => E,
 ) => {
   return (error: unknown, ...args: any[]): E => {
     if (error instanceof ErrorClass) {

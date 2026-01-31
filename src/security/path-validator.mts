@@ -1,16 +1,11 @@
 // Path validation and security module
-import { resolve, normalize, join, sep, posix } from "path";
+import { resolve, normalize, sep } from "node:path";
 import type {
   PathValidationResult,
   SecurityOptions,
   Result,
 } from "../types/index.mjs";
-import {
-  success,
-  failure,
-  tryCatch,
-  mapToSecurityError,
-} from "../utils/result-pattern.mjs";
+import { tryCatch, mapToSecurityError } from "../utils/result-pattern.mjs";
 
 /**
  * Default security options

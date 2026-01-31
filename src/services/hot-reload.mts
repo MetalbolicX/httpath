@@ -1,6 +1,6 @@
 // Hot-reload service with Server-Sent Events functionality
-import { watch, FSWatcher } from "fs";
-import { EventEmitter } from "events";
+import { watch, FSWatcher } from "node:fs";
+import { EventEmitter } from "node:events";
 import type {
   HotReloadOptions,
   SSEClient,
