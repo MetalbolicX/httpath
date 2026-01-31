@@ -219,13 +219,13 @@ export const unwrapOrElse = <T, E>(
  * Combine multiple Results into a single Result containing an array
  */
 export const all = <T, E>(results: Result<T, E>[]): Result<T[], E> => {
-  const values: T[] = [];
+  let values: T[] = [];
 
   for (const result of results) {
     if (isFailure(result)) {
       return result;
     }
-    values.push(result.data);
+    values = [...values, result.data];
   }
 
   return success(values);
@@ -240,14 +240,14 @@ export const allSettled = <T, E>(
   successes: T[];
   failures: E[];
 } => {
-  const successes: T[] = [];
-  const failures: E[] = [];
+  let successes: T[] = [];
+  let failures: E[] = [];
 
   for (const result of results) {
     if (isSuccess(result)) {
-      successes.push(result.data);
+      successes = [...successes, result.data];
     } else {
-      failures.push(result.error);
+      failures = [...failures, result.error];
     }
   }
 
@@ -291,14 +291,14 @@ export const partition = <T, E>(
   successes: Success<T>[];
   failures: Failure<E>[];
 } => {
-  const successes: Success<T>[] = [];
-  const failures: Failure<E>[] = [];
+  let successes: Success<T>[] = [];
+  let failures: Failure<E>[] = [];
 
   for (const result of results) {
     if (isSuccess(result)) {
-      successes.push(result);
+      successes = [...successes, result];
     } else {
-      failures.push(result);
+      failures = [...failures, result];
     }
   }
 
@@ -338,14 +338,14 @@ export const traverse = <T, U, E>(
   items: T[],
   mapper: (item: T) => Result<U, E>,
 ): Result<U[], E> => {
-  const results: U[] = [];
+  let results: U[] = [];
 
   for (const item of items) {
     const result = mapper(item);
     if (isFailure(result)) {
       return result;
     }
-    results.push(result.data);
+    results = [...results, result.data];
   }
 
   return success(results);
@@ -358,14 +358,14 @@ export const traverseAsync = async <T, U, E>(
   items: T[],
   mapper: (item: T) => Promise<Result<U, E>>,
 ): Promise<Result<U[], E>> => {
-  const results: U[] = [];
+  let results: U[] = [];
 
   for (const item of items) {
     const result = await mapper(item);
     if (isFailure(result)) {
       return result;
     }
-    results.push(result.data);
+    results = [...results, result.data];
   }
 
   return success(results);
