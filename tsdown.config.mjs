@@ -9,6 +9,8 @@ export default defineConfig({
   tsconfig: true,
   outDir: "./dist",
   fixedExtension: true,
+  bundle: true,
+  splitting: false,
   external: [
     "http",
     "https",
@@ -26,5 +28,8 @@ export default defineConfig({
   ],
   outputOptions: {
     name: "HTTPath",
+  },
+  onSuccess: async () => {
+    console.log("✅ Build completed successfully!");
   },
 });
