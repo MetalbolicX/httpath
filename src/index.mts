@@ -4,6 +4,7 @@
 // Main entry point that orchestrates all modules
 
 import { parseCliArgs, validateConfig, VERSION_INFO } from "./config/cli.mjs";
+import { isSuccess, unwrap } from "./utils/result-pattern.mjs";
 import { createHTTPServer } from "./services/server.mjs";
 import { createLogger } from "./utils/logger.mjs";
 import type { ServerInstance } from "./types/index.mjs";
@@ -26,19 +27,28 @@ let serverInstance: ServerInstance | null = null;
  * Main application function
  */
 const main = async (): Promise<void> => {
+  // Display banner
+  displayBanner();
+
+  // Parse CLI arguments
+  const configResult = parseCliArgs();
+  if (!isSuccess(configResult)) {
+    logger.error(
+      "❌ Failed to parse CLI arguments:",
+      configResult.error.message,
+    );
+    process.exit(1);
+  }
+
+  const config = configResult.data;
+
+  // Validate configuration
+  if (!validateConfig(config)) {
+    process.exit(1);
+  }
+
+  // Create and start server
   try {
-    // Display banner
-    displayBanner();
-
-    // Parse CLI arguments
-    const config = parseCliArgs();
-
-    // Validate configuration
-    if (!validateConfig(config)) {
-      process.exit(1);
-    }
-
-    // Create and start server
     const server = createHTTPServer(config);
     serverInstance = await server.start();
 

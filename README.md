@@ -160,13 +160,23 @@ npm start
 ### Project Structure
 
 ```
-httpath/
-├── src/
-│   └── index.mts          # Main server implementation
-├── test/                  # Test files and examples
-├── dist/                  # Built output (CJS + ESM)
-├── package.json
-└── tsdown.config.mjs      # Build configuration
+src/
+├── index.mts                 # Main entry point and orchestration
+├── types/
+│   └── index.mts            # TypeScript type definitions
+├── config/
+│   └── cli.mts              # CLI argument parsing and configuration
+├── constants/
+│   └── mime-types.mts       # MIME type mappings and utilities
+├── security/
+│   └── path-validator.mts   # Path validation and security middleware
+├── services/
+│   ├── file-service.mts     # File system operations and directory listing
+│   ├── hot-reload.mts       # Hot-reload functionality with SSE
+│   └── server.mts           # HTTP server and request handling
+└── utils/
+    ├── logger.mts           # Logging utilities and request logging
+    └── port-finder.mts      # Port availability checking
 ```
 
 ## 🧪 Testing
