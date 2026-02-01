@@ -44,7 +44,7 @@ export const DEFAULT_HOT_RELOAD_OPTIONS: Required<HotReloadOptions> = {
 /**
  * Hot-reload script that gets injected into HTML files
  */
-export const HOT_RELOAD_SCRIPT = `
+export const HOT_RELOAD_SCRIPT = /*html*/`
 <script>
 (function() {
   'use strict';
@@ -213,7 +213,8 @@ export const HOT_RELOAD_SCRIPT = `
 </script>`;
 
 /**
- * Hot-reload service class
+ * HotReloadService class
+ * Manages hot-reload functionality for development environments
  */
 export class HotReloadService extends EventEmitter {
   private watcher: FSWatcher | null = null;
@@ -228,6 +229,7 @@ export class HotReloadService extends EventEmitter {
 
   /**
    * Start watching for file changes
+   * @returns Result indicating success or failure of starting the watcher
    */
   public start(): Result<void> {
     if (this.watcher) {
@@ -265,6 +267,7 @@ export class HotReloadService extends EventEmitter {
 
   /**
    * Stop watching for file changes
+   * @description Stops the file system watcher and cleans up resources
    */
   public stop(): void {
     if (this.watcher) {
@@ -286,7 +289,9 @@ export class HotReloadService extends EventEmitter {
   }
 
   /**
-   * Handle SSE connection
+   * Handle new SSE connection from client
+   * @param req - HTTP request
+   * @param res - HTTP response
    */
   public handleSSEConnection(req: HttpRequest, res: HttpResponse): void {
     const clientId = this.generateClientId();
@@ -336,12 +341,14 @@ export class HotReloadService extends EventEmitter {
 
   /**
    * Broadcast reload signal to all connected clients
+   * @param event - Optional reload event details
+   * @returns {void}
    */
   public broadcastReload(event?: ReloadEvent): void {
     if (this.clients.size === 0) return;
 
     const message = "data: reload\n\n";
-    const disconnectedClients: string[] = [];
+    let disconnectedClients: string[] = [];
 
     for (const [clientId, client] of this.clients) {
       try {
@@ -351,7 +358,7 @@ export class HotReloadService extends EventEmitter {
           `Failed to send reload signal to client ${clientId}:`,
           error,
         );
-        disconnectedClients.push(clientId);
+        disconnectedClients = [...disconnectedClients, clientId];
       }
     }
 
@@ -369,6 +376,8 @@ export class HotReloadService extends EventEmitter {
 
   /**
    * Inject hot-reload script into HTML content
+   * @param htmlContent - HTML content to inject script into
+   * @returns HTML content with injected hot-reload script
    */
   public injectScript(htmlContent: string): string {
     // Try to inject before </body>, fallback to </html>, then end of content
@@ -382,14 +391,16 @@ export class HotReloadService extends EventEmitter {
   }
 
   /**
-   * Get connected clients count
+   * Get number of connected clients
+   * @returns {number} Number of connected clients
    */
   public getClientCount(): number {
     return this.clients.size;
   }
 
   /**
-   * Get client information
+   * Get information about connected clients
+   * @returns Array of client info objects
    */
   public getClientInfo(): Array<{ id: string; connectedAt: Date }> {
     return Array.from(this.clients.values()).map((client) => ({
@@ -400,6 +411,9 @@ export class HotReloadService extends EventEmitter {
 
   /**
    * Handle file change events
+   * @param eventType - Type of file system event
+   * @param filename - Name of the changed file
+   * @returns {void}
    */
   private handleFileChange(eventType: string, filename: string): void {
     // Skip ignored files/directories
@@ -446,7 +460,9 @@ export class HotReloadService extends EventEmitter {
   }
 
   /**
-   * Check if file should be ignored
+   * Check if a file should be ignored based on configured ignored patterns
+   * @param filename - Name of the file to check
+   * @returns boolean indicating if file should be ignored
    */
   private shouldIgnoreFile(filename: string): boolean {
     return this.options.ignored.some((pattern) => {
@@ -460,7 +476,9 @@ export class HotReloadService extends EventEmitter {
   }
 
   /**
-   * Convert fs event type to our event type
+   * Map fs.watch event type to ReloadEvent type
+   * @param eventType - Event type from fs.watch
+   * @returns Corresponding ReloadEvent type
    */
   private getEventType(eventType: string): ReloadEvent["type"] {
     switch (eventType) {
@@ -475,6 +493,8 @@ export class HotReloadService extends EventEmitter {
 
   /**
    * Decide if any of the given paths should trigger a server restart
+   * @param paths - Array of changed file paths
+   * @returns {boolean} indicating if server should restart
    */
   private shouldRestartServer(paths: string[]): boolean {
     const serverRestartPatterns = [
@@ -494,6 +514,8 @@ export class HotReloadService extends EventEmitter {
 
   /**
    * Decide if any of the given paths should trigger a browser reload
+   * @param paths - Array of changed file paths
+   * @returns {boolean} indicating if browser should reload
    */
   private shouldTriggerBrowserReload(paths: string[]): boolean {
     const browserReloadPatterns = [
@@ -517,7 +539,8 @@ export class HotReloadService extends EventEmitter {
   }
 
   /**
-   * Spawn a new Node process with the same arguments and exit current process
+   * Restart the current Node.js process
+   * @returns {void}
    */
   private restartProcess(): void {
     const args = process.argv.slice(1); // keep script and its args
@@ -532,14 +555,17 @@ export class HotReloadService extends EventEmitter {
   }
 
   /**
-   * Generate unique client ID
+   * Generate a unique client ID
+   * @returns string representing the unique client ID
    */
   private generateClientId(): string {
     return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
-   * Remove client and clean up
+   * Remove a client by ID
+   * @param clientId - ID of the client to remove
+   * @returns {void}
    */
   private removeClient(clientId: string): void {
     const client = this.clients.get(clientId);
@@ -559,7 +585,9 @@ export class HotReloadService extends EventEmitter {
 }
 
 /**
- * Create a new hot-reload service instance
+ * Create and return a HotReloadService instance
+ * @param options - Hot-reload options
+ * @returns HotReloadService instance
  */
 export const createHotReloadService = (
   options?: HotReloadOptions,

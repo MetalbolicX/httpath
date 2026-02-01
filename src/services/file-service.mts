@@ -41,7 +41,15 @@ export const DEFAULT_TEMPLATE_OPTIONS: Required<TemplateOptions> = {
 };
 
 /**
- * Read directory contents and return file entries
+ * Read directory entries with options
+ * @param dirPath - Directory path to read
+ * @param options - Directory listing options
+ * @returns Result containing array of FileEntry or error
+ * @description
+ * This function reads the contents of a directory specified by dirPath.
+ * It applies the provided options to filter and sort the entries. Hidden files can be excluded based on the showHidden option.
+ * The entries are sorted according to the sortBy and sortOrder options.
+ * The function returns a Result type containing either the array of FileEntry objects or an error if the operation fails.
  */
 export const readDirectoryEntries = async (
   dirPath: string,
@@ -58,7 +66,7 @@ export const readDirectoryEntries = async (
     return failure(entriesResult.error);
   }
 
-  const files: FileEntry[] = [];
+  let files: FileEntry[] = [];
 
   for (const entry of entriesResult.data) {
     // Skip hidden files if not allowed
@@ -73,12 +81,15 @@ export const readDirectoryEntries = async (
     );
 
     if (statsResult.success) {
-      files.push({
-        name: entry,
-        isDir: statsResult.data.isDirectory(),
-        size: statsResult.data.size,
-        lastModified: statsResult.data.mtime,
-      });
+      files = [
+        ...files,
+        {
+          name: entry,
+          isDir: statsResult.data.isDirectory(),
+          size: statsResult.data.size,
+          lastModified: statsResult.data.mtime,
+        },
+      ];
     } else {
       // Skip files that can't be accessed
       console.warn(`Warning: Cannot access file ${entry}:`, statsResult.error);
@@ -113,7 +124,15 @@ export const readDirectoryEntries = async (
 };
 
 /**
- * Generate HTML directory listing
+ * Generate directory listing HTML
+ * @param dirPath - Directory path on the file system
+ * @param urlPath - URL path for links
+ * @param options - Directory listing and template options
+ * @returns Result containing rendered HTML or error
+ * @description
+ * This function generates an HTML directory listing for the specified dirPath.
+ * It reads the directory entries, applies the provided options for filtering and sorting,
+ * and renders the template with the given options. If reading the directory fails, it returns an error template.
  */
 export const generateDirectoryListing = async (
   dirPath: string,
@@ -150,7 +169,13 @@ export const generateDirectoryListing = async (
 };
 
 /**
- * Get parent path for navigation
+ * Get parent path from URL path
+ * @param urlPath - URL path
+ * @returns Parent URL path
+ * @description
+ * This function takes a URL path as input and returns the parent path.
+ * It splits the path into segments, removes the last segment, and joins the remaining segments back together.
+ * If the resulting path is empty, it returns the root path ("/").
  */
 const getParentPath = (urlPath: string): string => {
   const segments = urlPath.split("/").filter((segment) => segment);
@@ -160,6 +185,11 @@ const getParentPath = (urlPath: string): string => {
 
 /**
  * Format file size for display
+ * @param bytes - File size in bytes
+ * @returns Formatted file size string
+ * @description
+ * This function takes a file size in bytes and converts it into a human-readable string format.
+ * It uses appropriate units (B, KB, MB, GB, TB) based on the size and formats the number to one decimal place for sizes larger than bytes.
  */
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return "0 B";
@@ -172,6 +202,8 @@ const formatFileSize = (bytes: number): string => {
 
 /**
  * Format date for display
+ * @param date - Date object
+ * @returns Formatted date string
  */
 const formatDate = (date: Date): string =>
   date.toLocaleString("en-US", {
@@ -183,7 +215,14 @@ const formatDate = (date: Date): string =>
   });
 
 /**
- * Get file type icon
+ * Get file icon based on file type
+ * @param file - FileEntry object
+ * @returns File icon string
+ * @description
+ * This function returns an appropriate icon string based on the file type.
+ * It checks the file extension and maps it to a corresponding icon.
+ * If the file is a directory, it returns a folder icon.
+ * For unrecognized file types, it returns a generic file icon.
  */
 const getFileIcon = (file: FileEntry): string => {
   if (file.isDir) return "📁";
@@ -225,7 +264,14 @@ const getFileIcon = (file: FileEntry): string => {
 };
 
 /**
- * Render directory template
+ * Render directory listing template
+ * @param data - Template data
+ * @param options - Template options
+ * @returns Rendered HTML template string
+ * @description
+ * This function generates an HTML template for the directory listing page.
+ * It uses the provided data to populate the title, path, and file entries.
+ * The template is styled with CSS and includes options for custom CSS, JS, favicon, and theme.
  */
 const renderDirectoryTemplate = (
   data: TemplateData,
@@ -234,7 +280,7 @@ const renderDirectoryTemplate = (
   const { title, path, files, parentPath } = data;
 
   const parentLink = parentPath
-    ? `<tr><td><a href="${parentPath}" class="parent-link">📁 ..</a></td><td>-</td><td>-</td></tr>`
+    ? /*html*/ `<tr><td><a href="${parentPath}" class="parent-link">📁 ..</a></td><td>-</td><td>-</td></tr>`
     : "";
 
   const fileRows = files
@@ -245,7 +291,7 @@ const renderDirectoryTemplate = (
       const size = file.isDir ? "-" : formatFileSize(file.size || 0);
       const date = file.lastModified ? formatDate(file.lastModified) : "-";
 
-      return `
+      return /*html*/ `
       <tr>
         <td><a href="${href}" class="${file.isDir ? "directory" : "file"}">${icon} ${displayName}</a></td>
         <td>${size}</td>
@@ -261,7 +307,7 @@ const renderDirectoryTemplate = (
         ? "theme-light"
         : "";
 
-  return `
+  return /*html*/ `
 <!DOCTYPE html>
 <html lang="en" class="${themeClass}">
 <head>
@@ -461,9 +507,14 @@ const renderDirectoryTemplate = (
 
 /**
  * Render error template
+ * @param title - Error title
+ * @param message - Error message
+ * @returns Rendered HTML error template string
  */
-const renderErrorTemplate = (title: string, message: string): string =>
-  `
+const renderErrorTemplate = (
+  title: string,
+  message: string,
+): string => /*html*/ `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -512,7 +563,13 @@ const renderErrorTemplate = (title: string, message: string): string =>
 </html>`;
 
 /**
- * Check if a file exists
+ * Check if file exists
+ * @param filePath - File path to check
+ * @returns Result indicating whether the file exists
+ * @description
+ * This function checks if a file exists at the specified filePath.
+ * It uses the access method from the fs/promises module to verify the file's existence.
+ * The function returns a Result type containing a boolean indicating whether the file exists or an error if the operation fails.
  */
 export const fileExists = async (
   filePath: string,
@@ -526,34 +583,51 @@ export const fileExists = async (
 };
 
 /**
- * Get file stats safely
+ * Get file statistics
+ * @param filePath - File path to get stats for
+ * @returns Result containing file statistics or error
+ * @description
+ * This function retrieves the statistics of a file located at the specified filePath.
+ * It uses the stat method from the fs/promises module to obtain file information such as size, modification date, and type.
+ * The function returns a Result type containing either the file statistics or an error if the operation fails.
  */
 export const getFileStat = async (
   filePath: string,
-): Promise<Result<import("fs").Stats>> => {
-  return await tryCatchAsync(() => stat(filePath), mapToFileSystemError);
-};
+): Promise<Result<import("fs").Stats>> =>
+  await tryCatchAsync(() => stat(filePath), mapToFileSystemError);
 
 /**
- * Read file content for text files
+ * Read text file content
+ * @param filePath - File path to read
+ * @returns Result containing file content or error
+ * @description
+ * This function reads the content of a text file located at the specified filePath.
+ * It uses the readFile method from the fs/promises module to read the file as a UTF-8 encoded string.
+ * The function returns a Result type containing either the file content or an error if the operation fails.
  */
-export const readTextFile = async (
-  filePath: string,
-): Promise<Result<string>> => {
-  return await tryCatchAsync(
-    () => readFile(filePath, "utf8"),
-    mapToFileSystemError,
-  );
-};
+export const readTextFile = async (filePath: string): Promise<Result<string>> =>
+  await tryCatchAsync(() => readFile(filePath, "utf8"), mapToFileSystemError);
 
 /**
- * Create file stream for binary files
+ * Create file read stream
+ * @param filePath - File path to create stream for
+ * @returns Read stream for the specified file
+ * @description
+ * This function creates a read stream for the file located at the specified filePath.
+ * It uses the createReadStream method from the fs module to create a stream that can be used to read the file's content in chunks.
  */
 export const createFileStream = (filePath: string) =>
   createReadStream(filePath);
 
 /**
- * Get appropriate serving method based on file type
+ * Get serving method based on file type
+ * @param filePath - File path to determine serving method for
+ * @returns Serving method ("stream" or "buffer")
+ * @description
+ * This function determines the appropriate serving method for a file based on its MIME type.
+ * It uses the getMimeTypeFromFilename utility to get the MIME type from the file extension.
+ * If the MIME type indicates a text-based file, it returns "buffer" to read the file into memory.
+ * For binary files, it returns "stream" to serve the file as a stream.
  */
 export const getServingMethod = (filePath: string): "stream" | "buffer" => {
   const mimeType = getMimeTypeFromFilename(filePath);

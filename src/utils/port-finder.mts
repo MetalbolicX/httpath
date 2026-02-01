@@ -18,7 +18,15 @@ export const DEFAULT_PORT_FINDER_OPTIONS: Required<PortFinderOptions> = {
 };
 
 /**
- * Check if a port is available
+ * Check if a specific port is available
+ * @param port - Port number to check
+ * @param timeout - Timeout in milliseconds
+ * @returns Promise resolving to Result<boolean> indicating if port is available
+ * @description
+ * This function attempts to create a temporary server on the specified port.
+ * If the server starts successfully, the port is available. If an error occurs
+ * indicating the address is in use, the port is not available. Other errors are
+ * mapped to network errors.
  */
 export const isPortAvailable = (
   port: number,
@@ -65,7 +73,13 @@ export const isPortAvailable = (
 };
 
 /**
- * Find the next available port starting from a given port
+ * Find a single available port within a specified range
+ * @param options - PortFinderOptions to specify range and timeout
+ * @returns Promise resolving to Result<number> with the available port number or error
+ * @description
+ * This function iterates through the specified port range, checking each port's availability.
+ * It returns the first available port found. If no ports are available in the range,
+ * it returns an error indicating the failure.
  */
 export const findAvailablePort = async (
   options: Partial<PortFinderOptions> = {},
@@ -111,6 +125,13 @@ export const findAvailablePort = async (
 
 /**
  * Find multiple available ports
+ * @param count - Number of ports to find
+ * @param options - PortFinderOptions to specify range and timeout
+ * @returns Promise resolving to Result<number[]> with the available port numbers or error
+ * @description
+ * This function searches for the specified number of available ports within the given range.
+ * It returns an array of available port numbers. If it cannot find enough available ports,
+ * it returns an error indicating how many ports were found versus requested.
  */
 export const findAvailablePorts = async (
   count: number,
@@ -149,7 +170,12 @@ export const findAvailablePorts = async (
 };
 
 /**
- * Get port status information
+ * Get status of a specific port
+ * @param port - Port number to check
+ * @returns Promise resolving to Result with port status information or error
+ * @description
+ * This function checks the availability of a specific port and returns an object
+ * containing the port number, its availability status, and any error message if applicable.
  */
 export const getPortStatus = async (
   port: number,
@@ -176,7 +202,13 @@ export const getPortStatus = async (
 };
 
 /**
- * Check multiple ports status
+ * Check status of multiple ports
+ * @param ports - Array of port numbers to check
+ * @returns Promise resolving to Result with array of port status information or error
+ * @description
+ * This function checks the availability of multiple ports and returns an array
+ * of objects containing each port number, its availability status, and any error
+ * message if applicable.
  */
 export const checkPortsStatus = async (
   ports: number[],
@@ -206,7 +238,15 @@ export const checkPortsStatus = async (
 };
 
 /**
- * Find port in a specific range with custom logic
+ * Find a port in a given range that satisfies an optional predicate
+ * @param startPort - Starting port number
+ * @param endPort - Ending port number
+ * @param predicate - Optional function to filter ports
+ * @returns Promise resolving to Result<number | null> with the found port or null if none found
+ * @description
+ * This function iterates through the specified port range, applying an optional
+ * predicate function to filter ports. It returns the first port that satisfies
+ * the predicate and is available. If no such port is found, it returns null.
  */
 export const findPortInRange = async (
   startPort: number,
@@ -254,8 +294,13 @@ export const PORT_RANGES = {
   HTTP_ALT: { start: 8000, end: 8999 },
 } as const;
 
-/**
- * Find port in a predefined range
+/** Find a port in a predefined range
+ * @param rangeName - Name of the predefined port range
+ * @returns Promise resolving to Result<number> with the found port or error
+ * @description
+ * This function looks for an available port within a predefined range
+ * such as SYSTEM, REGISTERED, DYNAMIC, DEVELOPMENT, or HTTP_ALT.
+ * It returns the first available port found or an error if none are available.
  */
 export const findPortInPredefinedRange = async (
   rangeName: keyof typeof PORT_RANGES,
@@ -281,7 +326,13 @@ export const findPortInPredefinedRange = async (
 };
 
 /**
- * Smart port finder that tries common development ports first
+ * Find a smart port for development servers
+ * @param preferredPort - Preferred port number to try first
+ * @returns Promise resolving to the first available port number
+ * @description
+ * This function attempts to find an available port commonly used for development servers.
+ * It first tries the preferred port, then a list of common development ports,
+ * and finally falls back to a sequential search if necessary.
  */
 export const findSmartPort = async (preferredPort = 8080): Promise<number> => {
   // Common development ports in order of preference
@@ -324,7 +375,14 @@ export const findSmartPort = async (preferredPort = 8080): Promise<number> => {
 };
 
 /**
- * Port finder with retry logic
+ * Find port with retry mechanism
+ * @param options - PortFinderOptions to specify range and timeout
+ * @param maxRetries - Maximum number of retry attempts
+ * @returns Promise resolving to Result<number> with the available port number or error
+ * @description
+ * This function attempts to find an available port within the specified range,
+ * retrying the search up to the specified number of times if no port is found.
+ * It implements an exponential backoff strategy between retries.
  */
 export const findPortWithRetry = async (
   options: Partial<PortFinderOptions> = {},

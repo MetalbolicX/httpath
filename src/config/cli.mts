@@ -107,7 +107,11 @@ export const VERSION_INFO = {
 } as const;
 
 /**
- * Parse command line arguments and return server configuration
+ * Parse CLI arguments into ServerConfig
+ * @param argv - Array of command-line arguments
+ * @returns Result containing ServerConfig or error
+ * @description
+ * This function uses Node.js's built-in parseArgs utility to parse command-line arguments based on predefined options.
  */
 export const parseCliArgs = (
   argv: string[] = process.argv.slice(2),
@@ -127,8 +131,7 @@ export const parseCliArgs = (
 
     // Handle version flag
     if (values.version) {
-      console.log(`${VERSION_INFO.name} v${VERSION_INFO.version}`);
-      console.log(VERSION_INFO.description);
+      console.log(`${VERSION_INFO.name} v${VERSION_INFO.version}\n${VERSION_INFO.description}`);
       process.exit(0);
     }
 
@@ -169,6 +172,11 @@ export const parseCliArgs = (
 
 /**
  * Validate server configuration
+ * @param config - Server configuration to validate
+ * @returns boolean indicating if the configuration is valid
+ * @description
+ * This function checks the validity of the server configuration. It ensures that the port number is within the valid range (1-65535),
+ * the root path is a non-empty string, and the reload flag is a boolean. If any of these checks fail, it logs an error message and returns false. Otherwise, it returns true.
  */
 export const validateConfig = (config: ServerConfig): boolean => {
   // Validate port
@@ -199,7 +207,9 @@ export const validateConfig = (config: ServerConfig): boolean => {
 };
 
 /**
- * Display configuration summary
+ * Display server configuration
+ * @param config - Server configuration to display
+ * @returns {void}
  */
 export const displayConfig = (config: ServerConfig): void =>
   console.log(`📋 Server Configuration:
@@ -208,7 +218,10 @@ export const displayConfig = (config: ServerConfig): void =>
   Hot-reload: ${config.reload ? "Enabled" : "Disabled"}`);
 
 /**
- * Create configuration from environment variables
+ * Parse environment variables into ServerConfig
+ * @returns Result containing Partial<ServerConfig> or error
+ * @description
+ * This function parses environment variables and returns a Partial<ServerConfig> object.
  */
 export const parseEnvConfig = (): Result<Partial<ServerConfig>> => {
   return tryCatch(() => {
@@ -237,7 +250,12 @@ export const parseEnvConfig = (): Result<Partial<ServerConfig>> => {
 };
 
 /**
- * Merge configurations with priority: CLI > ENV > Default
+ * Merge CLI and environment configurations
+ * @param cliConfig - ServerConfig from CLI
+ * @param envConfigResult - Result containing Partial<ServerConfig> from environment
+ * @returns Result containing merged ServerConfig or error
+ * @description
+ * This function merges the CLI configuration with the environment configuration, giving precedence to CLI values.
  */
 export const mergeConfigs = (
   cliConfig: ServerConfig,

@@ -20,12 +20,7 @@ import {
 import { HotReloadService } from "./hot-reload.mjs";
 import { createLogger } from "../utils/logger.mjs";
 import { findAvailablePort } from "../utils/port-finder.mjs";
-import {
-  tryCatchAsync,
-  mapToNetworkError,
-  isSuccess,
-  unwrapOr,
-} from "../utils/result-pattern.mjs";
+import { isSuccess } from "../utils/result-pattern.mjs";
 
 /**
  * HTTP Server service class
@@ -52,6 +47,7 @@ export class HTTPServer {
 
   /**
    * Start the HTTP server
+   * @returns ServerInstance object with server details
    */
   public async start(): Promise<ServerInstance> {
     if (this.isRunning) {
@@ -112,6 +108,7 @@ export class HTTPServer {
 
   /**
    * Stop the HTTP server
+   * @returns Promise that resolves when the server is stopped
    */
   public async stop(): Promise<void> {
     if (!this.isRunning || !this.server) {
@@ -137,6 +134,9 @@ export class HTTPServer {
 
   /**
    * Handle incoming HTTP requests
+   * @param req - Incoming HTTP request
+   * @param res - HTTP response to send data
+   * @returns Promise that resolves when the request is handled
    */
   private async handleRequest(
     req: HttpRequest,
@@ -217,7 +217,11 @@ export class HTTPServer {
       // Log actual thrown error with stack
       const e = err as any;
       if (e instanceof Error) {
-        this.logger.error("Unhandled exception during request handling:", e.message, e.stack);
+        this.logger.error(
+          "Unhandled exception during request handling:",
+          e.message,
+          e.stack,
+        );
       } else {
         this.logger.error("Unhandled exception during request handling:", e);
       }
@@ -234,6 +238,10 @@ export class HTTPServer {
 
   /**
    * Handle directory requests
+   * @param dirPath - Filesystem path of the directory
+   * @param urlPath - URL path requested
+   * @param res - HTTP response to send data
+   * @returns Promise that resolves when the directory request is handled
    */
   private async handleDirectoryRequest(
     dirPath: string,
@@ -277,6 +285,9 @@ export class HTTPServer {
 
   /**
    * Handle file requests
+   * @param filePath - Filesystem path of the file
+   * @param res - HTTP response to send data
+   * @returns Promise that resolves when the file request is handled
    */
   private async handleFileRequest(
     filePath: string,
@@ -346,6 +357,10 @@ export class HTTPServer {
 
   /**
    * Send error response
+   * @param res - HTTP response
+   * @param statusCode - HTTP status code
+   * @param statusText - HTTP status text
+   * @returns {void}
    */
   private sendError(
     res: HttpResponse,
@@ -367,6 +382,9 @@ export class HTTPServer {
 
   /**
    * Generate error page HTML
+   * @param statusCode - HTTP status code
+   * @param statusText - HTTP status text
+   * @returns HTML string for the error page
    */
   private generateErrorPage(statusCode: number, statusText: string): string {
     const errorMessages: Record<number, string> = {
@@ -378,7 +396,7 @@ export class HTTPServer {
 
     const message = errorMessages[statusCode] || "An error occurred.";
 
-    return `
+    return /*html*/`
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -464,13 +482,17 @@ export class HTTPServer {
 }
 
 /**
- * Create and configure HTTP server
+ * Create HTTP server instance
+ * @param config - Server configuration
+ * @returns HTTPServer instance
  */
 export const createHTTPServer = (config: ServerConfig): HTTPServer =>
   new HTTPServer(config);
 
 /**
- * Start HTTP server with configuration
+ * Start HTTP server with given configuration
+ * @param config - Server configuration
+ * @returns Promise resolving to ServerInstance
  */
 export const startServer = async (
   config: ServerConfig,

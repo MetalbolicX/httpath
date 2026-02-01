@@ -54,6 +54,22 @@ httpath --reload
 httpath --port 3000 --path ./dist --reload
 ```
 
+Additional options (useful for development):
+
+```bash
+# Ignore specific patterns (comma-separated)
+httpath --path ./demo --reload --ignore node_modules,.git
+
+# Disable directory listing (serve index.html or return 403)
+httpath --path ./demo --no-listing
+
+# Restart the server process when server/config files change
+httpath --path ./demo --reload --restart-on-change
+
+# Set log level
+httpath --log debug --reload
+```
+
 ## 📖 API Reference
 
 ### Command Line Options
@@ -63,6 +79,10 @@ httpath --port 3000 --path ./dist --reload
 | `--port` | `-p` | Port number to listen on | `8080` |
 | `--path` | `-d` | Directory to serve files from | Current directory |
 | `--reload` | `-r` | Enable hot-reload functionality | `false` |
+| `--ignore` | `-i` | Comma-separated patterns to ignore (watch) | `node_modules,.git,.DS_Store` |
+| `--no-listing` | | Disable directory listing when no `index.html` is present | `false` |
+| `--restart-on-change` | | Restart Node process when server/config files change | `false` |
+| `--log` | | Log level: `debug`, `info`, `warn`, `error` | `info` |
 
 ### Examples
 
@@ -93,6 +113,12 @@ When enabled with `--reload`, HTTPath provides:
 - **Auto-Injection**: Automatically injects reload script into HTML files
 - **Smart Reconnection**: Handles connection drops gracefully
 
+Notes on behavior:
+
+- By default hot-reload broadcasts a reload signal to connected browsers when frontend assets change (HTML/CSS/JS/images/fonts/etc.).
+- The server classifies file changes and will optionally restart the Node process when server or configuration files change (e.g., `.js`, `.mjs`, `.ts`, `package.json`, `.json`, `.yaml`). Enable this with `--restart-on-change`.
+- Use `--ignore` to provide comma-separated patterns (e.g., `node_modules,.git`) so file-watching ignores them.
+
 ### How It Works
 
 1. HTTPath watches for file changes using Node.js `fs.watch`
@@ -113,7 +139,7 @@ HTTPath includes built-in protection against common web server vulnerabilities:
 
 When accessing a directory without an `index.html` file, HTTPath generates a clean, navigable listing:
 
-- **Sorted Display**: Directories first, then files alphabetically  
+- **Sorted Display**: Directories first, then files alphabetically
 - **Parent Navigation**: Easy ".." links to go up directories
 - **File Type Icons**: Visual indicators for different file types
 - **Responsive Design**: Works well on mobile devices

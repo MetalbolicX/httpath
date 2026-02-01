@@ -109,7 +109,14 @@ export const PROTECTED_DIRECTORIES = new Set([
 ]);
 
 /**
- * Validate if a requested path is safe and within the root directory
+ * Verify if a path is safe within the root directory
+ * @param requestedPath - The path to validate
+ * @param rootPath - The root directory path
+ * @param options - Security options
+ * @returns {boolean} - True if the path is safe, false otherwise
+ * @description
+ * This function checks if the requested path is safe to access within the specified root directory.
+ * It uses the validatePath function to perform comprehensive validation and returns a boolean indicating safety.
  */
 export const isPathSafe = (
   requestedPath: string,
@@ -121,7 +128,15 @@ export const isPathSafe = (
 };
 
 /**
- * Comprehensive path validation with detailed results
+ * Validate and resolve a requested path against a root directory
+ * @param requestedPath - The path to validate
+ * @param rootPath - The root directory path
+ * @param options - Security options
+ * @returns Result containing PathValidationResult or error
+ * @description
+ * This function performs comprehensive validation of the requested path. It checks for path length, blocked patterns,
+ * URL decoding, path normalization, directory traversal, dot file access, and protected directories. If the path is valid,
+ * it resolves the absolute path within the root directory and returns it. Otherwise, it returns an error detailing the violation.
  */
 export const validatePath = (
   requestedPath: string,
@@ -268,7 +283,13 @@ export const validatePath = (
 };
 
 /**
- * Sanitize a filename by removing dangerous characters
+ * Sanitize filename by removing unsafe characters
+ * @param filename - The filename to sanitize
+ * @returns {string} Sanitized filename
+ * @description
+ * This function removes characters that are unsafe for filenames, such as control characters,
+ * slashes, backslashes, and other reserved characters. It also trims leading and trailing dots
+ * and replaces spaces with underscores. Finally, it limits the filename length to 255 characters.
  */
 export const sanitizeFilename = (filename: string): string =>
   filename
@@ -279,7 +300,11 @@ export const sanitizeFilename = (filename: string): string =>
     .slice(0, 255); // Limit length
 
 /**
- * Check if a file extension is potentially dangerous
+ * Check if a filename has a dangerous extension
+ * @param filename - The filename to check
+ * @returns {boolean} True if the extension is dangerous, false otherwise
+ * @description
+ * This function checks if the file extension of the given filename is in the list of dangerous extensions.
  */
 export const isDangerousExtension = (filename: string): boolean => {
   const extension = filename.toLowerCase().split(".").pop();
@@ -287,7 +312,13 @@ export const isDangerousExtension = (filename: string): boolean => {
 };
 
 /**
- * Extract safe path components
+ * Get sanitized path components from a given path
+ * @param path - The path to split into components
+ * @returns {string[]} An array of sanitized path components
+ * @description
+ * This function splits the given path into its components, filters out empty components
+ * and those representing current or parent directories, and sanitizes each component
+ * to ensure it is safe for use as a filename.
  */
 export const getPathComponents = (path: string): string[] =>
   path
@@ -296,7 +327,12 @@ export const getPathComponents = (path: string): string[] =>
     .map((component) => sanitizeFilename(component));
 
 /**
- * Create a safe relative path
+ * Create a safe relative path from given segments
+ * @param pathSegments - The path segments to combine
+ * @returns {string} The combined safe relative path
+ * @description
+ * This function takes multiple path segments, splits them into components,
+ * sanitizes each component, and then combines them into a single safe relative path.
  */
 export const createSafeRelativePath = (...pathSegments: string[]): string => {
   const safeSegments = pathSegments
@@ -308,6 +344,15 @@ export const createSafeRelativePath = (...pathSegments: string[]): string => {
 
 /**
  * Validate and resolve a URL path against a root directory
+ * @param urlPath - The URL path to validate
+ * @param rootPath - The root directory path
+ * @param options - Security options
+ * @returns {PathValidationResult} The result of the path validation and resolution
+ * @description
+ * This function removes any query strings or fragments from the URL path,
+ * then validates the cleaned path using the validatePath function.
+ * It returns the result of the validation, including whether the path is valid
+ * and the resolved absolute path within the root directory.
  */
 export const resolveUrlPath = (
   urlPath: string,
@@ -322,7 +367,13 @@ export const resolveUrlPath = (
 };
 
 /**
- * Check if a path contains any suspicious patterns
+ * Check if a path contains suspicious patterns
+ * @param path - The path to check
+ * @returns {boolean} True if the path contains suspicious patterns, false otherwise
+ * @description
+ * This function checks the given path against a set of known suspicious patterns
+ * that may indicate directory traversal attempts, URL encoding attacks, null byte injections,
+ * or the presence of control characters. It returns true if any such patterns are found.
  */
 export const containsSuspiciousPatterns = (path: string): boolean => {
   const suspiciousPatterns = [
@@ -340,24 +391,35 @@ export const containsSuspiciousPatterns = (path: string): boolean => {
 
 /**
  * Create a security audit log entry
+ * @param path - The requested path
+ * @param result - The result of path validation
+ * @param clientIP - Optional client IP address
+ * @returns {SecurityAuditEntry} The security audit entry
+ * @description
+ * This function creates a security audit log entry containing the timestamp,
+ * requested path, validation result, optional client IP address, and severity level.
  */
 export const createSecurityAuditEntry = (
   path: string,
   result: PathValidationResult,
   clientIP?: string,
-) => {
-  return {
+) => ({
     timestamp: new Date().toISOString(),
     path,
     isValid: result.isValid,
     error: result.error,
     clientIP,
     severity: result.isValid ? "info" : "warning",
-  };
-};
+  });
 
 /**
- * Security middleware factory
+ * Create security middleware factory
+ * @param rootPath - The root directory path
+ * @param options - Security options
+ * @returns {Function} The security middleware function
+ * @description
+ * This function creates a middleware function for security validation of incoming requests.
+ * It uses the validatePath function to check the requested URL path against the root directory
  */
 export const createSecurityMiddleware = (
   rootPath: string,

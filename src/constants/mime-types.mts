@@ -168,7 +168,14 @@ export const COMPRESSIBLE_MIME_TYPES = new Set([
 ]);
 
 /**
- * Get MIME type for a file extension
+ * Get MIME type for a given file extension
+ * @param extension - File extension (e.g., ".html")
+ * @param options - MimeTypeOptions to customize behavior
+ * @returns {string} MIME type as a string
+ * @description
+ * This function retrieves the MIME type for a given file extension. It first checks for any custom mappings provided in the options.
+ * If no custom mapping is found, it falls back to the default MIME type mappings defined in DEFAULT_MIME_TYPES.
+ * If the extension is not found in either, it returns the default MIME type specified in the options or "application/octet-stream" if none is provided.
  */
 export const getMimeType = (
   extension: string,
