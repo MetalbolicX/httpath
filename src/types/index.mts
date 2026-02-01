@@ -6,12 +6,22 @@ export interface ServerConfig {
   port: number;
   rootPath: string;
   reload: boolean;
+  // Additional options pulled from CLI
+  ignorePatterns?: string[];
+  enableDirectoryListing?: boolean;
+  restartOnChange?: boolean;
+  logLevel?: LogLevel;
+  debounceMs?: number;
 }
 
 export interface CliOptions {
   port?: string;
   path?: string;
   reload?: boolean;
+  ignore?: string;
+  "no-listing"?: boolean;
+  "restart-on-change"?: boolean;
+  log?: LogLevel;
 }
 
 // File system types
@@ -58,6 +68,7 @@ export interface HotReloadOptions {
   watchPath: string;
   ignored?: string[];
   debounceMs?: number;
+  restartOnChange?: boolean;
 }
 
 export interface SSEClient {

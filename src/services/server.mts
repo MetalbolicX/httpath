@@ -43,6 +43,9 @@ export class HTTPServer {
     if (config.reload) {
       this.hotReload = new HotReloadService({
         watchPath: config.rootPath,
+        ignored: config.ignorePatterns || undefined,
+        debounceMs: config.debounceMs || undefined,
+        restartOnChange: config.restartOnChange || false,
       });
     }
   }
@@ -143,20 +146,24 @@ export class HTTPServer {
     const url = req.url || "/";
     const method = req.method || "GET";
 
-    const requestResult = await tryCatchAsync(async () => {
+    let statusCode = 500;
+    const responseTimeStart = Date.now();
+    try {
       // Log the request
       this.logger.logRequest(method, url);
 
       // Handle hot-reload SSE endpoint
       if (url === "/__reload__" && this.hotReload) {
         this.hotReload.handleSSEConnection(req, res);
-        return { statusCode: 200 };
+        statusCode = 200;
+        return;
       }
 
       // Only handle GET requests for file serving
       if (method !== "GET") {
         this.sendError(res, 405, "Method Not Allowed");
-        return { statusCode: 405 };
+        statusCode = 405;
+        return;
       }
 
       // Validate path security
@@ -166,7 +173,8 @@ export class HTTPServer {
           `Security violation: ${pathValidationResult.error.message} - ${url}`,
         );
         this.sendError(res, 403, "Forbidden - Access denied");
-        return { statusCode: 403 };
+        statusCode = 403;
+        return;
       }
 
       const pathValidation = pathValidationResult.data;
@@ -175,7 +183,8 @@ export class HTTPServer {
           `Security violation: ${pathValidation.error} - ${url}`,
         );
         this.sendError(res, 403, "Forbidden - Access denied");
-        return { statusCode: 403 };
+        statusCode = 403;
+        return;
       }
 
       const safePath = pathValidation.resolvedPath;
@@ -184,13 +193,15 @@ export class HTTPServer {
       const existsResult = await fileExists(safePath);
       if (!isSuccess(existsResult) || !existsResult.data) {
         this.sendError(res, 404, "Not Found");
-        return { statusCode: 404 };
+        statusCode = 404;
+        return;
       }
 
       const statsResult = await getFileStat(safePath);
       if (!isSuccess(statsResult)) {
         this.sendError(res, 500, "Internal Server Error");
-        return { statusCode: 500 };
+        statusCode = 500;
+        return;
       }
 
       const stats = statsResult.data;
@@ -201,21 +212,24 @@ export class HTTPServer {
         await this.handleFileRequest(safePath, res);
       }
 
-      return { statusCode: 200 };
-    }, mapToNetworkError);
+      statusCode = 200;
+    } catch (err) {
+      // Log actual thrown error with stack
+      const e = err as any;
+      if (e instanceof Error) {
+        this.logger.error("Unhandled exception during request handling:", e.message, e.stack);
+      } else {
+        this.logger.error("Unhandled exception during request handling:", e);
+      }
 
-    // Handle result and log response
-    const statusCode = unwrapOr(requestResult, { statusCode: 500 }).statusCode;
-    const responseTime = Date.now() - startTime;
-
-    if (!isSuccess(requestResult)) {
-      this.logger.error("Request handling error:", requestResult.error);
       if (!res.headersSent) {
         this.sendError(res, 500, "Internal Server Error");
       }
+      statusCode = 500;
+    } finally {
+      const responseTime = Date.now() - startTime;
+      this.logger.logResponse(statusCode, responseTime);
     }
-
-    this.logger.logResponse(statusCode, responseTime);
   }
 
   /**
@@ -232,6 +246,11 @@ export class HTTPServer {
     const indexExistsResult = await fileExists(indexPath);
     if (isSuccess(indexExistsResult) && indexExistsResult.data) {
       await this.handleFileRequest(indexPath, res);
+      return;
+    }
+    // If directory listing is disabled, forbid access when no index.html
+    if (this.config && this.config.enableDirectoryListing === false) {
+      this.sendError(res, 403, "Directory listing disabled");
       return;
     }
 

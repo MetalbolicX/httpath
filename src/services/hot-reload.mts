@@ -1,5 +1,6 @@
 // Hot-reload service with Server-Sent Events functionality
 import { watch, FSWatcher } from "node:fs";
+import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import type {
   HotReloadOptions,
@@ -36,7 +37,8 @@ export const DEFAULT_HOT_RELOAD_OPTIONS: Required<HotReloadOptions> = {
     ".DS_Store",
     "Thumbs.db",
   ],
-  debounceMs: 100,
+  debounceMs: 500,
+  restartOnChange: false,
 };
 
 /**
@@ -419,8 +421,27 @@ export class HotReloadService extends EventEmitter {
         timestamp: new Date(),
       };
 
-      this.broadcastReload(reloadEvent);
-      this.emit("file-changed", reloadEvent);
+      // Classification: determine whether to restart server or broadcast reload
+      const shouldRestart = this.shouldRestartServer([filename]);
+      const shouldReload = this.shouldTriggerBrowserReload([filename]);
+
+      if (this.options.restartOnChange || shouldRestart) {
+        console.log(`🔁 Restart requested due to change: ${filename}`);
+        try {
+          this.restartProcess();
+        } catch (err) {
+          console.warn("Failed to restart process:", err);
+        }
+        return;
+      }
+
+      if (shouldReload) {
+        this.broadcastReload(reloadEvent);
+        this.emit("file-changed", reloadEvent);
+      } else {
+        // Not a known reload/restart type — still emit generic event
+        this.emit("file-changed", reloadEvent);
+      }
     }, this.options.debounceMs);
   }
 
@@ -450,6 +471,64 @@ export class HotReloadService extends EventEmitter {
       default:
         return "file-changed";
     }
+  }
+
+  /**
+   * Decide if any of the given paths should trigger a server restart
+   */
+  private shouldRestartServer(paths: string[]): boolean {
+    const serverRestartPatterns = [
+      /\.ts$/i,
+      /\.js$/i,
+      /\.mjs$/i,
+      /\.json$/i,
+      /\.toml$/i,
+      /\.ya?ml$/i,
+      /deno\.json/i,
+      /deno\.lock/i,
+      /package\.json/i,
+    ];
+
+    return paths.some((p) => serverRestartPatterns.some((r) => r.test(p)));
+  }
+
+  /**
+   * Decide if any of the given paths should trigger a browser reload
+   */
+  private shouldTriggerBrowserReload(paths: string[]): boolean {
+    const browserReloadPatterns = [
+      /\.html?$/i,
+      /\.css$/i,
+      /\.s[ac]ss$/i,
+      /\.less$/i,
+      /\.js$/i,
+      /\.jsx$/i,
+      /\.ts$/i,
+      /\.tsx$/i,
+      /\.vue$/i,
+      /\.svelte$/i,
+      /\.md$/i,
+      /\.(png|jpe?g|gif|svg|webp|ico)$/i,
+      /\.(woff2?|ttf|eot)$/i,
+      /\.json$/i,
+    ];
+
+    return paths.some((p) => browserReloadPatterns.some((r) => r.test(p)));
+  }
+
+  /**
+   * Spawn a new Node process with the same arguments and exit current process
+   */
+  private restartProcess(): void {
+    const args = process.argv.slice(1); // keep script and its args
+    const child = spawn(process.execPath, args, {
+      detached: true,
+      stdio: "inherit",
+    });
+
+    child.unref();
+    console.log("🔁 Spawned replacement process, exiting current process...");
+    process.exit(0);
   }
 
   /**

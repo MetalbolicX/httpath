@@ -11,6 +11,11 @@ export const DEFAULT_CONFIG = {
   port: 8080,
   rootPath: process.cwd(),
   reload: false,
+  ignorePatterns: ["node_modules", ".git", ".DS_Store"],
+  enableDirectoryListing: true,
+  restartOnChange: false,
+  logLevel: "info",
+  debounceMs: 500,
 } as const;
 
 /**
@@ -31,6 +36,23 @@ const CLI_OPTIONS = {
     type: "boolean" as const,
     short: "r",
     default: DEFAULT_CONFIG.reload,
+  },
+  ignore: {
+    type: "string" as const,
+    short: "i",
+    default: (DEFAULT_CONFIG.ignorePatterns || []).join(","),
+  },
+  "no-listing": {
+    type: "boolean" as const,
+    default: !DEFAULT_CONFIG.enableDirectoryListing,
+  },
+  "restart-on-change": {
+    type: "boolean" as const,
+    default: DEFAULT_CONFIG.restartOnChange,
+  },
+  log: {
+    type: "string" as const,
+    default: DEFAULT_CONFIG.logLevel,
   },
   help: {
     type: "boolean" as const,
@@ -56,6 +78,10 @@ Options:
   -p, --port <number>     Port number to listen on (default: 8080)
   -d, --path <directory>  Directory to serve files from (default: current directory)
   -r, --reload            Enable hot-reload functionality (default: false)
+  -i, --ignore <patterns>  Comma-separated patterns to ignore (default: node_modules,.git,.DS_Store)
+  --no-listing            Disable directory listing (default: false)
+  --restart-on-change     Restart server process on file changes (default: false)
+  --log <level>           Log level: debug, info, warn, error (default: info)
   -h, --help              Show this help message
   -v, --version           Show version number
 
@@ -117,10 +143,18 @@ export const parseCliArgs = (
     // Resolve and validate path
     const rootPath = resolve(values.path as string);
 
+    const ignorePatterns = (values.ignore as string)
+      ? (values.ignore as string).split(",").map((s) => s.trim()).filter(Boolean)
+      : DEFAULT_CONFIG.ignorePatterns;
+
     return {
       port,
       rootPath,
       reload: Boolean(values.reload),
+      ignorePatterns,
+      enableDirectoryListing: !(values["no-listing"] as boolean),
+      restartOnChange: Boolean(values["restart-on-change"]),
+      logLevel: (values.log as any) || DEFAULT_CONFIG.logLevel,
     };
   }, mapToConfigurationError);
 

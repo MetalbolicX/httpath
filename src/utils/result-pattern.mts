@@ -447,3 +447,8 @@ export const mapToFileSystemError = createErrorMapper(FileSystemError);
 export const mapToSecurityError = createErrorMapper(SecurityError);
 export const mapToConfigurationError = createErrorMapper(ConfigurationError);
 export const mapToNetworkError = createErrorMapper(NetworkError);
+
+// Backwards-compat: expose helpers on globalThis to avoid bundler rename issues
+;(globalThis as any).success = success;
+;(globalThis as any).failure = failure;
+;(globalThis as any).isSuccess = isSuccess;
