@@ -9,7 +9,6 @@ export default defineConfig({
   tsconfig: true,
   outDir: "./dist",
   fixedExtension: true,
-  bundle: true,
   splitting: false,
   external: [
     "http",
