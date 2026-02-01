@@ -1,7 +1,7 @@
 {
   "name": "httpath",
   "version": "0.1.0",
-  "description": "A file server similar to liveserver",
+  "description": "A lightweight, feature-rich static file server similar to Python's `python -m http.server` but with modern Node.js features and more.",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "main": "./dist/index.umd.js",
@@ -24,8 +24,7 @@
     "start": "node ./dist/index.mjs",
     "dev": "node ./dist/index.mjs --reload",
     "serve": "node ./dist/index.mjs --port 3000 --path .",
-    "test": "node test-server.mjs",
-    "prepublishOnly": "npm run build"
+    "test": "node test-server.mjs"
   },
   "author": {
     "name": "José Martínez Santana"
