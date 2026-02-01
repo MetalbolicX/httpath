@@ -4,7 +4,7 @@ export default defineConfig({
   entry: "./src/index.mts",
   format: ["cjs", "esm"],
   platform: "node",
-  minify: false,
+  minify: true,
   dts: true,
   tsconfig: true,
   outDir: "./dist",
