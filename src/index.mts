@@ -1,157 +1,547 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* Converted from sample.mjs to TypeScript */
 
-// HTTPath - A minimalist Node.js file server with hot-reload capabilities
-// Main entry point that orchestrates all modules
+import { parseArgs, ParseArgsConfig } from "node:util";
+import { join, resolve, extname, dirname } from "node:path";
+import { createServer, IncomingMessage, ServerResponse } from "node:http";
+import { watch, createReadStream } from "node:fs";
+import { stat, readdir, open } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
-import { parseCliArgs, validateConfig, VERSION_INFO } from "./config/cli.mjs";
-import { isSuccess, unwrap } from "./utils/result-pattern.mjs";
-import { createHTTPServer } from "./services/server.mjs";
-import { createLogger } from "./utils/logger.mjs";
-import type { ServerInstance } from "./types/index.mjs";
+// --- Types ---
 
-/**
- * Global logger instance
- */
-const logger = createLogger({
-  level: "info",
-  format: "simple",
-  colorize: true,
-});
-
-/**
- * Application state
- */
-let serverInstance: ServerInstance | null = null;
-
-/**
- * Main application function
- */
-const main = async (): Promise<void> => {
-  // Display banner
-  displayBanner();
-
-  // Parse CLI arguments
-  const configResult = parseCliArgs();
-  if (!isSuccess(configResult)) {
-    logger.error(
-      "❌ Failed to parse CLI arguments:",
-      configResult.error.message,
-    );
-    process.exit(1);
-  }
-
-  const config = configResult.data;
-
-  // Validate configuration
-  if (!validateConfig(config)) {
-    process.exit(1);
-  }
-
-  // Create and start server
-  try {
-    const server = createHTTPServer(config);
-    serverInstance = await server.start();
-
-    // Setup graceful shutdown
-    setupGracefulShutdown();
-  } catch (error) {
-    logger.error(
-      "❌ Failed to start server:",
-      error instanceof Error ? error.message : String(error),
-    );
-    process.exit(1);
-  }
-};
-
-/**
- * Display application banner
- */
-const displayBanner = (): void => {
-  console.log(`
-🚀 ${VERSION_INFO.name} v${VERSION_INFO.version}
-${VERSION_INFO.description}
-`);
-};
-
-/**
- * Setup graceful shutdown handlers
- */
-const setupGracefulShutdown = (): void => {
-  const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
-
-  for (const signal of signals) {
-    process.on(signal, async () => {
-      logger.info(`\n\n👋 Received ${signal}, shutting down gracefully...`);
-
-      if (serverInstance) {
-        try {
-          await serverInstance.stop();
-          logger.info("✅ Server stopped successfully");
-          process.exit(0);
-        } catch (error) {
-          logger.error("❌ Error stopping server:", error);
-          process.exit(1);
-        }
-      } else {
-        process.exit(0);
-      }
-    });
-  }
-
-  // Handle uncaught exceptions
-  process.on("uncaughtException", (error) => {
-    logger.error("💥 Uncaught Exception:", error);
-    if (serverInstance) {
-      serverInstance.stop().finally(() => process.exit(1));
-    } else {
-      process.exit(1);
-    }
-  });
-
-  // Handle unhandled promise rejections
-  process.on("unhandledRejection", (reason, promise) => {
-    logger.error("💥 Unhandled Promise Rejection:", reason);
-    logger.debug("Promise:", promise);
-    if (serverInstance) {
-      serverInstance.stop().finally(() => process.exit(1));
-    } else {
-      process.exit(1);
-    }
-  });
-};
-
-/**
- * Check if this file is being run directly
- */
-const isMainModule = (): boolean => {
-  return (
-    process.argv[1] &&
-    (process.argv[1].endsWith("/index.mjs") ||
-      process.argv[1].endsWith("\\index.mjs") ||
-      process.argv[1].includes("dist"))
-  );
-};
-
-// Run the application if this file is executed directly
-if (isMainModule()) {
-  main().catch((error) => {
-    logger.error("💥 Application crashed:", error);
-    process.exit(1);
-  });
+export interface Config {
+  directory: string;
+  port: number;
+  ignorePatterns: string[];
+  enableDirectoryListing: boolean;
+  logLevel: ParseArgsConfig["logLevel"];
+  enableLiveReload: boolean;
+  restartOnChange: boolean;
 }
 
-// Export main functions for programmatic use
-export { main, createHTTPServer, parseCliArgs, validateConfig, VERSION_INFO };
+export interface FileEntry {
+  name: string;
+  isDirectory: boolean;
+  url: string;
+}
 
-// Re-export key types and utilities for external use
-export type {
-  ServerConfig,
-  ServerInstance,
-  HotReloadOptions,
-  LoggerOptions,
-} from "./types/index.mjs";
+// --- Constants & Globals ---
 
-export { createLogger } from "./utils/logger.mjs";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-export { findAvailablePort } from "./utils/port-finder.mjs";
-export { createHotReloadService } from "./services/hot-reload.mjs";
+const MIME_TYPES: Record<string, string> = {
+  html: "text/html",
+  css: "text/css",
+  js: "text/javascript",
+  mjs: "text/javascript",
+  json: "application/json",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  ico: "image/x-icon",
+  txt: "text/plain",
+  md: "text/markdown",
+  ts: "video/mp2t", // Common misinterpretation, but for serving source:
+  // For source code serving usually text/plain is safer unless specific mime needed
+};
+
+const DEFAULT_CONFIG: Config = {
+  directory: __dirname,
+  port: 8080,
+  ignorePatterns: [".git", "node_modules", ".DS_Store"],
+  enableDirectoryListing: true,
+  logLevel: "info",
+  enableLiveReload: true,
+  restartOnChange: false,
+};
+
+let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
+let isProcessingChange = false;
+const liveReloadClients = new Set<ServerResponse>();
+
+// --- Helpers ---
+
+/**
+ * Parses command line arguments.
+ * @param args {string[]} - Command line arguments.
+ * @returns {Config} - Parsed configuration.
+ */
+const parseArguments = (args: string[]): Config => {
+  const options: ParseArgsConfig = {
+    dir: { type: "string", short: "d", default: DEFAULT_CONFIG.directory },
+    port: {
+      type: "string",
+      short: "p",
+      default: DEFAULT_CONFIG.port.toString(),
+    },
+    ignore: {
+      type: "string",
+      short: "i",
+      default: DEFAULT_CONFIG.ignorePatterns.join(","),
+    },
+    "no-listing": { type: "boolean", default: false },
+    "no-live-reload": { type: "boolean", default: false },
+    "restart-on-change": { type: "boolean", default: false },
+    log: { type: "string", default: DEFAULT_CONFIG.logLevel },
+    help: { type: "boolean", short: "h", default: false },
+  };
+
+  const { values } = parseArgs({ args, options, allowPositionals: true });
+
+  if (values.help) {
+    console.log(`
+Static File Server with Auto-Reload (Node.js)
+
+Usage: httpreload [OPTIONS]
+
+Options:
+  -d, --dir <directory>      Directory to serve (default: current directory)
+  -p, --port <port>          Port to listen on (default: 8080)
+  -i, --ignore <patterns>    Comma-separated patterns to ignore
+  --no-listing               Disable directory listing
+  --no-live-reload           Disable live reload feature
+  --restart-on-change        Restart server process on file changes
+  --log <level>              Log level: info, debug, error
+  -h, --help                 Show this help message
+`);
+    process.exit(0);
+  }
+
+  const port = parseInt((values.port as string) || "8080", 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error("Port must be a valid number between 1 and 65535");
+  }
+
+  return {
+    directory: resolve((values.dir as string) || "."),
+    port,
+    ignorePatterns: ((values.ignore as string) || "")
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean),
+    enableDirectoryListing: !Boolean(values["no-listing"]),
+    logLevel:
+      (values.log as ParseArgsConfig["logLevel"]) || DEFAULT_CONFIG.logLevel,
+    enableLiveReload: !Boolean(values["no-live-reload"]),
+    restartOnChange: Boolean(values["restart-on-change"]),
+  };
+};
+
+/**
+ * Logs a message.
+ * @param message {string} - The message to log.
+ * @param level {Config['logLevel']} - The log level.
+ */
+const log = (message: string, level: Config["logLevel"] = "info") => {
+  const timestamp = new Date().toISOString();
+  const prefix = level.toUpperCase().padEnd(5);
+  // eslint-disable-next-line no-console
+  console.log(`[${timestamp}] ${prefix} ${message}`);
+};
+
+/**
+ * Checks if a filename should be ignored.
+ * @param filename {string} - The filename to check.
+ * @param ignorePatterns {string[]} - The patterns to ignore.
+ */
+const shouldIgnore = (filename: string, ignorePatterns: string[]) =>
+  ignorePatterns.some(
+    (pattern) => filename.includes(pattern) || filename.endsWith(pattern),
+  );
+
+/**
+ * Debounce helper.
+ * @param ms {number} - The debounce time in milliseconds.
+ * @returns {Promise<void>} - A promise that resolves after the debounce time.
+ */
+const debounce = (ms: number) =>
+  new Promise<void>((resolve) => {
+    if (debounceTimeout) clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(() => {
+      debounceTimeout = null;
+      resolve();
+    }, ms);
+  });
+
+/**
+ * Gets MIME type from file extension.
+ * @param filePath {string} - The file path to get the MIME type for.
+ */
+const getMimeType = (filePath: string) => {
+  const ext = extname(filePath).slice(1).toLowerCase();
+  return MIME_TYPES[ext] || "application/octet-stream";
+};
+
+// --- Live Reload (SSE) ---
+
+/**
+ * Generates the SSE client script.
+ * @param port {number} - The port number for the SSE server.
+ */
+const getLiveReloadScript = (port: number) => /*html*/ `
+<script>
+(() => {
+  const sseUrl = '/livereload';
+  let source;
+
+  const connect = () => {
+    console.log('[Live Reload] Connecting...');
+    source = new EventSource(sseUrl);
+
+    source.onopen = () => {
+      console.log('[Live Reload] Connected');
+    };
+
+    source.onmessage = (event) => {
+      if (event.data === 'reload') {
+        console.log('[Live Reload] Reloading page...');
+        window.location.reload();
+      }
+    };
+
+    source.onerror = () => {
+      console.log('[Live Reload] Connection error, reconnecting...');
+      source.close();
+      setTimeout(connect, 1000);
+    };
+  };
+
+  connect();
+})();
+</script>`;
+
+/**
+ * Injects script into HTML.
+ * @param html {string} - The HTML content to inject the script into.
+ * @param port {number} - The port number for the SSE server.
+ * @returns {string} - The HTML content with the script injected.
+ */
+const injectLiveReloadScript = (html: string, port: number) => {
+  const script = getLiveReloadScript(port);
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${script}\n</body>`);
+  } else if (html.includes("</html>")) {
+    return html.replace("</html>", `${script}\n</html>`);
+  }
+  return html + script;
+};
+
+/**
+ * Handles SSE subscriptions.
+ * @param req IncomingMessage - The incoming HTTP request.
+ * @param res ServerResponse - The server response.
+ * @returns {Promise<void>} - A promise that resolves after the SSE subscription is handled.
+ */
+const handleSSE = async (req: IncomingMessage, res: ServerResponse) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  res.write("data: connected\n\n");
+  liveReloadClients.add(res);
+
+  req.on("close", () => {
+    liveReloadClients.delete(res);
+  });
+};
+
+/**
+ * Notifies all connected clients to reload.
+ * @param reason {string} - The reason for the reload notification.
+ * @returns {Promise<void>} - A promise that resolves after all clients are notified.
+ */
+const notifyClients = async (reason = "change") => {
+  if (liveReloadClients.size === 0) return;
+  log(`Reloading ${liveReloadClients.size} clients (${reason})`, "debug");
+  for (const client of liveReloadClients) {
+    try {
+      client.write(`data: reload\n\n`);
+    } catch {
+      // ignore write errors for individual clients
+    }
+  }
+};
+
+// --- HTML Generators ---
+
+const getCSSStyles = () => /*css*/ `
+:root { --bg-page: #f2f2f2; --bg-article: #bbc3db; --color-title: #333; --color-paragraph: #333; --link-color: #1a0dab; --link-hover-color: #d93025; --toggle-color: #0f172b; --fill-icons: white; }
+:root:has(#dark:checked) { --bg-page: #333; --bg-article: #444; --color-title: #eee; --color-paragraph: #ddd; --link-color: #bb86fc; --link-hover-color: #ff79c6; }
+body { font-family: monospace; font-size: 1.3em; margin: 0.5em; padding: 1em; background-color: var(--bg-page); color: var(--color-paragraph); &:has(#dark:checked) { background-color: var(--bg-article); color: var(--color-title); } }
+h1 { font-size: 2em; margin-bottom: 0.5em; }
+a { text-decoration: none; color: var(--link-color); &:hover { text-decoration: underline; color: var(--link-hover-color); } }
+.toggle { --width: 3em; --height: calc(var(--width) / 2); --border-radius: calc(var(--height) / 2); display: inline-block; cursor: pointer; .toggle__input { display: none; &:checked + .toggle__fill { background: #009578; } &:checked + .toggle__fill::after { transform: translateX(var(--height)); } } .toggle__fill { position: relative; width: var(--width); height: var(--height); border-radius: var(--border-radius); background-color: var(--toggle-color); transition: background-color 0.3s ease-in-out; &::after { content: ""; position: absolute; top: 0; left: 0; width: var(--height); height: var(--height); border-radius: var(--border-radius); background-color: var(--fill-icons); box-shadow: 0 0 0.2em rgba(0, 0, 0, 0.2); transition: transform 0.3s ease-in-out; } } }
+`;
+
+/**
+ * Generates Directory Listing HTML.
+ * @param entries {FileEntry[]} - The array of file entries to generate the directory listing for.
+ * @param urlPath {string} - The URL path of the directory.
+ * @returns {string} - The generated directory listing HTML.
+ */
+const generateDirectoryListingHTML = (
+  entries: FileEntry[],
+  urlPath: string,
+) => {
+  const parentDir = urlPath === "/" ? "" : `<a href="../">../</a><br>`;
+  const entryLinks = entries
+    .slice()
+    .sort((a, b) =>
+      a.isDirectory === b.isDirectory ? 0 : a.isDirectory ? -1 : 1,
+    )
+    .sort((a, b) =>
+      a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : 0,
+    )
+    .map((entry) => {
+      const icon = entry.isDirectory ? "📁" : "📄";
+      const href = entry.url;
+      return `<a href="${href}">${icon} ${entry.name}</a>`;
+    })
+    .join("<br>");
+
+  return /*html*/ `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Listing of ${urlPath}</title>
+  <style>${getCSSStyles()}</style>
+</head>
+<body>
+  <label class="toggle" for="dark"><input type="checkbox" id="dark" class="toggle__input" checked><span class="toggle__fill"></span></label>
+  <h1>Listing of ${urlPath}</h1>
+  ${parentDir}
+  ${entryLinks}
+</body>
+</html>`;
+};
+
+// --- Server Logic ---
+
+/**
+ * Serves a file.
+ * @param filePath {string} - The path of the file to serve.
+ * @param res ServerResponse - The response object to write the file content to.
+ * @param config Config - The configuration object.
+ * @returns {Promise<void>} - A promise that resolves when the file is served.
+ */
+const serveFile = async (
+  filePath: string,
+  res: ServerResponse,
+  config: Config,
+) => {
+  const mimeType = getMimeType(filePath);
+
+  // Inject script for HTML files if live reload is on
+  if (config.enableLiveReload && mimeType.includes("text/html")) {
+    try {
+      const handle = await open(filePath);
+      try {
+        const content = await handle.readFile({ encoding: "utf-8" });
+        const modified = injectLiveReloadScript(content, config.port);
+        res.writeHead(200, { "Content-Type": mimeType });
+        res.end(modified);
+        return;
+      } finally {
+        await handle.close();
+      }
+    } catch (e) {
+      // Fallback to stream on error
+    }
+  }
+
+  res.writeHead(200, { "Content-Type": mimeType });
+  const stream = createReadStream(filePath);
+  stream.pipe(res);
+  stream.on("error", (err) => {
+    res.writeHead(500);
+    res.end(err.message);
+  });
+};
+
+/**
+ * Serves a directory.
+ * @param dirPath {string} - The path of the directory to serve.
+ * @param urlPath {string} - The URL path of the directory.
+ * @param res ServerResponse - The response object to write the directory listing to.
+ * @param config Config - The configuration object.
+ * @returns {Promise<void>} - A promise that resolves when the directory is served.
+ */
+const serveDirectory = async (
+  dirPath: string,
+  urlPath: string,
+  res: ServerResponse,
+  config: Config,
+) => {
+  try {
+    const files = await readdir(dirPath, { withFileTypes: true });
+    const entries: FileEntry[] = files
+      .filter((f) => !shouldIgnore(f.name, config.ignorePatterns))
+      .map((f) => ({
+        name: f.name,
+        isDirectory: f.isDirectory(),
+        // Ensure URL paths use forward slashes
+        url: join(urlPath, f.name).replace(/\\/g, "/"),
+      }));
+
+    let html = generateDirectoryListingHTML(entries, urlPath);
+    if (config.enableLiveReload)
+      html = injectLiveReloadScript(html, config.port);
+
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end(html);
+  } catch (e: any) {
+    res.writeHead(500);
+    res.end("Error reading directory");
+  }
+};
+
+/**
+ * Creates the HTTP request handler.
+ * @param config {Config} - The configuration object.
+ * @returns import('node:http').RequestListener
+ * @returns {Promise<void>} - A promise that resolves when the directory is served.
+ */
+const createHandler = (config: Config) => {
+  return async (req: IncomingMessage, res: ServerResponse) => {
+    const hostHeader = req.headers.host || `localhost:${config.port}`;
+    const url = new URL(req.url || "/", `http://${hostHeader}`);
+    const pathname = decodeURIComponent(url.pathname);
+
+    if (config.enableLiveReload && pathname === "/livereload") {
+      return handleSSE(req, res);
+    }
+
+    // Security: Traversal prevention
+    const safePath = resolve(config.directory, `.${pathname}`);
+    if (!safePath.startsWith(config.directory)) {
+      res.writeHead(403);
+      return res.end("Forbidden");
+    }
+
+    try {
+      const stats = await stat(safePath);
+      if (stats.isFile()) {
+        return await serveFile(safePath, res, config);
+      } else if (stats.isDirectory()) {
+        if (config.enableDirectoryListing) {
+          return await serveDirectory(safePath, pathname, res, config);
+        } else {
+          // Try index.html
+          const indexPath = join(safePath, "index.html");
+          try {
+            await stat(indexPath);
+            return await serveFile(indexPath, res, config);
+          } catch {
+            res.writeHead(403);
+            return res.end("Listing disabled");
+          }
+        }
+      } else {
+        res.writeHead(404);
+        return res.end("Not Found");
+      }
+    } catch (e: any) {
+      if (e && e.code === "ENOENT") {
+        res.writeHead(404);
+        return res.end("Not Found");
+      }
+      res.writeHead(500);
+      res.end(e?.message || "Server error");
+    }
+  };
+};
+
+// --- Watcher & Main ---
+
+/**
+ * Restarts the server (spawns new process, exits current).
+ */
+const reloadServer = () => {
+  log("Reloading server process...");
+  const child = spawn(process.argv[0], process.argv.slice(1), {
+    stdio: "inherit",
+    detached: true,
+  });
+  // detach and let child continue
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  child.unref();
+  process.exit(0);
+};
+
+/**
+ * Starts watching files.
+ * @param config {Config} - The configuration object.
+ * @returns {Promise<void>} - A promise that resolves when the directory is served.
+ */
+const startWatcher = async (config: Config): Promise<void> => {
+  log(`Watching: ${config.directory}`);
+
+  try {
+    watch(
+      config.directory,
+      { recursive: true },
+      async (eventType, filename) => {
+        if (!filename || shouldIgnore(filename, config.ignorePatterns)) return;
+        if (isProcessingChange) return;
+
+        isProcessingChange = true;
+        log(`Change detected: ${filename} (${eventType})`);
+
+        await debounce(500);
+
+        const isServerFile = /\.(json|js|mjs|ts)$/.test(filename);
+        const isAsset = /\.(html|css|png|jpg|jpeg|gif|svg)$/.test(filename);
+
+        if (config.restartOnChange || isServerFile) {
+          if (config.enableLiveReload) notifyClients("restart");
+          reloadServer();
+        } else if (config.enableLiveReload && isAsset) {
+          notifyClients("asset change");
+        }
+
+        // Reset lock
+        setTimeout(() => {
+          isProcessingChange = false;
+        }, 1000);
+      },
+    );
+  } catch (e: any) {
+    log(`Watcher error: ${e?.message}`, "error");
+  }
+};
+
+const main = () => {
+  try {
+    const config = parseArguments(process.argv.slice(2));
+    const server = createServer(createHandler(config));
+
+    server.listen(config.port, () => {
+      log(`Server running at http://localhost:${config.port}`);
+      log(`Root: ${config.directory}`);
+
+      startWatcher(config);
+    });
+
+    // Graceful Shutdown
+    (["SIGINT", "SIGTERM"] as NodeJS.Signals[]).forEach((sig) => {
+      process.on(sig, () => {
+        log("Shutting down...");
+        process.exit(0);
+      });
+    });
+  } catch (error: any) {
+    log(`Startup Error: ${error?.message}`, "error");
+    process.exit(1);
+  }
+};
+
+main();
