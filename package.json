@@ -1,6 +1,6 @@
 {
   "name": "httpath",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A lightweight, feature-rich static file server similar to Python's `python -m http.server` but with modern Node.js features and more.",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
