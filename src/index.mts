@@ -69,8 +69,7 @@ const liveReloadClients = new Set<ServerResponse>();
 
 /**
  * Parses command line arguments.
- * @param args {string[]} - Command line arguments.
- * @returns {Config} - Parsed configuration.
+ * @param args string[]
  */
 const parseArguments = (args: string[]): Config => {
   const options: ParseArgsConfig = {
@@ -87,7 +86,7 @@ const parseArguments = (args: string[]): Config => {
     },
     "no-listing": { type: "boolean", default: false },
     "no-live-reload": { type: "boolean", default: false },
-    "restart-on-change": { type: "boolean", short: "r", default: false },
+    "restart-on-change": { type: "boolean", default: false },
     log: { type: "string", default: DEFAULT_CONFIG.logLevel },
     help: { type: "boolean", short: "h", default: false },
   };
@@ -106,7 +105,7 @@ Options:
   -i, --ignore <patterns>    Comma-separated patterns to ignore
   --no-listing               Disable directory listing
   --no-live-reload           Disable live reload feature
-  -r  --restart-on-change        Restart server process on file changes
+  --restart-on-change        Restart server process on file changes
   --log <level>              Log level: info, debug, error
   -h, --help                 Show this help message
 `);
@@ -135,8 +134,8 @@ Options:
 
 /**
  * Logs a message.
- * @param message {string} - The message to log.
- * @param level {Config['logLevel']} - The log level.
+ * @param message string
+ * @param level Config['logLevel']
  */
 const log = (message: string, level: Config["logLevel"] = "info") => {
   const timestamp = new Date().toISOString();
@@ -147,8 +146,8 @@ const log = (message: string, level: Config["logLevel"] = "info") => {
 
 /**
  * Checks if a filename should be ignored.
- * @param filename {string} - The filename to check.
- * @param ignorePatterns {string[]} - The patterns to ignore.
+ * @param filename string
+ * @param ignorePatterns string[]
  */
 const shouldIgnore = (filename: string, ignorePatterns: string[]) =>
   ignorePatterns.some(
@@ -157,8 +156,7 @@ const shouldIgnore = (filename: string, ignorePatterns: string[]) =>
 
 /**
  * Debounce helper.
- * @param ms {number} - The debounce time in milliseconds.
- * @returns {Promise<void>} - A promise that resolves after the debounce time.
+ * @param ms number
  */
 const debounce = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -171,7 +169,7 @@ const debounce = (ms: number) =>
 
 /**
  * Gets MIME type from file extension.
- * @param filePath {string} - The file path to get the MIME type for.
+ * @param filePath string
  */
 const getMimeType = (filePath: string) => {
   const ext = extname(filePath).slice(1).toLowerCase();
@@ -182,7 +180,7 @@ const getMimeType = (filePath: string) => {
 
 /**
  * Generates the SSE client script.
- * @param port {number} - The port number for the SSE server.
+ * @param port number
  */
 const getLiveReloadScript = (port: number) => /*html*/ `
 <script>
@@ -218,9 +216,8 @@ const getLiveReloadScript = (port: number) => /*html*/ `
 
 /**
  * Injects script into HTML.
- * @param html {string} - The HTML content to inject the script into.
- * @param port {number} - The port number for the SSE server.
- * @returns {string} - The HTML content with the script injected.
+ * @param html string
+ * @param port number
  */
 const injectLiveReloadScript = (html: string, port: number) => {
   const script = getLiveReloadScript(port);
@@ -234,11 +231,10 @@ const injectLiveReloadScript = (html: string, port: number) => {
 
 /**
  * Handles SSE subscriptions.
- * @param req IncomingMessage - The incoming HTTP request.
- * @param res ServerResponse - The server response.
- * @returns {Promise<void>} - A promise that resolves after the SSE subscription is handled.
+ * @param req IncomingMessage
+ * @param res ServerResponse
  */
-const handleSSE = async (req: IncomingMessage, res: ServerResponse) => {
+const handleSSE = (req: IncomingMessage, res: ServerResponse) => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -255,10 +251,9 @@ const handleSSE = async (req: IncomingMessage, res: ServerResponse) => {
 
 /**
  * Notifies all connected clients to reload.
- * @param reason {string} - The reason for the reload notification.
- * @returns {Promise<void>} - A promise that resolves after all clients are notified.
+ * @param reason string
  */
-const notifyClients = async (reason = "change") => {
+const notifyClients = (reason = "change") => {
   if (liveReloadClients.size === 0) return;
   log(`Reloading ${liveReloadClients.size} clients (${reason})`, "debug");
   for (const client of liveReloadClients) {
@@ -273,130 +268,52 @@ const notifyClients = async (reason = "change") => {
 // --- HTML Generators ---
 
 const getCSSStyles = () => /*css*/ `
-:root{
-  --bg: #f6f8fa;
-  --card: #ffffff;
-  --muted: #6b7280;
-  --accent: #2563eb;
-  --text: #0f172a;
-  --elev: 0 6px 18px rgba(15,23,42,0.06);
-  --btn-border: rgba(15,23,42,0.06);
-}
-/* Respect user's system preference */
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg: #0b1220;
-    --card: #0f1724;
-    --muted: #9ca3af;
-    --accent: #60a5fa;
-    --text: #e6eef8;
-    --elev: 0 6px 22px rgba(2,6,23,0.6);
-    --btn-border: rgba(255,255,255,0.08);
-  }
-}
-/* Toggle using hidden checkbox (works without :has()) */
-#dark-toggle:checked ~ .container{
-  --bg: #0b1220;
-  --card: #0f1724;
-  --muted: #9ca3af;
-  --accent: #60a5fa;
-  --text: #e6eef8;
-  --elev: 0 6px 22px rgba(2,6,23,0.6);
-}
-
-.box-sizing{box-sizing:border-box}
-*{box-sizing:border-box}
-html{color-scheme: light dark; background-color:var(--bg)}
-body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;background:var(--bg);color:var(--text)}
-.container{max-width:980px;margin:28px auto;padding:20px}
-.card{background:var(--card);border-radius:10px;padding:18px;box-shadow:var(--elev)}
-.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
-.title{font-size:18px;font-weight:600;color:var(--text);margin:0}
-.path{font-size:12px;color:var(--muted)}
-.controls{display:flex;align-items:center;gap:8px}
-.toggle-btn{background:transparent;border:1px solid var(--btn-border);padding:6px 8px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text);backdrop-filter: blur(4px);transition:all 180ms ease}
-.toggle-btn:hover{opacity:0.95}
-
-/* Visible active state when dark mode is enabled */
-#dark-toggle:checked ~ .container .toggle-btn{background:var(--accent);color:#fff;border-color:transparent;transform:translateY(-1px)}
-.file-list{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.file{display:flex;align-items:center;padding:10px;border-radius:8px;border:1px solid rgba(15,23,42,0.04);background:linear-gradient(180deg,rgba(0,0,0,0.01),transparent)}
-.file a{display:flex;align-items:center;gap:12px;width:100%;color:inherit;text-decoration:none}
-.icon{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(37,99,235,0.08);font-size:20px}
-.name{font-weight:500}
-.meta{margin-left:auto;font-size:12px;color:var(--muted)}
-.parent{grid-column:1/-1;padding:0 4px}
-.empty{padding:18px;text-align:center;color:var(--muted)}
-@media (max-width:600px){.file-list{grid-template-columns:1fr}}
+:root { --bg-page: #f2f2f2; --bg-article: #bbc3db; --color-title: #333; --color-paragraph: #333; --link-color: #1a0dab; --link-hover-color: #d93025; --toggle-color: #0f172b; --fill-icons: white; }
+:root:has(#dark:checked) { --bg-page: #333; --bg-article: #444; --color-title: #eee; --color-paragraph: #ddd; --link-color: #bb86fc; --link-hover-color: #ff79c6; }
+body { font-family: monospace; font-size: 1.3em; margin: 0.5em; padding: 1em; background-color: var(--bg-page); color: var(--color-paragraph); &:has(#dark:checked) { background-color: var(--bg-article); color: var(--color-title); } }
+h1 { font-size: 2em; margin-bottom: 0.5em; }
+a { text-decoration: none; color: var(--link-color); &:hover { text-decoration: underline; color: var(--link-hover-color); } }
+.toggle { --width: 3em; --height: calc(var(--width) / 2); --border-radius: calc(var(--height) / 2); display: inline-block; cursor: pointer; .toggle__input { display: none; &:checked + .toggle__fill { background: #009578; } &:checked + .toggle__fill::after { transform: translateX(var(--height)); } } .toggle__fill { position: relative; width: var(--width); height: var(--height); border-radius: var(--border-radius); background-color: var(--toggle-color); transition: background-color 0.3s ease-in-out; &::after { content: ""; position: absolute; top: 0; left: 0; width: var(--height); height: var(--height); border-radius: var(--border-radius); background-color: var(--fill-icons); box-shadow: 0 0 0.2em rgba(0, 0, 0, 0.2); transition: transform 0.3s ease-in-out; } } }
 `;
 
 /**
  * Generates Directory Listing HTML.
- * @param entries {FileEntry[]} - The array of file entries to generate the directory listing for.
- * @param urlPath {string} - The URL path of the directory.
- * @returns {string} - The generated directory listing HTML.
+ * @param entries FileEntry[]
+ * @param urlPath string
  */
 const generateDirectoryListingHTML = (
   entries: FileEntry[],
   urlPath: string,
 ) => {
-  const parentDir =
-    urlPath === "/"
-      ? null
-      : {
-          name: "..",
-          url: join(urlPath, "../").replace(/\\/g, "/"),
-          isDirectory: true,
-        };
-
-  const sorted = entries.slice().sort((a, b) => {
-    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-  });
-
-  const items = sorted
+  const parentDir = urlPath === "/" ? "" : `<a href="../">../</a><br>`;
+  const entryLinks = entries
+    .slice()
+    .sort((a, b) =>
+      a.isDirectory === b.isDirectory ? 0 : a.isDirectory ? -1 : 1,
+    )
+    .sort((a, b) =>
+      a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : 0,
+    )
     .map((entry) => {
       const icon = entry.isDirectory ? "📁" : "📄";
       const href = entry.url;
-      return /*html*/ `<li class="file"><a href="${href}"><span class="icon">${icon}</span><span class="name">${entry.name}</span><span class="meta">${entry.isDirectory ? "Dir" : "File"}</span></a></li>`;
+      return `<a href="${href}">${icon} ${entry.name}</a>`;
     })
-    .join("\n");
-
-  const parentHtml = parentDir
-    ? /*html*/ `<li class="file parent"><a href="../"><span class="icon">⬆️</span><span class="name">..</span><span class="meta">Parent</span></a></li>`
-    : "";
-
-  const content = items || /*html*/ `<div class="empty">This folder is empty</div>`;
+    .join("<br>");
 
   return /*html*/ `
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
   <title>Listing of ${urlPath}</title>
   <style>${getCSSStyles()}</style>
-  <style>/* small reset for injected scripts */ body > script{display:none}</style>
 </head>
 <body>
-  <input type="checkbox" id="dark-toggle" aria-hidden style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;border:0;padding:0;margin:0" />
-  <div class="container">
-    <div class="card">
-      <div class="header">
-        <div>
-          <h1 class="title">Listing of ${urlPath}</h1>
-          <div class="path">${urlPath}</div>
-        </div>
-        <div class="controls">
-          <label for="dark-toggle" class="toggle-btn" title="Toggle dark mode">🌓</label>
-        </div>
-      </div>
-      <ul class="file-list">
-        ${parentHtml}
-        ${content}
-      </ul>
-    </div>
-  </div>
+  <label class="toggle" for="dark"><input type="checkbox" id="dark" class="toggle__input" checked><span class="toggle__fill"></span></label>
+  <h1>Listing of ${urlPath}</h1>
+  ${parentDir}
+  ${entryLinks}
 </body>
 </html>`;
 };
@@ -405,10 +322,9 @@ const generateDirectoryListingHTML = (
 
 /**
  * Serves a file.
- * @param filePath {string} - The path of the file to serve.
- * @param res ServerResponse - The response object to write the file content to.
- * @param config Config - The configuration object.
- * @returns {Promise<void>} - A promise that resolves when the file is served.
+ * @param filePath string
+ * @param res ServerResponse
+ * @param config Config
  */
 const serveFile = async (
   filePath: string,
@@ -446,11 +362,10 @@ const serveFile = async (
 
 /**
  * Serves a directory.
- * @param dirPath {string} - The path of the directory to serve.
- * @param urlPath {string} - The URL path of the directory.
- * @param res ServerResponse - The response object to write the directory listing to.
- * @param config Config - The configuration object.
- * @returns {Promise<void>} - A promise that resolves when the directory is served.
+ * @param dirPath string
+ * @param urlPath string
+ * @param res ServerResponse
+ * @param config Config
  */
 const serveDirectory = async (
   dirPath: string,
@@ -483,9 +398,8 @@ const serveDirectory = async (
 
 /**
  * Creates the HTTP request handler.
- * @param config {Config} - The configuration object.
+ * @param config Config
  * @returns import('node:http').RequestListener
- * @returns {Promise<void>} - A promise that resolves when the directory is served.
  */
 const createHandler = (config: Config) => {
   return async (req: IncomingMessage, res: ServerResponse) => {
@@ -556,10 +470,9 @@ const reloadServer = () => {
 
 /**
  * Starts watching files.
- * @param config {Config} - The configuration object.
- * @returns {Promise<void>} - A promise that resolves when the directory is served.
+ * @param config Config
  */
-const startWatcher = async (config: Config): Promise<void> => {
+const startWatcher = (config: Config) => {
   log(`Watching: ${config.directory}`);
 
   try {
