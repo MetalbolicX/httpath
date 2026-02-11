@@ -387,65 +387,110 @@ body {
   transform: translateX(calc(var(--width) - var(--height)));
 }
 
-/* Listing */
+/* Listing - improved file/folder presentation */
 .listing {
-  display: grid;
-  gap: 0.35rem;
-  margin-top: 0.5rem;
-}
-.listing a {
   display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+/* Each item becomes a clear row with icon, name, and meta */
+.listing a.item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 0.85rem;
-  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
   color: var(--title);
   text-decoration: none;
   background: transparent;
-  transition: background 160ms ease, transform 120ms ease;
+  transition: background 180ms ease, transform 150ms ease, box-shadow 180ms ease;
   font-size: 1rem;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  border: 1px solid transparent;
 }
-.listing a .name {
-  flex: 1 1 auto;
-  color: var(--title);
-}
-.listing a .meta {
-  color: var(--muted);
-  font-size: 0.9rem;
-  flex-shrink: 0;
-}
-.listing a:hover {
-  background: rgba(37,99,235,0.06);
-  transform: translateX(4px);
+
+/* Hover and focus styles */
+.listing a.item:hover,
+.listing a.item:focus {
+  background: color-mix(in srgb, var(--link-hover-color) 6%, transparent);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--title) 6%, transparent);
   color: var(--link-hover-color);
-}
-.listing a:active {
-  transform: translateX(2px);
-}
-
-/* Icons (the DOM already includes emoji icons; make them consistent) */
-.listing a .icon {
-  font-size: 1.15rem;
-  width: 1.4rem;
-  text-align: center;
+  outline: none;
+  border-color: color-mix(in srgb, var(--link-hover-color) 12%, transparent);
 }
 
-/* Parent link styling */
+/* Icon badge */
+.listing a.item .icon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  flex: 0 0 auto;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.02));
+  box-shadow: 0 2px 8px rgba(2,6,23,0.04);
+  color: var(--fill-icons, #fff);
+}
+
+/* Different tones for directories vs files - still respecting variables */
+.listing a.item.dir .icon {
+  background: linear-gradient(180deg, rgba(124,58,237,0.12), rgba(124,58,237,0.06));
+  color: white;
+}
+.listing a.item.file .icon {
+  background: linear-gradient(180deg, rgba(37,99,235,0.08), rgba(37,99,235,0.03));
+  color: white;
+}
+
+/* Name column */
+.listing a.item .name {
+  font-weight: 600;
+  color: var(--title);
+  min-width: 0; /* allow ellipsis */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Meta column (size/type/date or just type for now) */
+.listing a.item .meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-left: 0.6rem;
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+/* Parent link styling - present as subtle pill */
 .parent {
-  display: inline-block;
-  margin-bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  margin-bottom: 0.35rem;
   color: var(--muted);
   font-size: 0.95rem;
+  background: transparent;
 }
+.parent a { color: inherit; text-decoration: none; }
 
-/* Responsive */
+/* Small screens adjustments */
 @media (max-width: 640px) {
   .container { padding: 0.8rem; margin: 1rem; }
   .header .title { font-size: 1.25rem; }
-  .listing a { padding: 0.5rem; font-size: 0.95rem; }
+  .listing a.item { padding: 0.5rem; font-size: 0.95rem; grid-template-columns: 36px 1fr auto; }
+  .listing a.item .icon { width: 36px; height: 36px; border-radius: 8px; }
 }
 `;
 
@@ -458,7 +503,8 @@ const generateDirectoryListingHTML = (
   entries: FileEntry[],
   urlPath: string,
 ) => {
-  const parentDir = urlPath === "/" ? "" : `<a href="../">../</a><br>`;
+  const parentDir =
+    urlPath === "/" ? "" : `<div class="parent"><a href="../">../</a></div>`;
   const entryLinks = entries
     .slice()
     .sort((a, b) =>
@@ -470,9 +516,15 @@ const generateDirectoryListingHTML = (
     .map((entry) => {
       const icon = entry.isDirectory ? "📁" : "📄";
       const href = entry.url;
-      return `<a href="${href}">${icon} ${entry.name}</a>`;
+      const kindClass = entry.isDirectory ? "dir" : "file";
+      const meta = entry.isDirectory
+        ? "Directory"
+        : entry.name.includes(".")
+          ? entry.name.split(".").pop().toUpperCase()
+          : "File";
+      return `<a class="item ${kindClass}" href="${href}"><span class="icon">${icon}</span><span class="name">${entry.name}</span><span class="meta">${meta}</span></a>`;
     })
-    .join("<br>");
+    .join("\n");
 
   return /*html*/ `
 <!DOCTYPE html>
@@ -485,8 +537,10 @@ const generateDirectoryListingHTML = (
 <body>
   <label class="toggle" for="dark"><input type="checkbox" id="dark" class="toggle__input" checked><span class="toggle__fill"></span></label>
   <h1>Listing of ${urlPath}</h1>
-  ${parentDir}
-  ${entryLinks}
+  <div class="listing">
+    ${parentDir}
+    ${entryLinks}
+  </div>
 </body>
 </html>`;
 };
