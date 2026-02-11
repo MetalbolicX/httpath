@@ -87,7 +87,7 @@ const parseArguments = (args: string[]): Config => {
     },
     "no-listing": { type: "boolean", default: false },
     "no-live-reload": { type: "boolean", default: false },
-    "restart-on-change": { type: "boolean", default: false },
+    "restart-on-change": { type: "boolean", short: "r", default: false },
     log: { type: "string", default: DEFAULT_CONFIG.logLevel },
     help: { type: "boolean", short: "h", default: false },
   };
@@ -106,7 +106,7 @@ Options:
   -i, --ignore <patterns>    Comma-separated patterns to ignore
   --no-listing               Disable directory listing
   --no-live-reload           Disable live reload feature
-  --restart-on-change        Restart server process on file changes
+  -r  --restart-on-change        Restart server process on file changes
   --log <level>              Log level: info, debug, error
   -h, --help                 Show this help message
 `);
@@ -273,12 +273,23 @@ const notifyClients = async (reason = "change") => {
 // --- HTML Generators ---
 
 const getCSSStyles = () => /*css*/ `
-:root { --bg-page: #f2f2f2; --bg-article: #bbc3db; --color-title: #333; --color-paragraph: #333; --link-color: #1a0dab; --link-hover-color: #d93025; --toggle-color: #0f172b; --fill-icons: white; }
-:root:has(#dark:checked) { --bg-page: #333; --bg-article: #444; --color-title: #eee; --color-paragraph: #ddd; --link-color: #bb86fc; --link-hover-color: #ff79c6; }
-body { font-family: monospace; font-size: 1.3em; margin: 0.5em; padding: 1em; background-color: var(--bg-page); color: var(--color-paragraph); &:has(#dark:checked) { background-color: var(--bg-article); color: var(--color-title); } }
-h1 { font-size: 2em; margin-bottom: 0.5em; }
-a { text-decoration: none; color: var(--link-color); &:hover { text-decoration: underline; color: var(--link-hover-color); } }
-.toggle { --width: 3em; --height: calc(var(--width) / 2); --border-radius: calc(var(--height) / 2); display: inline-block; cursor: pointer; .toggle__input { display: none; &:checked + .toggle__fill { background: #009578; } &:checked + .toggle__fill::after { transform: translateX(var(--height)); } } .toggle__fill { position: relative; width: var(--width); height: var(--height); border-radius: var(--border-radius); background-color: var(--toggle-color); transition: background-color 0.3s ease-in-out; &::after { content: ""; position: absolute; top: 0; left: 0; width: var(--height); height: var(--height); border-radius: var(--border-radius); background-color: var(--fill-icons); box-shadow: 0 0 0.2em rgba(0, 0, 0, 0.2); transition: transform 0.3s ease-in-out; } } }
+:root{--bg:#f6f8fa;--card:#ffffff;--muted:#6b7280;--accent:#2563eb;--accent-2:#1f2937}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;font-size:14px;background:var(--bg);color:var(--accent-2);}
+.container{max-width:980px;margin:28px auto;padding:20px}
+.card{background:var(--card);border-radius:10px;padding:18px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.title{font-size:18px;font-weight:600;color:var(--accent-2);margin:0}
+.path{font-size:12px;color:var(--muted)}
+.file-list{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.file{display:flex;align-items:center;padding:10px;border-radius:8px;border:1px solid rgba(15,23,42,0.04);background:linear-gradient(180deg,rgba(0,0,0,0.01),transparent)}
+.file a{display:flex;align-items:center;gap:12px;width:100%;color:inherit;text-decoration:none}
+.icon{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(37,99,235,0.08);font-size:20px}
+.name{font-weight:500}
+.meta{margin-left:auto;font-size:12px;color:var(--muted)}
+.parent{grid-column:1/-1;padding:0 4px}
+.empty{padding:18px;text-align:center;color:var(--muted)}
+@media (max-width:600px){.file-list{grid-template-columns:1fr}}
 `;
 
 /**
@@ -291,35 +302,54 @@ const generateDirectoryListingHTML = (
   entries: FileEntry[],
   urlPath: string,
 ) => {
-  const parentDir = urlPath === "/" ? "" : `<a href="../">../</a><br>`;
-  const entryLinks = entries
+  const parentDir = urlPath === "/" ? null : { name: "..", url: join(urlPath, "../").replace(/\\/g, "/"), isDirectory: true };
+
+  const sorted = entries
     .slice()
-    .sort((a, b) =>
-      a.isDirectory === b.isDirectory ? 0 : a.isDirectory ? -1 : 1,
-    )
-    .sort((a, b) =>
-      a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : 0,
-    )
+    .sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+    });
+
+  const items = sorted
     .map((entry) => {
       const icon = entry.isDirectory ? "📁" : "📄";
       const href = entry.url;
-      return `<a href="${href}">${icon} ${entry.name}</a>`;
+      return `<li class="file"><a href="${href}"><span class="icon">${icon}</span><span class="name">${entry.name}</span><span class="meta">${entry.isDirectory?"Dir":"File"}</span></a></li>`;
     })
-    .join("<br>");
+    .join("\n");
+
+  const parentHtml = parentDir
+    ? `<li class="file parent"><a href="../"><span class="icon">⬆️</span><span class="name">..</span><span class="meta">Parent</span></a></li>`
+    : "";
+
+  const content = items || '<div class="empty">This folder is empty</div>';
 
   return /*html*/ `
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Listing of ${urlPath}</title>
   <style>${getCSSStyles()}</style>
+  <style>/* small reset for injected scripts */ body > script{display:none}</style>
 </head>
 <body>
-  <label class="toggle" for="dark"><input type="checkbox" id="dark" class="toggle__input" checked><span class="toggle__fill"></span></label>
-  <h1>Listing of ${urlPath}</h1>
-  ${parentDir}
-  ${entryLinks}
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div>
+          <h1 class="title">Listing of ${urlPath}</h1>
+          <div class="path">${urlPath}</div>
+        </div>
+      </div>
+      <ul class="file-list">
+        ${parentHtml}
+        ${content}
+      </ul>
+    </div>
+  </div>
 </body>
 </html>`;
 };
