@@ -273,14 +273,52 @@ const notifyClients = async (reason = "change") => {
 // --- HTML Generators ---
 
 const getCSSStyles = () => /*css*/ `
-:root{--bg:#f6f8fa;--card:#ffffff;--muted:#6b7280;--accent:#2563eb;--accent-2:#1f2937}
+:root{
+  --bg: #f6f8fa;
+  --card: #ffffff;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --text: #0f172a;
+  --elev: 0 6px 18px rgba(15,23,42,0.06);
+  --btn-border: rgba(15,23,42,0.06);
+}
+/* Respect user's system preference */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg: #0b1220;
+    --card: #0f1724;
+    --muted: #9ca3af;
+    --accent: #60a5fa;
+    --text: #e6eef8;
+    --elev: 0 6px 22px rgba(2,6,23,0.6);
+    --btn-border: rgba(255,255,255,0.08);
+  }
+}
+/* Toggle using hidden checkbox (works without :has()) */
+#dark-toggle:checked ~ .container{
+  --bg: #0b1220;
+  --card: #0f1724;
+  --muted: #9ca3af;
+  --accent: #60a5fa;
+  --text: #e6eef8;
+  --elev: 0 6px 22px rgba(2,6,23,0.6);
+}
+
+.box-sizing{box-sizing:border-box}
 *{box-sizing:border-box}
-body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;font-size:14px;background:var(--bg);color:var(--accent-2);}
+html{color-scheme: light dark; background-color:var(--bg)}
+body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;background:var(--bg);color:var(--text)}
 .container{max-width:980px;margin:28px auto;padding:20px}
-.card{background:var(--card);border-radius:10px;padding:18px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
-.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.title{font-size:18px;font-weight:600;color:var(--accent-2);margin:0}
+.card{background:var(--card);border-radius:10px;padding:18px;box-shadow:var(--elev)}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+.title{font-size:18px;font-weight:600;color:var(--text);margin:0}
 .path{font-size:12px;color:var(--muted)}
+.controls{display:flex;align-items:center;gap:8px}
+.toggle-btn{background:transparent;border:1px solid var(--btn-border);padding:6px 8px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text);backdrop-filter: blur(4px);transition:all 180ms ease}
+.toggle-btn:hover{opacity:0.95}
+
+/* Visible active state when dark mode is enabled */
+#dark-toggle:checked ~ .container .toggle-btn{background:var(--accent);color:#fff;border-color:transparent;transform:translateY(-1px)}
 .file-list{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
 .file{display:flex;align-items:center;padding:10px;border-radius:8px;border:1px solid rgba(15,23,42,0.04);background:linear-gradient(180deg,rgba(0,0,0,0.01),transparent)}
 .file a{display:flex;align-items:center;gap:12px;width:100%;color:inherit;text-decoration:none}
@@ -302,28 +340,33 @@ const generateDirectoryListingHTML = (
   entries: FileEntry[],
   urlPath: string,
 ) => {
-  const parentDir = urlPath === "/" ? null : { name: "..", url: join(urlPath, "../").replace(/\\/g, "/"), isDirectory: true };
+  const parentDir =
+    urlPath === "/"
+      ? null
+      : {
+          name: "..",
+          url: join(urlPath, "../").replace(/\\/g, "/"),
+          isDirectory: true,
+        };
 
-  const sorted = entries
-    .slice()
-    .sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-    });
+  const sorted = entries.slice().sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
 
   const items = sorted
     .map((entry) => {
       const icon = entry.isDirectory ? "📁" : "📄";
       const href = entry.url;
-      return `<li class="file"><a href="${href}"><span class="icon">${icon}</span><span class="name">${entry.name}</span><span class="meta">${entry.isDirectory?"Dir":"File"}</span></a></li>`;
+      return /*html*/ `<li class="file"><a href="${href}"><span class="icon">${icon}</span><span class="name">${entry.name}</span><span class="meta">${entry.isDirectory ? "Dir" : "File"}</span></a></li>`;
     })
     .join("\n");
 
   const parentHtml = parentDir
-    ? `<li class="file parent"><a href="../"><span class="icon">⬆️</span><span class="name">..</span><span class="meta">Parent</span></a></li>`
+    ? /*html*/ `<li class="file parent"><a href="../"><span class="icon">⬆️</span><span class="name">..</span><span class="meta">Parent</span></a></li>`
     : "";
 
-  const content = items || '<div class="empty">This folder is empty</div>';
+  const content = items || /*html*/ `<div class="empty">This folder is empty</div>`;
 
   return /*html*/ `
 <!doctype html>
@@ -336,12 +379,16 @@ const generateDirectoryListingHTML = (
   <style>/* small reset for injected scripts */ body > script{display:none}</style>
 </head>
 <body>
+  <input type="checkbox" id="dark-toggle" aria-hidden style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden;border:0;padding:0;margin:0" />
   <div class="container">
     <div class="card">
       <div class="header">
         <div>
           <h1 class="title">Listing of ${urlPath}</h1>
           <div class="path">${urlPath}</div>
+        </div>
+        <div class="controls">
+          <label for="dark-toggle" class="toggle-btn" title="Toggle dark mode">🌓</label>
         </div>
       </div>
       <ul class="file-list">
