@@ -1,4 +1,4 @@
-import type { FileEntry } from "../types.ts";
+import type { FileEntry } from "../types.mts";
 
 export const getCSSStyles = (): string =>
   /*css*/ `
