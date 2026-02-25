@@ -90,7 +90,7 @@ httpath/
 
 ## 📋 Requirements
 
-- **Node.js** >= 18.0.0
+- **Deno** >= 2.0.0
 - **Operating System**: Windows, macOS, Linux
 
 ## 🤝 Contributing
