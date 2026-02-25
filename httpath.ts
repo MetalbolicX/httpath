@@ -6,18 +6,30 @@ import { startFileWatcher } from "./src/watcher";
 
 /**
  * Sets up signal handlers for graceful shutdown.
- * @param abortController - The AbortController used for graceful shutdown.
+ * Uses a try-catch block to handle OS-specific signal support
+ * (e.g., Windows does not support SIGTERM).
  */
-export const setupSignalHandlers = (abortController: AbortController): void => {
-  const signals = ["SIGINT", "SIGBREAK"] as const;
+const setupSignalHandlers = (abortController: AbortController): void => {
+  // We attempt to listen to both, but we won't crash if one fails
+  const signals = ["SIGINT", "SIGTERM"] as const;
 
-  signals.forEach((signal) => {
-    Deno.addSignalListener(signal, () => {
-      log(`Received ${signal}, shutting down gracefully...`);
-      abortController.abort();
-      Deno.exit(0);
-    });
-  });
+  for (const signal of signals) {
+    try {
+      Deno.addSignalListener(signal, () => {
+        log(`Received ${signal}, shutting down gracefully...`);
+        abortController.abort();
+        Deno.exit(0);
+      });
+    } catch (error) {
+      // On Windows, SIGTERM will throw "TypeError: Signal not supported"
+      // We log this as debug so it doesn't clutter the user's output
+      // but developers can still see why a signal wasn't registered.
+      log(
+        `Signal listener for ${signal} could not be registered (OS restriction).`,
+        "debug",
+      );
+    }
+  }
 };
 
 export const main = async (): Promise<void> => {
