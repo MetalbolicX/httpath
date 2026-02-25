@@ -1,0 +1,11 @@
+{
+    "tasks": {
+        "dev": "deno run -RN --allow-run --sloppy-imports index.ts"
+    },
+    "imports": {
+        "@std/assert": "jsr:@std/assert@1",
+        "@std/cli": "jsr:@std/cli@^1.0.28",
+        "@std/media-types": "jsr:@std/media-types@^1.1.0",
+        "@std/path": "jsr:@std/path@^1.1.4"
+    }
+}
