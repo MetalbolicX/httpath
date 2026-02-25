@@ -177,14 +177,14 @@ export const generateDirectoryListingHTML = (
   const parentDir =
     urlPath === "/"
       ? ""
-      : `<a href="../" class="file-item">
+      : /*html*/ `<a href="../" class="file-item">
         <span class="icon">📁</span>
         <span class="file-name">..</span>
        </a>`;
 
   const entryLinks =
     entries.length === 0
-      ? `<div class="empty-state">This directory is empty</div>`
+      ? /*html*/ `<div class="empty-state">This directory is empty</div>`
       : entries
           .sort((a, b) => {
             if (a.isDirectory && !b.isDirectory) return -1;
@@ -194,7 +194,7 @@ export const generateDirectoryListingHTML = (
           .map((entry) => {
             const icon = entry.isDirectory ? "📁" : "📄";
             const href = entry.url === "/" ? `/${entry.name}` : `${entry.url}`;
-            return `
+            return /*html*/ `
             <a href="${href}" class="file-item">
               <span class="icon">${icon}</span>
               <span class="file-name">${entry.name}</span>
