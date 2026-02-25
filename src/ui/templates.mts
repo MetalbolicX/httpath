@@ -1,145 +1,237 @@
-import type { FileEntry } from "../types.mts";
+import type { FileEntry } from "../types.ts";
 
 export const getCSSStyles = (): string =>
-    /*css*/ `
+  /*css*/ `
 :root {
-  --bg-page: #f2f2f2;
-  --bg-article: #bbc3db;
-  --color-title: #333;
-  --color-paragraph: #333;
-  --link-color: #1a0dab;
-  --link-hover-color: #d93025;
-
-  --toggle-color: #0f172b;
-  --fill-icons: white;
+  /* Light Theme */
+  --bg-body: #f8fafc;
+  --bg-surface: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --hover-bg: #f1f5f9;
+  --accent-color: #3b82f6;
+  --toggle-bg: #cbd5e1;
+  --toggle-knob: #ffffff;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
 :root:has(#dark:checked) {
-  --bg-page: #333;
-  --bg-article: #444;
-  --color-title: #eee;
-  --color-paragraph: #ddd;
-  --link-color: #bb86fc;
-  --link-hover-color: #ff79c6;
+  /* Dark Theme */
+  --bg-body: #0f172a;
+  --bg-surface: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  --hover-bg: #334155;
+  --accent-color: #60a5fa;
+  --toggle-bg: #3b82f6;
+  --toggle-knob: #ffffff;
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+}
 
-  --toggle-color: #0f172b;
-  --fill-icons: white;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  font-family: monospace;
-  font-size: 1.3em;
-  margin: 0.5em;
-  padding: 1em;
-  background-color: var(--bg-page);
-  color: var(--color-paragraph);
-
-  &:has(#dark:checked) {
-    background-color: var(--bg-article);
-    color: var(--color-title);
-  }
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-body);
+  color: var(--text-main);
+  line-height: 1.5;
+  padding: 2rem 1rem;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-h1 {
-  font-size: 2em;
-  margin-bottom: 0.5em;
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  background-color: var(--bg-surface);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-a {
-  text-decoration: none;
-  color: var(--link-color);
-
-  &:hover {
-    text-decoration: underline;
-    color: var(--link-hover-color);
-  }
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
 }
 
+.header h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-main);
+  word-break: break-all;
+}
+
+.header-path {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1rem;
+  margin-left: 0.5rem;
+}
+
+/* Toggle Switch */
 .toggle {
-  --width: 3em;
-  --height: calc(var(--width) / 2);
-  --border-radius: calc(var(--height) / 2);
+  --width: 46px;
+  --height: 24px;
 
-  display: inline-block;
+  display: flex;
+  align-items: center;
   cursor: pointer;
+  flex-shrink: 0;
+}
 
-  .toggle__input {
-    display: none;
+.toggle__input {
+  display: none;
+}
 
-    &:checked + .toggle__fill {
-      background: #009578;
-    }
+.toggle__fill {
+  position: relative;
+  width: var(--width);
+  height: var(--height);
+  border-radius: 9999px;
+  background-color: var(--toggle-bg);
+  transition: background-color 0.3s ease;
+}
 
-    &:checked + .toggle__fill::after {
-      transform: translateX(var(--height));
-    }
-  }
+.toggle__fill::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--toggle-knob);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-  .toggle__fill {
-    position: relative;
-    width: var(--width);
-    height: var(--height);
-    border-radius: var(--border-radius);
-    background-color: var(--toggle-color);
-    transition: background-color 0.3s ease-in-out;
+.toggle__input:checked + .toggle__fill::after {
+  transform: translateX(22px);
+}
 
-    &::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: var(--height);
-      height: var(--height);
-      border-radius: var(--border-radius);
-      background-color: var(--fill-icons);
-      box-shadow: 0 0 0.2em rgba(0, 0, 0, 0.2);
-      transition: transform 0.3s ease-in-out;
-    }
-  }
+/* File List */
+.file-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  color: var(--text-main);
+  border-radius: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.file-item:hover {
+  background-color: var(--hover-bg);
+}
+
+.file-item:hover .file-name {
+  color: var(--accent-color);
+}
+
+.icon {
+  font-size: 1.25rem;
+  margin-right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+}
+
+.file-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.95rem;
+  transition: color 0.2s ease;
+}
+
+.empty-state {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
 }
 `.trim();
 
 export const generateDirectoryListingHTML = (
-    entries: FileEntry[],
-    urlPath: string,
+  entries: FileEntry[],
+  urlPath: string,
 ): string => {
-    const parentDir = urlPath === "/" ? "" : `<a href="../">../</a><br>`;
+  const parentDir =
+    urlPath === "/"
+      ? ""
+      : `<a href="../" class="file-item">
+        <span class="icon">📁</span>
+        <span class="file-name">..</span>
+       </a>`;
 
-    const entryLinks = entries
-        .sort((a, b) => {
+  const entryLinks =
+    entries.length === 0
+      ? `<div class="empty-state">This directory is empty</div>`
+      : entries
+          .sort((a, b) => {
             if (a.isDirectory && !b.isDirectory) return -1;
             if (!a.isDirectory && b.isDirectory) return 1;
             return a.name.localeCompare(b.name);
-        })
-        .map((entry) => {
+          })
+          .map((entry) => {
             const icon = entry.isDirectory ? "📁" : "📄";
             const href = entry.url === "/" ? `/${entry.name}` : `${entry.url}`;
-            return `<a href="${href}">${icon} ${entry.name}</a>`;
-        })
-        .join("<br>");
+            return `
+            <a href="${href}" class="file-item">
+              <span class="icon">${icon}</span>
+              <span class="file-name">${entry.name}</span>
+            </a>
+          `;
+          })
+          .join("");
 
-    const themeToggle = /*html*/ `
-    <label class="toggle" for="dark">
+  const themeToggle = /*html*/ `
+    <label class="toggle" for="dark" title="Toggle Dark Mode">
       <input type="checkbox" name="toggle" id="dark" class="toggle__input" checked>
       <span class="toggle__fill"></span>
     </label>
   `;
 
-    return /*html*/ `
+  return /*html*/ `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Directory listing for ${urlPath}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Index of ${urlPath}</title>
   <style>
 ${getCSSStyles()}
   </style>
 </head>
 <body>
-  ${themeToggle}
-  <h1>Directory listing for ${urlPath}</h1>
-  ${parentDir}
-  ${entryLinks}
+  <div class="container">
+    <header class="header">
+      <h1>Index of <span class="header-path">${urlPath}</span></h1>
+      ${themeToggle}
+    </header>
+    <main class="file-list">
+      ${parentDir}
+      ${entryLinks}
+    </main>
+  </div>
 </body>
 </html>
   `.trim();
