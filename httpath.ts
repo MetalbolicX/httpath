@@ -1,13 +1,22 @@
 #!/usr/bin/env -S deno run -RN --allow-run --sloppy-imports
-import { parseArguments } from "./src/cli";
-import { log, setLogLevel } from "./src/utils";
-import { startHttpServer } from "./src/server";
-import { startFileWatcher } from "./src/watcher";
+import { parseArguments } from "./src/cli/index.ts";
+import { log, setLogLevel } from "./src/utils/index.ts";
+import { startHttpServer } from "./src/server/index.ts";
+import { startFileWatcher } from "./src/watcher/index.ts";
 
 /**
- * Sets up signal handlers for graceful shutdown.
- * Uses a try-catch block to handle OS-specific signal support
- * (e.g., Windows does not support SIGTERM).
+ * Sets up signal handlers for graceful shutdown of the application.
+ *
+ * Attempts to register listeners for SIGINT and SIGTERM signals. When either signal is received,
+ * the application will log the shutdown message, abort the provided AbortController, and exit gracefully.
+ *
+ * On platforms where a signal is not supported (such as SIGTERM on Windows), the registration will fail
+ * silently and a debug-level log message will be emitted instead of throwing an error.
+ *
+ * @param abortController - The AbortController instance to abort when a shutdown signal is received.
+ *                          This allows coordinated cancellation of ongoing operations.
+ *
+ * @returns void
  */
 const setupSignalHandlers = (abortController: AbortController): void => {
   // We attempt to listen to both, but we won't crash if one fails
@@ -32,6 +41,19 @@ const setupSignalHandlers = (abortController: AbortController): void => {
   }
 };
 
+/**
+ * Main entry point for the httpath application.
+ *
+ * Initializes the application by:
+ * - Parsing command-line arguments
+ * - Setting the log level
+ * - Validating the target directory exists and is a directory
+ * - Setting up signal handlers for graceful shutdown
+ * - Starting both the file watcher and HTTP server concurrently
+ *
+ * @returns A promise that resolves when the application completes or rejects on error
+ * @throws Will exit the process with code 1 if any error occurs during initialization or execution
+ */
 export const main = async (): Promise<void> => {
   try {
     const config = parseArguments(Deno.args);
