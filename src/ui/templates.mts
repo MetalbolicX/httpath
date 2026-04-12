@@ -1,5 +1,23 @@
 import type { FileEntry } from "../types.mts";
 
+/**
+ * Escapes HTML special characters in a string to prevent XSS attacks.
+ * Converts the following characters to their HTML entity equivalents:
+ * - `&` to `&amp;`
+ * - `<` to `&lt;`
+ * - `>` to `&gt;`
+ * - `"` to `&quot;`
+ * - `'` to `&#39;`
+ *
+ * @param s - The string to escape
+ * @returns The escaped string with HTML special characters converted to entities
+ *
+ * @example
+ * ```typescript
+ * escapeHtml('<script>alert("XSS")</script>')
+ * // Returns: '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;'
+ * ```
+ */
 export const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) =>
     (
@@ -36,6 +54,7 @@ export const getCSSStyles = (): string =>
   --accent-color: #60a5fa;
   --toggle-bg: #3b82f6;
   --toggle-knob: #ffffff;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
 }
 
@@ -178,6 +197,29 @@ body {
 }
 `.trim();
 
+/**
+ * Generates an HTML page displaying a directory listing.
+ *
+ * @param entries - Array of file entries to display in the directory listing
+ * @param urlPath - The URL path of the current directory
+ * @returns A complete HTML document string containing the formatted directory listing
+ *
+ * @example
+ * ```typescript
+ * const entries: FileEntry[] = [
+ *   { name: 'file.txt', isDirectory: false, url: '/file.txt' },
+ *   { name: 'subfolder', isDirectory: true, url: '/subfolder' }
+ * ];
+ * const html = generateDirectoryListingHTML(entries, '/documents');
+ * ```
+ *
+ * @remarks
+ * - Automatically sorts entries with directories first, then alphabetically
+ * - Displays a parent directory link (..) for non-root paths
+ * - Includes a dark mode toggle in the header
+ * - Escapes HTML in file names and URL paths for security
+ * - Uses emoji icons (📁 for directories, 📄 for files)
+ */
 export const generateDirectoryListingHTML = (
   entries: FileEntry[],
   urlPath: string,

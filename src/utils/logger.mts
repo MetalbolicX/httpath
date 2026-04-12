@@ -3,18 +3,29 @@ import type { Config } from "../types.mts";
 const LEVELS: Record<string, number> = { debug: 0, info: 1, error: 2 };
 let currentLevel: Config["logLevel"] = "info";
 
+
 /**
- * Sets the minimum log level.
- * @param level - The log level to set.
+ * Sets the current logging level for the logger.
+ * @param level - The logging level to set, as defined in the Config type
  */
 export const setLogLevel = (level: Config["logLevel"]): void => {
   currentLevel = level;
 };
 
 /**
- * Logs a message with a timestamp and log level prefix.
+ * Logs a message to the console with a specified log level and timestamp.
+ *
  * @param message - The message to log.
- * @param level - The log level (default: "info").
+ * @param level - The log level for this message. Defaults to "info".
+ *                Only logs if the level is greater than or equal to the current log level.
+ * @returns void
+ *
+ * @example
+ * ```typescript
+ * log("Application started");
+ * log("An error occurred", "error");
+ * log("Debug information", "debug");
+ * ```
  */
 export const log = (
   message: string,

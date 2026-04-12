@@ -1,10 +1,26 @@
 import { join, normalize, relative, resolve } from "@std/path";
 
 /**
- * Resolves a safe path within a base directory.
- * @param baseDir - The base directory.
- * @param requestPath - The requested path.
- * @returns The resolved path or null if it's outside the base directory.
+ * Resolves a safe file path by validating it stays within a base directory.
+ *
+ * Prevents directory traversal attacks by ensuring the resolved path does not
+ * escape outside the specified base directory using relative path validation.
+ *
+ * @param baseDir - The base directory path to constrain resolution within
+ * @param requestPath - The requested file path to resolve relative to baseDir
+ * @returns The safely resolved absolute path, or null if the path attempts to
+ *          escape the base directory or if an error occurs during resolution
+ *
+ * @example
+ * ```typescript
+ * // Returns the safe resolved path
+ * resolveSafePath('/home/user/files', './document.txt');
+ * // Returns: '/home/user/files/document.txt'
+ *
+ * // Returns null when attempting directory traversal
+ * resolveSafePath('/home/user/files', '../../../etc/passwd');
+ * // Returns: null
+ * ```
  */
 export const resolveSafePath = (
   baseDir: string,

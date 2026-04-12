@@ -1,6 +1,6 @@
 import type { Config } from "../types.mts";
-import { debounce, log } from "../utils";
-import { notifyLiveReloadClients } from "../server";
+import { debounce, log } from "../utils/index.ts";
+import { notifyLiveReloadClients } from "../server/index.ts";
 import {
   shouldIgnoreEvent,
   shouldRestartServer,
@@ -9,6 +9,22 @@ import {
 
 let isProcessingChange = false;
 
+/**
+ * Reloads the server by spawning a new Deno process with the specified entrypoint.
+ *
+ * This function logs a reload message, constructs a Deno command with appropriate
+ * flags and arguments, spawns the new process, and then exits the current process.
+ *
+ * @param entrypoint - Optional path to the script entrypoint. Defaults to "httpath.ts" if not provided.
+ * @returns void
+ *
+ * @example
+ * ```typescript
+ * reloadServer();
+ * // or with custom entrypoint
+ * reloadServer("./custom-entry.ts");
+ * ```
+ */
 export const reloadServer = (entrypoint?: string): void => {
   log("Reloading server...");
 
@@ -31,6 +47,34 @@ export const reloadServer = (entrypoint?: string): void => {
   Deno.exit(0);
 };
 
+/**
+ * Starts a file system watcher that monitors changes in the configured directory.
+ *
+ * Handles file change events and determines whether to restart the server or trigger
+ * browser reload based on the configuration and file types that changed.
+ *
+ * @param config - The configuration object containing watch directory, patterns, and reload settings
+ * @param abortController - AbortController to signal when watching should stop
+ * @param entrypoint - Optional path to the main entrypoint file for server restart
+ *
+ * @returns A promise that resolves when the watcher is started and runs until aborted
+ *
+ * @throws May throw errors from Deno.watchFs or file processing operations
+ *
+ * @remarks
+ * - Debounces file change events to avoid processing rapid changes
+ * - Differentiates between server restart triggers (config files) and browser reload triggers (frontend files)
+ * - Skips duplicate events and ignored file patterns based on configuration
+ * - Notifies live reload clients when `enableLiveReload` is configured
+ * - Respects the `restartOnChange` flag to determine legacy vs. smart reload behavior
+ *
+ * @example
+ * ```typescript
+ * const controller = new AbortController();
+ * await startFileWatcher(config, controller, './app.ts');
+ * // Watcher runs indefinitely until controller.abort() is called
+ * ```
+ */
 export const startFileWatcher = async (
   config: Config,
   abortController: AbortController,
