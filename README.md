@@ -1,6 +1,7 @@
 # httpath
 
-> **HTTPath** - A lightweight, feature-rich static file server similar to Python's `python -m http.server` but with only the standard Deno modules.
+> **HTTPath** - A lightweight, feature-rich static file server similar to
+> Python's `python -m http.server` but with only the standard Deno modules.
 
 ![Deno](https://img.shields.io/badge/deno->=2.0.0-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
@@ -9,11 +10,13 @@
 ## ✨ Features
 
 - 📁 Static File Streaming - Efficient file serving using Node.js streams
-- 🎯 MIME Type Detection - Automatic content-type detection for common file types
+- 🎯 MIME Type Detection - Automatic content-type detection for common file
+  types
 - 📂 Directory Indexing - Beautiful directory listings with navigation
 - 🔒 Path Sanitization - Built-in security against directory traversal attacks
 - 🔄 Hot-Reload - Automatic browser refresh when files change
-- **No Dependencies:** Built entirely on standard Deno modules (`@std/cli`, `@std/path`, `@std/media-types`).
+- **No Dependencies:** Built entirely on standard Deno modules (`@std/cli`,
+  `@std/path`, `@std/media-types`).
 
 ## Prerequisites
 
@@ -25,25 +28,26 @@ You can run `httpath` directly from the source or install it globally via Deno.
 
 ### Running from Source
 
-Because Deno supports executing directly from a URL or local file, you can start the server using the Deno task defined in the `deno.json`:
+Because Deno supports executing directly from a URL or local file, you can start
+the server using the Deno task defined in the `deno.json`:
 
 You can run directly:
 
 ```sh
 ./httpath.ts [OPTIONS]
 ```
+
 **Options**
 
 Usage: `httpath [OPTIONS]`
 
--d, --dir <directory>     Directory to serve (default: current directory)
--p, --port <port>         Port to listen on (default: 8080)
--i, --ignore <patterns>   Comma-separated patterns to ignore (default: .git,node_modules,.DS_Store)
---no-listing              Disable directory listing
---no-live-reload          Disable live reload feature
--r, --restart-on-change       Restart server process on file changes (default: browser reload only)
---log <level>             Log level: info, debug, error (default: info)
--h, --help                Show this help message
+-d, --dir <directory> Directory to serve (default: current directory) -p, --port
+<port> Port to listen on (default: 8080) -i, --ignore <patterns> Comma-separated
+patterns to ignore (default: .git,node_modules,.DS_Store) --no-listing Disable
+directory listing --no-live-reload Disable live reload feature -r,
+--restart-on-change Restart server process on file changes (default: browser
+reload only) --log <level> Log level: info, debug, error (default: info) -h,
+--help Show this help message
 
 ## Examples
 
@@ -61,6 +65,7 @@ Usage: `httpath [OPTIONS]`
   ```sh
   httpath -p 8081
   ```
+
 ## Arquitecture
 
 ```text
@@ -105,13 +110,16 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-Released under [MIT License](LICENSE) by [@MetalbolicX](https://github.com/MetalbolicX).
+Released under [MIT License](LICENSE) by
+[@MetalbolicX](https://github.com/MetalbolicX).
 
 ## 🔗 Related Projects
 
-- [live-server](https://github.com/tapio/live-server) - Live reloading for development
+- [live-server](https://github.com/tapio/live-server) - Live reloading for
+  development
 - [http-server](https://github.com/http-party/http-server) - Simple HTTP server
-- [serve](https://github.com/vercel/serve) - Static file serving and directory listing
+- [serve](https://github.com/vercel/serve) - Static file serving and directory
+  listing
 
 ---
 

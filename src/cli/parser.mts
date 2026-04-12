@@ -12,6 +12,30 @@ export const DEFAULT_CONFIG: Config = {
   restartOnChange: false,
 };
 
+/**
+ * Parses command-line arguments and returns a validated configuration object.
+ *
+ * Supports the following options:
+ * - `--dir, -d`: Directory to serve (default: current directory)
+ * - `--port, -p`: Port to listen on (default: 8080)
+ * - `--ignore, -i`: Comma-separated patterns to ignore
+ * - `--no-listing`: Disable directory listing
+ * - `--no-live-reload`: Disable live reload feature
+ * - `--restart-on-change, -r`: Restart server on file changes
+ * - `--log`: Log level (info, debug, error)
+ * - `--help, -h`: Display help message and exit
+ *
+ * @param args - Array of command-line arguments to parse
+ * @returns A validated {@link Config} object with parsed settings
+ * @throws {Error} If the port number is invalid (not between 1 and 65535)
+ *
+ * @example
+ * ```ts
+ * const config = parseArguments(['--dir', './public', '--port', '3000']);
+ * console.log(config.directory); // /absolute/path/to/public
+ * console.log(config.port); // 3000
+ * ```
+ */
 export const parseArguments = (args: string[]): Config => {
   const parsed = parseArgs(args, {
     string: ["dir", "port", "ignore", "log"],

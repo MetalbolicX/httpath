@@ -6,14 +6,14 @@ let debounceTimeout: number | null = null;
  * @returns A promise that resolves after the debounce duration.
  */
 export const debounce = (ms: number): Promise<void> =>
-    new Promise((resolve) => {
-        if (debounceTimeout !== null) {
-            clearTimeout(debounceTimeout);
-            debounceTimeout = null;
-        }
+  new Promise((resolve) => {
+    if (debounceTimeout !== null) {
+      clearTimeout(debounceTimeout);
+      debounceTimeout = null;
+    }
 
-        debounceTimeout = setTimeout(() => {
-            debounceTimeout = null;
-            resolve();
-        }, ms);
-    });
+    debounceTimeout = setTimeout(() => {
+      debounceTimeout = null;
+      resolve();
+    }, ms);
+  });

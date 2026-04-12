@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run -RN --allow-run --sloppy-imports
 import { parseArguments } from "./src/cli";
-import { log } from "./src/utils";
+import { log, setLogLevel } from "./src/utils";
 import { startHttpServer } from "./src/server";
 import { startFileWatcher } from "./src/watcher";
 
@@ -20,7 +20,7 @@ const setupSignalHandlers = (abortController: AbortController): void => {
         abortController.abort();
         Deno.exit(0);
       });
-    } catch (error) {
+    } catch (_error) {
       // On Windows, SIGTERM will throw "TypeError: Signal not supported"
       // We log this as debug so it doesn't clutter the user's output
       // but developers can still see why a signal wasn't registered.
@@ -35,6 +35,7 @@ const setupSignalHandlers = (abortController: AbortController): void => {
 export const main = async (): Promise<void> => {
   try {
     const config = parseArguments(Deno.args);
+    setLogLevel(config.logLevel);
 
     try {
       const dirInfo = await Deno.stat(config.directory);
@@ -51,8 +52,10 @@ export const main = async (): Promise<void> => {
     const abortController = new AbortController();
     setupSignalHandlers(abortController);
 
+    const entrypoint = new URL(import.meta.url).pathname;
+
     await Promise.race([
-      startFileWatcher(config, abortController),
+      startFileWatcher(config, abortController, entrypoint),
       startHttpServer(config, abortController),
     ]);
   } catch (error) {

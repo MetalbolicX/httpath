@@ -7,7 +7,8 @@ export const getLiveReloadScript = (port: number): string => /*html*/ `
 <script>
 (() => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = \`\${protocol}//\${window.location.hostname}:\${${port}}/livereload\`;
+  const clientPort = window.location.port || '${port}';
+  const wsUrl = protocol + '//' + window.location.hostname + ':' + clientPort + '/livereload';
 
   const connect = () => {
     const ws = new WebSocket(wsUrl);
@@ -43,11 +44,11 @@ export const getLiveReloadScript = (port: number): string => /*html*/ `
  * @returns The HTML string with the live reload script injected.
  */
 export const injectLiveReloadScript = (html: string, port: number): string => {
-    const script = getLiveReloadScript(port);
-    if (html.includes("</body>")) {
-        return html.replace("</body>", `${script}\n</body>`);
-    } else if (html.includes("</html>")) {
-        return html.replace("</html>", `${script}\n</html>`);
-    }
-    return html + script;
+  const script = getLiveReloadScript(port);
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${script}\n</body>`);
+  } else if (html.includes("</html>")) {
+    return html.replace("</html>", `${script}\n</html>`);
+  }
+  return html + script;
 };

@@ -93,10 +93,10 @@
       "All file paths are sanitized to prevent security vulnerabilities"
     ],
     "sampleArray": [
-      {"id": 1, "name": "index.html", "type": "file"},
-      {"id": 2, "name": "styles.css", "type": "file"},
-      {"id": 3, "name": "assets", "type": "directory"},
-      {"id": 4, "name": "demo.js", "type": "file"}
+      { "id": 1, "name": "index.html", "type": "file" },
+      { "id": 2, "name": "styles.css", "type": "file" },
+      { "id": 3, "name": "assets", "type": "directory" },
+      { "id": 4, "name": "demo.js", "type": "file" }
     ]
   },
   "meta": {

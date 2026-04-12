@@ -1,6 +1,7 @@
 # HTTPath Demo
 
-This demo showcases all the features of HTTPath, a minimalist Node.js file server with hot-reload capabilities.
+This demo showcases all the features of HTTPath, a minimalist Node.js file
+server with hot-reload capabilities.
 
 ## 🚀 Quick Start
 
@@ -37,6 +38,7 @@ This demo showcases all the features of HTTPath, a minimalist Node.js file serve
 ### Features Demonstrated
 
 #### 🎯 Static File Serving
+
 - HTML files with proper content-type headers
 - CSS files with `text/css` MIME type
 - JavaScript files with `text/javascript` MIME type
@@ -44,22 +46,26 @@ This demo showcases all the features of HTTPath, a minimalist Node.js file serve
 - Text files with `text/plain` MIME type
 
 #### 📂 Directory Indexing
+
 - Browse the `assets/` folder to see directory listing
 - Navigate up directories with "../" links
 - Clean, responsive directory listing interface
 
 #### 🔄 Hot-Reload (when enabled with `--reload`)
+
 - Edit any HTML, CSS, or JS file
 - Save the file
 - Watch the browser automatically refresh
 - Real-time development experience
 
 #### 🛡️ Security Features
+
 - Try accessing `../../../etc/passwd` - should get 403 Forbidden
 - Path traversal attempts are blocked
 - Directory escape attempts are prevented
 
 #### ⚡ Interactive Features
+
 - **Theme Changer** - Click "Change Theme Color" to see CSS updates
 - **Dynamic Elements** - Add interactive elements to the page
 - **JSON Fetching** - Test AJAX requests to JSON files
@@ -68,6 +74,7 @@ This demo showcases all the features of HTTPath, a minimalist Node.js file serve
 ## 🧪 Testing Scenarios
 
 ### 1. Basic File Serving
+
 ```bash
 # Start server
 node ../dist/index.mjs --path . --port 8080
@@ -80,12 +87,14 @@ curl -I http://localhost:8080/sample-data.json
 ```
 
 ### 2. Directory Listing
+
 ```bash
 # Visit directory without index.html
 curl http://localhost:8080/assets/
 ```
 
 ### 3. Hot-Reload Testing
+
 ```bash
 # Start with hot-reload enabled
 node ../dist/index.mjs --path . --port 8080 --reload
@@ -95,6 +104,7 @@ node ../dist/index.mjs --path . --port 8080 --reload
 ```
 
 ### 4. Security Testing
+
 ```bash
 # These should return 403 Forbidden
 curl http://localhost:8080/../../../etc/passwd
@@ -145,14 +155,17 @@ When you visit `http://localhost:8080`, you can:
 ## 🐛 Troubleshooting
 
 ### Port Already in Use
+
 If port 8080 is busy, HTTPath will automatically try 8081, 8082, etc.
 
 ### Hot-Reload Not Working
+
 - Ensure you started the server with `--reload` flag
 - Check browser console for EventSource connections
 - Verify the server shows "Hot-reload enabled" message
 
 ### Files Not Loading
+
 - Check file permissions
 - Ensure files exist in the demo directory
 - Look at server logs for 404 errors

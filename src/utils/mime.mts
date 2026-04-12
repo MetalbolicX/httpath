@@ -1,4 +1,5 @@
 import { contentType } from "@std/media-types";
+import { extname } from "@std/path";
 
 /**
  * Returns the MIME type of a file based on its extension.
@@ -6,4 +7,5 @@ import { contentType } from "@std/media-types";
  * @returns The MIME type or "application/octet-stream" if not found.
  */
 export const getMimeType = (filePath: string): string =>
-    contentType(filePath.split(".").at(-1) || "") || "application/octet-stream";
+  contentType(extname(filePath).replace(/^\./, "")) ||
+  "application/octet-stream";

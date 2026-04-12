@@ -1,5 +1,13 @@
 import type { FileEntry } from "../types.mts";
 
+export const escapeHtml = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) =>
+    (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+        c
+      ]
+    ) ?? c);
+
 export const getCSSStyles = (): string =>
   /*css*/ `
 :root {
@@ -174,34 +182,34 @@ export const generateDirectoryListingHTML = (
   entries: FileEntry[],
   urlPath: string,
 ): string => {
-  const parentDir =
-    urlPath === "/"
-      ? ""
-      : /*html*/ `<a href="../" class="file-item">
+  const parentDir = urlPath === "/"
+    ? ""
+    : /*html*/ `<a href="../" class="file-item">
         <span class="icon">📁</span>
         <span class="file-name">..</span>
        </a>`;
 
-  const entryLinks =
-    entries.length === 0
-      ? /*html*/ `<div class="empty-state">This directory is empty</div>`
-      : entries
-          .sort((a, b) => {
-            if (a.isDirectory && !b.isDirectory) return -1;
-            if (!a.isDirectory && b.isDirectory) return 1;
-            return a.name.localeCompare(b.name);
-          })
-          .map((entry) => {
-            const icon = entry.isDirectory ? "📁" : "📄";
-            const href = entry.url === "/" ? `/${entry.name}` : `${entry.url}`;
-            return /*html*/ `
+  const entryLinks = entries.length === 0
+    ? /*html*/ `<div class="empty-state">This directory is empty</div>`
+    : entries
+      .sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.localeCompare(b.name);
+      })
+      .map((entry) => {
+        const icon = entry.isDirectory ? "📁" : "📄";
+        const href = entry.url === "/"
+          ? `/${encodeURIComponent(entry.name)}`
+          : entry.url;
+        return /*html*/ `
             <a href="${href}" class="file-item">
               <span class="icon">${icon}</span>
-              <span class="file-name">${entry.name}</span>
+              <span class="file-name">${escapeHtml(entry.name)}</span>
             </a>
           `;
-          })
-          .join("");
+      })
+      .join("");
 
   const themeToggle = /*html*/ `
     <label class="toggle" for="dark" title="Toggle Dark Mode">
@@ -224,7 +232,7 @@ ${getCSSStyles()}
 <body>
   <div class="container">
     <header class="header">
-      <h1>Index of <span class="header-path">${urlPath}</span></h1>
+      <h1>Index of <span class="header-path">${escapeHtml(urlPath)}</span></h1>
       ${themeToggle}
     </header>
     <main class="file-list">
