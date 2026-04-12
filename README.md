@@ -41,13 +41,18 @@ You can run directly:
 
 Usage: `httpath [OPTIONS]`
 
--d, --dir <directory> Directory to serve (default: current directory) -p, --port
-<port> Port to listen on (default: 8080) -i, --ignore <patterns> Comma-separated
-patterns to ignore (default: .git,node_modules,.DS_Store) --no-listing Disable
-directory listing --no-live-reload Disable live reload feature -r,
---restart-on-change Restart server process on file changes (default: browser
-reload only) --log <level> Log level: info, debug, error (default: info) -h,
---help Show this help message
+- `-d, --dir <directory>`: Specify the directory to serve (defaults to the current
+  directory).
+- `-p, --port <port>`: Specify the port to listen on (defaults to 8080).
+- `-i, --ignore <patterns>`: Comma-separated list of file patterns to ignore (default:
+  `.git,node_modules,.DS_Store`).
+- `--no-listing`: Disable directory listing (returns 403 Forbidden for directories).
+- `--no-live-reload`: Disable the live reload feature (file changes will not trigger
+  browser refresh).
+- `-r, --restart-on-change`: Restart the server process on file changes instead of
+  just reloading the browser (default is to reload the browser only).
+- `--log <level>`: Set the logging level (info, debug, error) (default: info).
+- `-h, --help`: Show the help message and exit.
 
 ## Examples
 
