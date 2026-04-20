@@ -1,5 +1,5 @@
 import type { Config } from "../types.mts";
-import { debounce, log } from "../utils/index.ts";
+import { createDebouncer, log } from "../utils/index.ts";
 import { notifyLiveReloadClients } from "../server/index.ts";
 import {
   shouldIgnoreEvent,
@@ -81,6 +81,7 @@ export const startFileWatcher = async (
   entrypoint?: string,
 ): Promise<void> => {
   const watcher = Deno.watchFs(config.directory);
+  const debounceChange = createDebouncer();
 
   log(`Watching for file changes in: ${config.directory}`);
   if (config.restartOnChange) {
@@ -89,65 +90,73 @@ export const startFileWatcher = async (
     log("Mode: Browser reload on file changes (server stays alive)");
   }
 
-  for await (const event of watcher) {
-    if (abortController.signal.aborted) break;
-    if (shouldIgnoreEvent(event, config.ignorePatterns)) continue;
+  try {
+    for await (const event of watcher) {
+      if (abortController.signal.aborted) break;
+      if (shouldIgnoreEvent(event, config.ignorePatterns)) continue;
 
-    if (isProcessingChange) {
-      log(
-        `Skipping duplicate file change event: ${event.kind} - ${
-          event.paths.join(", ")
-        }`,
-        "debug",
-      );
-      continue;
-    }
-
-    log(`File change detected: ${event.kind} - ${event.paths.join(", ")}`);
-    isProcessingChange = true;
-
-    try {
-      await debounce(500);
-      if (abortController.signal.aborted) continue;
-
-      if (config.restartOnChange) {
-        log("Legacy mode: Restarting server for any file change");
-        if (config.enableLiveReload) {
-          notifyLiveReloadClients("server restart");
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        reloadServer(entrypoint);
-      } else {
-        const shouldRestart = shouldRestartServer(event.paths);
-        const shouldReload = shouldTriggerBrowserReload(event.paths);
-
+      if (isProcessingChange) {
         log(
-          `File analysis: restart=${shouldRestart}, reload=${shouldReload}`,
+          `Skipping duplicate file change event: ${event.kind} - ${
+            event.paths.join(", ")
+          }`,
           "debug",
         );
+        continue;
+      }
 
-        if (shouldRestart) {
-          log(
-            "Server configuration files changed, restarting server...",
-          );
+      log(`File change detected: ${event.kind} - ${event.paths.join(", ")}`);
+      isProcessingChange = true;
+
+      try {
+        await debounceChange(500);
+        if (abortController.signal.aborted) continue;
+
+        if (config.restartOnChange) {
+          log("Legacy mode: Restarting server for any file change");
           if (config.enableLiveReload) {
             notifyLiveReloadClients("server restart");
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
           reloadServer(entrypoint);
-        } else if (shouldReload && config.enableLiveReload) {
-          log("Frontend files changed, triggering browser reload...");
-          notifyLiveReloadClients("frontend change");
         } else {
+          const shouldRestart = shouldRestartServer(event.paths);
+          const shouldReload = shouldTriggerBrowserReload(event.paths);
+
           log(
-            "File change detected but no action taken (not a monitored file type)",
+            `File analysis: restart=${shouldRestart}, reload=${shouldReload}`,
+            "debug",
           );
+
+          if (shouldRestart) {
+            log(
+              "Server configuration files changed, restarting server...",
+            );
+            if (config.enableLiveReload) {
+              notifyLiveReloadClients("server restart");
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            }
+            reloadServer(entrypoint);
+          } else if (shouldReload && config.enableLiveReload) {
+            log("Frontend files changed, triggering browser reload...");
+            notifyLiveReloadClients("frontend change");
+          } else {
+            log(
+              "File change detected but no action taken (not a monitored file type)",
+            );
+          }
         }
+      } finally {
+        setTimeout(() => {
+          isProcessingChange = false;
+        }, 1000);
       }
-    } finally {
-      setTimeout(() => {
-        isProcessingChange = false;
-      }, 1000);
     }
+  } catch (error) {
+    if (!abortController.signal.aborted) {
+      log(`Watcher error: ${(error as Error).message}`, "error");
+    }
+  } finally {
+    watcher.close();
   }
 };

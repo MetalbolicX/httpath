@@ -1,4 +1,4 @@
-import { debounce } from "../src/utils/debounce.mts";
+import { createDebouncer, debounce } from "../src/utils/debounce.mts";
 import { assertEquals } from "@std/assert";
 
 Deno.test("debounce: multiple rapid calls resolve only once", async () => {
@@ -28,4 +28,20 @@ Deno.test("debounce: zero ms resolves immediately", async () => {
   await debounce(0);
   const elapsed = Date.now() - before;
   assertEquals(elapsed < 20, true);
+});
+
+Deno.test("createDebouncer: two instances are isolated", async () => {
+  const debounceA = createDebouncer();
+  const debounceB = createDebouncer();
+
+  const startA = Date.now();
+  const startB = Date.now();
+
+  const promiseA = debounceA(80).then(() => Date.now() - startA);
+  const promiseB = debounceB(15).then(() => Date.now() - startB);
+
+  const [elapsedA, elapsedB] = await Promise.all([promiseA, promiseB]);
+
+  assertEquals(elapsedA >= 70, true);
+  assertEquals(elapsedB < 50, true);
 });

@@ -28,7 +28,7 @@ export default defineConfig({
   outputOptions: {
     name: "HTTPath",
   },
-  onSuccess: async () => {
+  onSuccess: () => {
     console.log("✅ Build completed successfully!");
   },
 });

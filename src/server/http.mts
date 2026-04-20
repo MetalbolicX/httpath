@@ -1,7 +1,11 @@
 import type { Config, FileEntry } from "../types.mts";
-import { join } from "@std/path";
+import { LIVE_RELOAD_ENDPOINT } from "../types.mts";
+import { join, relative, resolve } from "@std/path";
 import { getMimeType, log, resolveSafePath } from "../utils/index.ts";
-import { generateDirectoryListingHTML, injectLiveReloadScript } from "../ui/index.ts";
+import {
+  generateDirectoryListingHTML,
+  injectLiveReloadScript,
+} from "../ui/index.ts";
 import { handleWebSocket } from "./websocket.mts";
 
 /**
@@ -23,13 +27,40 @@ import { handleWebSocket } from "./websocket.mts";
  * });
  * ```
  */
+type SupportedMethod = "GET" | "HEAD";
+
+const pathMatchesIgnorePattern = (
+  path: string,
+  ignorePatterns: string[],
+): boolean => {
+  const normalizedPath = path.replaceAll("\\", "/");
+  return ignorePatterns.some((pattern) =>
+    normalizedPath.includes(pattern) || normalizedPath.endsWith(pattern)
+  );
+};
+
+const isIgnoredSafePath = (safePath: string, config: Config): boolean => {
+  const relativePath = relative(resolve(config.directory), safePath);
+  return pathMatchesIgnorePattern(relativePath, config.ignorePatterns);
+};
+
 const serveFile = async (
   filePath: string,
   config: Config,
+  method: SupportedMethod,
 ): Promise<Response> => {
   const mimeType = getMimeType(filePath);
 
   if (config.enableLiveReload && mimeType.includes("text/html")) {
+    if (method === "HEAD") {
+      return new Response(null, {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-cache",
+        },
+      });
+    }
+
     const html = await Deno.readTextFile(filePath);
     const modifiedHtml = injectLiveReloadScript(html, config.port);
 
@@ -41,13 +72,17 @@ const serveFile = async (
     });
   }
 
+  const headers = {
+    "content-type": mimeType,
+    "cache-control": "no-cache",
+  };
+
+  if (method === "HEAD") {
+    return new Response(null, { headers });
+  }
+
   const file = await Deno.open(filePath, { read: true });
-  return new Response(file.readable, {
-    headers: {
-      "content-type": mimeType,
-      "cache-control": "no-cache",
-    },
-  });
+  return new Response(file.readable, { headers });
 };
 
 /**
@@ -74,7 +109,14 @@ const serveDirectory = async (
   dirPath: string,
   urlPath: string,
   config: Config,
+  method: SupportedMethod,
 ): Promise<Response> => {
+  if (method === "HEAD") {
+    return new Response(null, {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
   const entries: FileEntry[] = (await Array.fromAsync(Deno.readDir(dirPath)))
     .filter(
       (entry) =>
@@ -126,14 +168,33 @@ const serveDirectory = async (
  */
 export const createRequestHandler =
   (config: Config) => async (request: Request): Promise<Response> => {
-    const url = new URL(request.url);
-    const pathname = decodeURIComponent(url.pathname);
+    const method = request.method.toUpperCase();
+    if (method !== "GET" && method !== "HEAD") {
+      await request.body?.cancel();
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: {
+          "allow": "GET, HEAD",
+        },
+      });
+    }
 
-    log(`${request.method} ${pathname}`, "debug");
+    const supportedMethod = method as SupportedMethod;
+    const url = new URL(request.url);
+    let pathname: string;
+
+    try {
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      log(`Malformed URL path: ${url.pathname}`, "error");
+      return new Response("Bad Request", { status: 400 });
+    }
+
+    log(`${supportedMethod} ${pathname}`, "debug");
 
     if (
       config.enableLiveReload &&
-      pathname === "/livereload" &&
+      pathname === LIVE_RELOAD_ENDPOINT &&
       request.headers.get("upgrade") === "websocket"
     ) {
       return handleWebSocket(request);
@@ -145,19 +206,29 @@ export const createRequestHandler =
       return new Response("Forbidden", { status: 403 });
     }
 
+    if (isIgnoredSafePath(safePath, config)) {
+      log(`Blocked ignored path access: ${pathname}`, "debug");
+      return new Response("Forbidden", { status: 403 });
+    }
+
     try {
       const fileInfo = await Deno.stat(safePath);
 
       if (fileInfo.isFile) {
-        return await serveFile(safePath, config);
+        return await serveFile(safePath, config, supportedMethod);
       } else if (fileInfo.isDirectory) {
         if (config.enableDirectoryListing) {
-          return await serveDirectory(safePath, pathname, config);
+          return await serveDirectory(
+            safePath,
+            pathname,
+            config,
+            supportedMethod,
+          );
         } else {
           const indexPath = join(safePath, "index.html");
           try {
             await Deno.stat(indexPath);
-            return await serveFile(indexPath, config);
+            return await serveFile(indexPath, config, supportedMethod);
           } catch {
             return new Response("Directory listing disabled", {
               status: 403,

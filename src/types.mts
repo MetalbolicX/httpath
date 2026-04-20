@@ -8,6 +8,9 @@ export interface Config {
   restartOnChange: boolean;
 }
 
+export const LIVE_RELOAD_ENDPOINT = "/livereload";
+export const LIVE_RELOAD_MESSAGE = "reload";
+
 export interface FileEntry {
   name: string;
   isDirectory: boolean;

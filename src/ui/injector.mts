@@ -1,3 +1,5 @@
+import { LIVE_RELOAD_ENDPOINT, LIVE_RELOAD_MESSAGE } from "../types.mts";
+
 /**
  * Generates a live reload script that establishes a WebSocket connection to the development server.
  *
@@ -19,7 +21,7 @@ export const getLiveReloadScript = (port: number): string => /*html*/ `
 (() => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const clientPort = window.location.port || '${port}';
-  const wsUrl = protocol + '//' + window.location.hostname + ':' + clientPort + '/livereload';
+  const wsUrl = protocol + '//' + window.location.hostname + ':' + clientPort + '${LIVE_RELOAD_ENDPOINT}';
 
   const connect = () => {
     const ws = new WebSocket(wsUrl);
@@ -27,7 +29,7 @@ export const getLiveReloadScript = (port: number): string => /*html*/ `
     ws.onopen = () => console.log('[Live Reload] Connected');
 
     ws.onmessage = (event) => {
-      if (event.data === 'reload') {
+      if (event.data === '${LIVE_RELOAD_MESSAGE}') {
         console.log('[Live Reload] Reloading page...');
         window.location.reload();
       }

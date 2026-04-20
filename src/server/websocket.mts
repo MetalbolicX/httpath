@@ -1,6 +1,8 @@
+import { LIVE_RELOAD_ENDPOINT, LIVE_RELOAD_MESSAGE } from "../types.mts";
 import { log } from "../utils/index.ts";
 
 export const liveReloadClients = new Set<WebSocket>();
+export { LIVE_RELOAD_ENDPOINT, LIVE_RELOAD_MESSAGE };
 
 /**
  * Handles WebSocket upgrade requests and manages live reload client connections.
@@ -52,19 +54,19 @@ export const handleWebSocket = (request: Request): Response => {
 
 /**
  * Notifies all connected live reload clients to reload their content.
- * 
+ *
  * Iterates through all active WebSocket clients and sends a reload signal to those
  * with an open connection. Automatically removes stale client connections that are
  * no longer in an OPEN state or fail to receive the signal.
- * 
+ *
  * @param reason - Optional description of why the reload was triggered (default: "file change")
- * 
+ *
  * @example
  * ```ts
  * notifyLiveReloadClients("config update");
  * notifyLiveReloadClients(); // Uses default reason
  * ```
- * 
+ *
  * @remarks
  * - Logs debug messages for no connected clients and stale connections
  * - Logs info level message showing number of successful notifications
@@ -82,7 +84,7 @@ export const notifyLiveReloadClients = (reason = "file change"): void => {
   for (const client of liveReloadClients) {
     try {
       if (client.readyState === WebSocket.OPEN) {
-        client.send("reload");
+        client.send(LIVE_RELOAD_MESSAGE);
         successCount++;
       } else {
         clientsToRemove = [...clientsToRemove, client];

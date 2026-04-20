@@ -143,7 +143,7 @@ async function fetchJsonData() {
 
   try {
     // Try to fetch sample data (create if doesn't exist)
-    let response = await fetch("./sample-data.json");
+    const response = await fetch("./sample-data.json");
 
     if (!response.ok) {
       // If sample-data.json doesn't exist, create sample data
@@ -316,7 +316,7 @@ function detectHotReload() {
 function initializeDynamicFeatures() {
   // Add some interactive hover effects
   const featureCards = document.querySelectorAll(".feature-card");
-  featureCards.forEach((card, index) => {
+  featureCards.forEach((card, _index) => {
     card.addEventListener("mouseenter", () => {
       card.style.transform = "translateY(-8px) rotateZ(0.5deg)";
     });
@@ -372,7 +372,7 @@ function initializeDynamicFeatures() {
 }
 
 // Utility functions
-function formatTime(seconds) {
+function _formatTime(seconds) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
@@ -386,7 +386,7 @@ function formatTime(seconds) {
   }
 }
 
-function debounce(func, wait) {
+function _debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {
     const later = () => {
@@ -433,7 +433,7 @@ if (typeof PerformanceObserver !== "undefined") {
 }
 
 // Export functions for global access
-window.HTTPathDemo = {
+globalThis.HTTPathDemo = {
   changeThemeColor,
   addDynamicElement,
   fetchJsonData,
