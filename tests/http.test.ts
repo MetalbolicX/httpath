@@ -143,7 +143,10 @@ Deno.test("createRequestHandler: auth enabled — missing header returns 401", a
   const response = await handler(request);
 
   assertEquals(response.status, 401);
-  assertEquals(response.headers.get("www-authenticate"), `Basic realm="httpath"`);
+  assertEquals(
+    response.headers.get("www-authenticate"),
+    `Basic realm="httpath"`,
+  );
 });
 
 Deno.test("createRequestHandler: auth enabled — valid credentials pass through", async () => {

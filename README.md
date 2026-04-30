@@ -1,7 +1,8 @@
 # httpath — zero-dep static file server for Deno
 
-> **[paθ]** — /ˈeɪtʃ.tiː.pæθ/ — A lightweight, zero-dependency static file server
-> with live-reload, directory listings, and smart file watching. Think `python -m
+> **[paθ]** — /ˈeɪtʃ.tiː.pæθ/ — A lightweight, zero-dependency static file
+> server with live-reload, directory listings, and smart file watching. Think
+> `python -m
 > http.server` with superpowers, in pure Deno.
 
 <p align="center">
@@ -19,15 +20,16 @@
 automatic MIME types, generates beautiful directory listings, and reloads your
 browser the instant you save a change.
 
-| Feature | httpath | `python -m http.server` | `serve` (Vercel) | `http-server` |
-|---------|---------|------------------------|------------------|---------------|
-| Live reload | ✅ Smart (server restart OR browser reload) | ❌ | ❌ | ✅ |
-| Directory listing | ✅ Beautiful HTML with dark mode | ✅ Plain text | ❌ | ✅ |
-| File watching | ✅ 2 modes: smart + legacy | ❌ | ❌ | ❌ |
-| HEAD requests | ✅ | ❌ | ❌ | ❌ |
-| System dir guard | ✅ | ❌ | ❌ | ❌ |
-| Dependencies | **ZERO** (only `@std/*`) | Built-in | 30+ npm | 10+ npm |
-| Runtime | Deno | Python | Node | Node |
+| Feature           | httpath                                     | `python -m http.server` | `serve` (Vercel) | `http-server` |
+| ----------------- | ------------------------------------------- | ----------------------- | ---------------- | ------------- |
+| Live reload       | ✅ Smart (server restart OR browser reload) | ❌                      | ❌               | ✅            |
+| Directory listing | ✅ Beautiful HTML with dark mode            | ✅ Plain text           | ❌               | ✅            |
+| File watching     | ✅ 2 modes: smart + legacy                  | ❌                      | ❌               | ❌            |
+| HEAD requests     | ✅                                          | ❌                      | ❌               | ❌            |
+| System dir guard  | ✅                                          | ❌                      | ❌               | ❌            |
+| Basic Auth        | ✅ (env-var based)                          | ❌                      | ❌               | ❌            |
+| Dependencies      | **ZERO** (only `@std/*`)                    | Built-in                | 30+ npm          | 10+ npm       |
+| Runtime           | Deno                                        | Python                  | Node             | Node          |
 
 ---
 
@@ -35,12 +37,13 @@ browser the instant you save a change.
 
 ```sh
 # Run directly (no install needed)
-deno run -RN --allow-run --sloppy-imports https://raw.githubusercontent.com/metalbolicx/httpath/main/httpath.ts
+deno run -RN --allow-run --allow-env --sloppy-imports https://raw.githubusercontent.com/metalbolicx/httpath/main/httpath.ts
 
 # Install globally
-deno install -RN --allow-run --sloppy-imports -n httpath https://raw.githubusercontent.com/metalbolicx/httpath/main/httpath.ts
+deno install -RN --allow-run --allow-env --sloppy-imports -n httpath https://raw.githubusercontent.com/metalbolicx/httpath/main/httpath.ts
 
 # Or run from source
+cp .env.example .env   # edit credentials (optional)
 ./httpath.ts
 ```
 
@@ -63,27 +66,38 @@ deno install -RN --allow-run --sloppy-imports -n httpath https://raw.githubuserc
 
 ## CLI Reference
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-d, --dir <path>` | `.` (current dir) | Directory to serve |
-| `-p, --port <n>` | `8080` | Port to listen on (1–65535) |
-| `-i, --ignore <patterns>` | `.git,node_modules,.DS_Store` | Comma-separated patterns to exclude |
-| `--no-listing` | `false` | Disable directory listing (returns 403) |
-| `--no-live-reload` | `false` | Disable automatic browser refresh |
-| `-r, --restart-on-change` | `false` | Legacy mode: restart server on **any** file change |
-| `--log <level>` | `info` | One of: `info`, `debug`, `error` |
-| `--allow-protected-dir` | `false` | Allow serving system directories (`/etc`, `C:\Windows`, etc.) |
-| `-h, --help` | | Show help and exit |
+| Flag                      | Default                       | Description                                                   |
+| ------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `-d, --dir <path>`        | `.` (current dir)             | Directory to serve                                            |
+| `-p, --port <n>`          | `8080`                        | Port to listen on (1–65535)                                   |
+| `-i, --ignore <patterns>` | `.git,node_modules,.DS_Store` | Comma-separated patterns to exclude                           |
+| `--no-listing`            | `false`                       | Disable directory listing (returns 403)                       |
+| `--no-live-reload`        | `false`                       | Disable automatic browser refresh                             |
+| `-r, --restart-on-change` | `false`                       | Legacy mode: restart server on **any** file change            |
+| `--log <level>`           | `info`                        | One of: `info`, `debug`, `error`                              |
+| `--allow-protected-dir`   | `false`                       | Allow serving system directories (`/etc`, `C:\Windows`, etc.) |
+| `-h, --help`              |                               | Show help and exit                                            |
+
+### Basic Auth (optional)
+
+Set `HTTPATH_USER` and `HTTPATH_PASS` in a `.env` file to enable HTTP Basic Auth
+for all endpoints (HTTP + WebSocket `/livereload`).
+
+```sh
+cp .env.example .env   # then edit the credentials
+```
+
+See [.env.example](.env.example).
 
 ### Smart Mode vs Legacy Mode
 
 In **smart mode** (default), the watcher analyses file extensions:
 
-| When you change… | The server… |
-|------------------|-------------|
-| `.ts`, `.json`, `deno.json` | Restarts (config/runtime files) |
-| `.html`, `.css`, `.js`, `.png` | Reloads the browser only |
-| `.log`, `.txt`, etc. | Does nothing (not a monitored type) |
+| When you change…               | The server…                         |
+| ------------------------------ | ----------------------------------- |
+| `.ts`, `.json`, `deno.json`    | Restarts (config/runtime files)     |
+| `.html`, `.css`, `.js`, `.png` | Reloads the browser only            |
+| `.log`, `.txt`, etc.           | Does nothing (not a monitored type) |
 
 In **legacy mode** (`--restart-on-change`), **any** file change triggers a full
 server restart.
@@ -92,7 +106,7 @@ server restart.
 
 ## Security
 
-httpath protects you at three levels:
+httpath protects you at four levels:
 
 1. **Startup Guard** — Refuses to serve system directories (`/etc`, `/boot`,
    `C:\Windows`, etc.) unless `--allow-protected-dir` is passed.
@@ -100,12 +114,15 @@ httpath protects you at three levels:
    before they reach the filesystem.
 3. **Ignore Patterns** — Sensitive project directories (`.git`, `node_modules`)
    are automatically blocked, even when explicitly requested.
+4. **Basic Auth** (optional) — When `HTTPATH_USER` / `HTTPATH_PASS` are set,
+   every request requires a valid `Authorization: Basic <base64>` header. The
+   live-reload WebSocket is also protected.
 
 ---
 
 ## Project Status
 
-**Stable.** Used in daily development. All 130+ tests pass. Supports Linux,
+**Stable.** Used in daily development. All 137+ tests pass. Supports Linux,
 macOS, and Windows.
 
 ---
@@ -113,14 +130,14 @@ macOS, and Windows.
 ## Architecture
 
 For a deep dive into the internals — module map, Mermaid flow diagrams,
-concurrency model, and all 10 design decisions with rationale — see:
+concurrency model, and all 12 design decisions with rationale — see:
 
 ➡️ [docs/architecture.md](docs/architecture.md)
 
 > Covers: startup flow, HTTP request handling, file watcher decision matrix,
-> live reload flow, 3-layer security model, concurrent `Promise.race` design,
-> and why closures over classes, hoisted regex constants, and server-side HTML
-> injection.
+> live reload flow, 4-layer security model (including Basic Auth), concurrent
+> `Promise.race` design, and why closures over classes, hoisted regex constants,
+> server-side HTML injection, and env-var-based credentials.
 
 ---
 
@@ -144,6 +161,7 @@ See [docs/workflow.md](docs/workflow.md) for the full development workflow.
 - [x] Smart live reload (browser vs server restart)
 - [x] HEAD request support
 - [x] Protected system directory guard
+- [x] Basic authentication
 - [ ] Range request support (partial content)
 - [ ] Request logging to file
 - [ ] Basic authentication
@@ -153,7 +171,8 @@ See [docs/workflow.md](docs/workflow.md) for the full development workflow.
 
 ## License
 
-Released under the [MIT License](LICENSE) by [José Martínez Santana](https://github.com/MetalbolicX).
+Released under the [MIT License](LICENSE) by
+[José Martínez Santana](https://github.com/MetalbolicX).
 
 ---
 

@@ -5,9 +5,9 @@
   "license": "MIT",
   "exports": "./httpath.ts",
   "tasks": {
-    "dev":  "deno run --env-file=.env -RN --allow-run --allow-env --sloppy-imports httpath.ts",
+    "dev": "deno run --env-file=.env -RN --allow-run --allow-env --sloppy-imports httpath.ts",
     "test": "deno test",
-    "fmt":  "deno fmt",
+    "fmt": "deno fmt",
     "lint": "deno lint"
   },
   "imports": {

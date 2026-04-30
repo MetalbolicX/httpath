@@ -1,7 +1,12 @@
 import type { Config, FileEntry } from "../types.mts";
 import { LIVE_RELOAD_ENDPOINT } from "../types.mts";
 import { join, relative, resolve } from "@std/path";
-import { getMimeType, log, matchesPattern, resolveSafePath } from "../utils/index.ts";
+import {
+  getMimeType,
+  log,
+  matchesPattern,
+  resolveSafePath,
+} from "../utils/index.ts";
 import {
   generateDirectoryListingHTML,
   injectLiveReloadScript,
@@ -17,7 +22,10 @@ type SupportedMethod = "GET" | "HEAD";
 const isIgnoredSafePath = (safePath: string, config: Config): boolean => {
   const relativePath = relative(resolve(config.directory), safePath);
   // Normalise separators for cross-platform consistency
-  return matchesPattern(relativePath.replaceAll("\\", "/"), config.ignorePatterns);
+  return matchesPattern(
+    relativePath.replaceAll("\\", "/"),
+    config.ignorePatterns,
+  );
 };
 
 /**

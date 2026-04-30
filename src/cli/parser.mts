@@ -40,7 +40,13 @@ export const DEFAULT_CONFIG: Config = {
 export const parseArguments = (args: string[]): Config => {
   const parsed = parseArgs(args, {
     string: ["dir", "port", "ignore", "log"],
-    boolean: ["no-listing", "help", "no-live-reload", "restart-on-change", "allow-protected-dir"],
+    boolean: [
+      "no-listing",
+      "help",
+      "no-live-reload",
+      "restart-on-change",
+      "allow-protected-dir",
+    ],
     default: {
       dir: DEFAULT_CONFIG.directory,
       port: DEFAULT_CONFIG.port.toString(),
@@ -95,7 +101,9 @@ Examples:
   const validLogLevels: Config["logLevel"][] = ["info", "debug", "error"];
   if (!validLogLevels.includes(parsed.log as Config["logLevel"])) {
     throw new Error(
-      `Invalid log level: "${parsed.log}". Must be one of: ${validLogLevels.join(", ")}`,
+      `Invalid log level: "${parsed.log}". Must be one of: ${
+        validLogLevels.join(", ")
+      }`,
     );
   }
 

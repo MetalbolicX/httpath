@@ -1,17 +1,17 @@
 # Architecture
 
 > **httpath** is a lightweight, zero-dependency static file server for Deno with
-> live-reload, directory listing, and smart file-watching. This document describes
-> the internal architecture, key flows, and the rationale behind every design
-> decision.
+> live-reload, directory listing, and smart file-watching. This document
+> describes the internal architecture, key flows, and the rationale behind every
+> design decision.
 
 ---
 
 ## High-Level Overview
 
-httpath follows a **layered architecture** with five distinct domains. Each layer
-has a single responsibility and communicates through well-defined interfaces
-(`Config`, function parameters).
+httpath follows a **layered architecture** with five distinct domains. Each
+layer has a single responsibility and communicates through well-defined
+interfaces (`Config`, function parameters).
 
 ```mermaid
 graph TB
@@ -65,21 +65,21 @@ graph TB
 
 ## Module Map
 
-| Layer | Module | Responsibility | Key Exports |
-|-------|--------|----------------|-------------|
-| **Entrypoint** | `httpath.ts` | Orchestration, signal handling, validation | `main()` |
-| **CLI** | `cli/parser.mts` | Argument parsing, defaults, validation | `parseArguments()`, `DEFAULT_CONFIG` |
-| **Server** | `server/http.mts` | HTTP request routing, file/directory serving | `createRequestHandler()`, `startHttpServer()` |
-| **Server** | `server/websocket.mts` | WebSocket live-reload client management | `handleWebSocket()`, `notifyLiveReloadClients()` |
-| **Watcher** | `watcher/monitor.mts` | File system watching, debounce, restart/reload dispatch | `startFileWatcher()`, `reloadServer()` |
-| **Watcher** | `watcher/rules.mts` | Pure decision functions for restart vs. reload | `shouldIgnoreEvent()`, `shouldRestartServer()`, `shouldTriggerBrowserReload()` |
-| **UI** | `ui/templates.mts` | HTML/CSS generation for directory listings | `generateDirectoryListingHTML()`, `escapeHtml()` |
-| **UI** | `ui/injector.mts` | Live-reload script generation and injection | `getLiveReloadScript()`, `injectLiveReloadScript()` |
-| **Utils** | `utils/logger.mts` | Leveled console logging | `log()`, `setLogLevel()` |
-| **Utils** | `utils/path.mts` | Path security, pattern matching | `resolveSafePath()`, `matchesPattern()`, `isProtectedSystemPath()` |
-| **Utils** | `utils/mime.mts` | MIME type detection via `@std/media-types` | `getMimeType()` |
-| **Utils** | `utils/debounce.mts` | Debounce factory and singleton | `createDebouncer()`, `debounce()` |
-| **Shared** | `types.mts` | Shared TypeScript interfaces and constants | `Config`, `FileEntry`, `LIVE_RELOAD_ENDPOINT` |
+| Layer          | Module                 | Responsibility                                                      | Key Exports                                                                    |
+| -------------- | ---------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Entrypoint** | `httpath.ts`           | Orchestration, signal handling, validation                          | `main()`                                                                       |
+| **CLI**        | `cli/parser.mts`       | Argument parsing, defaults, validation                              | `parseArguments()`, `DEFAULT_CONFIG`                                           |
+| **Server**     | `server/http.mts`      | HTTP request routing, file/directory serving, Basic Auth middleware | `createRequestHandler()`, `startHttpServer()`                                  |
+| **Server**     | `server/websocket.mts` | WebSocket live-reload client management                             | `handleWebSocket()`, `notifyLiveReloadClients()`                               |
+| **Watcher**    | `watcher/monitor.mts`  | File system watching, debounce, restart/reload dispatch             | `startFileWatcher()`, `reloadServer()`                                         |
+| **Watcher**    | `watcher/rules.mts`    | Pure decision functions for restart vs. reload                      | `shouldIgnoreEvent()`, `shouldRestartServer()`, `shouldTriggerBrowserReload()` |
+| **UI**         | `ui/templates.mts`     | HTML/CSS generation for directory listings                          | `generateDirectoryListingHTML()`, `escapeHtml()`                               |
+| **UI**         | `ui/injector.mts`      | Live-reload script generation and injection                         | `getLiveReloadScript()`, `injectLiveReloadScript()`                            |
+| **Utils**      | `utils/logger.mts`     | Leveled console logging                                             | `log()`, `setLogLevel()`                                                       |
+| **Utils**      | `utils/path.mts`       | Path security, pattern matching                                     | `resolveSafePath()`, `matchesPattern()`, `isProtectedSystemPath()`             |
+| **Utils**      | `utils/mime.mts`       | MIME type detection via `@std/media-types`                          | `getMimeType()`                                                                |
+| **Utils**      | `utils/debounce.mts`   | Debounce factory and singleton                                      | `createDebouncer()`, `debounce()`                                              |
+| **Shared**     | `types.mts`            | Shared TypeScript interfaces and constants                          | `Config` (including `auth?`), `FileEntry`, `LIVE_RELOAD_ENDPOINT`              |
 
 ---
 
@@ -100,6 +100,10 @@ sequenceDiagram
     Main->>CLI: parseArguments(Deno.args)
     CLI-->>Main: Config object
     Main->>Main: setLogLevel(config.logLevel)
+
+    Note over Main: Read optional auth credentials
+    Main->>Main: Deno.env.get("HTTPATH_USER" / "HTTPATH_PASS")
+    Main->>Config: config.auth = { username, password }
 
     Note over Main: Validate directory exists
     Main->>FS: Deno.stat(config.directory)
@@ -132,7 +136,14 @@ Every incoming request follows this decision tree:
 
 ```mermaid
 flowchart TD
-    A[Incoming Request] --> B{Method?}
+    A[Incoming Request] --> AA{Auth configured?}
+    AA -->|No| B{Method?}
+    AA -->|Yes| AB{Valid Basic<br>Authorization?}
+    AB -->|Missing header| AC[401 + WWW-Authenticate]
+    AB -->|Wrong credentials| AD[401 Forbidden]
+
+    AB -->|Valid| B
+
     B -->|POST/PUT/DELETE| C[405 Method Not Allowed]
     B -->|GET/HEAD| D[Decode URL pathname]
 
@@ -223,19 +234,19 @@ sequenceDiagram
 
 ### Decision Matrix
 
-| File Extension | `shouldRestartServer` | `shouldTriggerBrowserReload` | Action |
-|----------------|:---------------------:|:---------------------------:|--------|
-| `.ts`, `.js`, `.mjs` | ✅ | ✅ | **Server restart** (takes priority) |
-| `.json` | ✅ | ✅ | **Server restart** |
-| `.toml`, `.yaml`, `.yml` | ✅ | ❌ | **Server restart** |
-| `deno.json`, `deno.lock`, `package.json` | ✅ | ❌ | **Server restart** |
-| `.html`, `.css` | ❌ | ✅ | **Browser reload** |
-| `.scss`, `.sass`, `.less` | ❌ | ✅ | **Browser reload** |
-| `.vue`, `.svelte`, `.tsx`, `.jsx` | ❌ | ✅ | **Browser reload** |
-| `.md` | ❌ | ✅ | **Browser reload** |
-| `.png`, `.jpg`, `.svg`, `.gif`, `.webp`, `.ico` | ❌ | ✅ | **Browser reload** |
-| `.woff`, `.woff2`, `.ttf`, `.eot` | ❌ | ✅ | **Browser reload** |
-| `.log`, `.txt`, other | ❌ | ❌ | **No action** |
+| File Extension                                  | `shouldRestartServer` | `shouldTriggerBrowserReload` | Action                              |
+| ----------------------------------------------- | :-------------------: | :--------------------------: | ----------------------------------- |
+| `.ts`, `.js`, `.mjs`                            |          ✅           |              ✅              | **Server restart** (takes priority) |
+| `.json`                                         |          ✅           |              ✅              | **Server restart**                  |
+| `.toml`, `.yaml`, `.yml`                        |          ✅           |              ❌              | **Server restart**                  |
+| `deno.json`, `deno.lock`, `package.json`        |          ✅           |              ❌              | **Server restart**                  |
+| `.html`, `.css`                                 |          ❌           |              ✅              | **Browser reload**                  |
+| `.scss`, `.sass`, `.less`                       |          ❌           |              ✅              | **Browser reload**                  |
+| `.vue`, `.svelte`, `.tsx`, `.jsx`               |          ❌           |              ✅              | **Browser reload**                  |
+| `.md`                                           |          ❌           |              ✅              | **Browser reload**                  |
+| `.png`, `.jpg`, `.svg`, `.gif`, `.webp`, `.ico` |          ❌           |              ✅              | **Browser reload**                  |
+| `.woff`, `.woff2`, `.ttf`, `.eot`               |          ❌           |              ✅              | **Browser reload**                  |
+| `.log`, `.txt`, other                           |          ❌           |              ❌              | **No action**                       |
 
 ---
 
@@ -273,7 +284,7 @@ sequenceDiagram
 
 ## Security Model
 
-httpath has **three layers** of path security:
+httpath has **four layers** of security:
 
 ```mermaid
 flowchart LR
@@ -289,17 +300,23 @@ flowchart LR
         E["matchesPattern()"] -->|Block .git, node_modules, .DS_Store| F["403 Forbidden"]
     end
 
+    subgraph "Layer 4: Auth Middleware"
+        H["rejectBasicAuth() /<br>missingBasicAuthHeader()"] -->|"Missing header"| I["401 + WWW-Authenticate"]
+        H -->|"Wrong credentials"| J["401 (no prompt)"]
+    end
+
     A -.->|User must opt-in| G["--allow-protected-dir"]
     C -->|"startsWith('..')"| D
 ```
 
 ### Layer Details
 
-| Layer | Where | What It Protects Against | How |
-|-------|-------|--------------------------|-----|
-| **Startup Guard** | `httpath.ts:main()` | Accidentally serving `/etc`, `C:\Windows`, etc. | Prefix-match against per-OS blocklist. Hard error unless `--allow-protected-dir`. |
-| **Traversal Prevention** | `utils/path.mts:resolveSafePath()` | `../../etc/passwd` attacks | Resolve + normalize + check `relative()` starts with `..`. |
-| **Ignore Patterns** | `server/http.mts:isIgnoredSafePath()` | Serving `.git/`, `node_modules/`, `.DS_Store` | Substring/suffix match against configurable patterns. |
+| Layer                    | Where                                    | What It Protects Against                        | How                                                                                                                                                                                                   |
+| ------------------------ | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Startup Guard**        | `httpath.ts:main()`                      | Accidentally serving `/etc`, `C:\Windows`, etc. | Prefix-match against per-OS blocklist. Hard error unless `--allow-protected-dir`.                                                                                                                     |
+| **Traversal Prevention** | `utils/path.mts:resolveSafePath()`       | `../../etc/passwd` attacks                      | Resolve + normalize + check `relative()` starts with `..`.                                                                                                                                            |
+| **Ignore Patterns**      | `server/http.mts:isIgnoredSafePath()`    | Serving `.git/`, `node_modules/`, `.DS_Store`   | Substring/suffix match against configurable patterns.                                                                                                                                                 |
+| **Auth Middleware**      | `server/http.mts:createRequestHandler()` | Unauthenticated HTTP/WebSocket access           | Check `Authorization: Basic` header at handler entry. Populated from `HTTPATH_USER` / `HTTPATH_PASS`. Missing header returns `www-authenticate` (browser prompt), wrong credentials return plain 401. |
 
 ---
 
@@ -339,12 +356,14 @@ graph LR
 closures rather than using classes.
 
 **Rationale:**
+
 - Closures capture `config` / internal state via lexical scope — no `this`
   binding issues, no class instantiation ceremony.
 - The returned function is a plain `async (Request) => Response`, compatible
   directly with `Deno.serve({ handler })`.
-- Each debouncer instance has isolated state (`pendingResolvers`, timeout handle),
-  preventing cross-contamination between watcher and potential future consumers.
+- Each debouncer instance has isolated state (`pendingResolvers`, timeout
+  handle), preventing cross-contamination between watcher and potential future
+  consumers.
 
 ### 2. Separate Watcher Rules from Watcher Engine
 
@@ -353,6 +372,7 @@ closures rather than using classes.
 watcher loop.
 
 **Rationale:**
+
 - **Testability:** Rules are pure functions — trivially testable without
   filesystem mocking.
 - **Single Responsibility:** `monitor.mts` handles debounce, concurrency guards,
@@ -365,6 +385,7 @@ watcher loop.
 module-level constants, not created inside functions.
 
 **Rationale:**
+
 - File-watch events are **hot** — regex arrays were being reconstructed on every
   call. Hoisting eliminates repeated allocation.
 - Module-level constants are also easier to test and document.
@@ -375,6 +396,7 @@ module-level constants, not created inside functions.
 guard that resets immediately after processing (not via a fixed timer).
 
 **Rationale:**
+
 - File editors often save multiple files atomically (e.g., format-on-save
   touching 3 files). The 500ms debounce batches these into one event.
 - The `isProcessingChange` flag prevents duplicate events from entering the
@@ -388,6 +410,7 @@ guard that resets immediately after processing (not via a fixed timer).
 through `handleWebSocket()` and `notifyLiveReloadClients()`.
 
 **Rationale:**
+
 - Exporting a mutable `Set` would let any consumer `.add()`, `.delete()`, or
   `.clear()` it, breaking the WebSocket lifecycle contract.
 - `getLiveReloadClientCount()` provides read-only access for diagnostics.
@@ -398,6 +421,7 @@ through `handleWebSocket()` and `notifyLiveReloadClients()`.
 browser reload for frontend files). `--restart-on-change` activates legacy mode.
 
 **Rationale:**
+
 - Most developers edit HTML/CSS/JS during development — restarting the server
   for these changes is unnecessary and slow.
 - Config files (`.json`, `.yaml`, `deno.json`) require a server restart because
@@ -406,10 +430,11 @@ browser reload for frontend files). `--restart-on-change` activates legacy mode.
 
 ### 7. HTML Injection Strategy
 
-**Decision:** Live-reload script is injected **server-side** into HTML responses,
-not loaded as an external file.
+**Decision:** Live-reload script is injected **server-side** into HTML
+responses, not loaded as an external file.
 
 **Rationale:**
+
 - No additional HTTP request for the script — zero latency.
 - Works with any HTML file, even those without a `<head>` or explicit script
   includes.
@@ -422,6 +447,7 @@ not loaded as an external file.
 `Deno.build.os`. Case-insensitive on Windows.
 
 **Rationale:**
+
 - Path-based (no filesystem access required) — fast and deterministic.
 - Prefix-match with separator ensures `/etc` blocks `/etc/nginx` but NOT
   `/etc-custom`.
@@ -435,6 +461,7 @@ not loaded as an external file.
 assert, testing/mock).
 
 **Rationale:**
+
 - Eliminates supply-chain risk — no `node_modules`, no transitive
   vulnerabilities.
 - Smaller binary footprint when compiled.
@@ -446,10 +473,35 @@ assert, testing/mock).
 public symbols from its modules.
 
 **Rationale:**
+
 - Clean import paths: `import { log, getMimeType } from "../utils/index.ts"`
   instead of importing from individual files.
 - Single point of control for what each layer exposes externally.
 - Changing internal file structure doesn't break consumers.
+
+### 11. Env-Variable-Based Authentication
+
+**Decision:** Auth credentials come from environment variables (`HTTPATH_USER`,
+`HTTPATH_PASS`) via Deno's native `--env-file` flag, not CLI flags.
+
+**Rationale:**
+
+- Deno's `--env-file` flag loads `.env` automatically — zero parsing code.
+- Passwords in CLI args leak to `ps aux` / process listings.
+- Env vars are a universal standard (12 Factor App).
+- Setting only one variable warns and disables auth — fails safe.
+
+### 12. Two-Step 401 Response
+
+**Decision:** Missing auth header returns 401 with `www-authenticate` header;
+wrong credentials return 401 without it.
+
+**Rationale:**
+
+- `www-authenticate` triggers the browser's built-in auth dialog — appropriate
+  when no credentials were supplied.
+- Omitting it on wrong credentials prevents an infinite prompt loop after the
+  user clicks "Cancel".
 
 ---
 
@@ -457,6 +509,7 @@ public symbols from its modules.
 
 ```text
 httpath/
+├── .env.example                  # Basic Auth credential template
 ├── deno.json                    # Tasks, imports, metadata
 ├── deno.lock                    # Pinned dependency versions
 ├── httpath.ts                   # Entry point (shebang + main)
@@ -467,7 +520,7 @@ httpath/
 │   │   └── parser.mts           # CLI argument parsing + defaults
 │   ├── server/
 │   │   ├── index.ts             # Barrel export
-│   │   ├── http.mts             # Request handler + Deno.serve
+│   │   ├── http.mts             # Request handler + Deno.serve + Basic Auth
 │   │   └── websocket.mts        # WebSocket client management
 │   ├── watcher/
 │   │   ├── index.ts             # Barrel export

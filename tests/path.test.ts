@@ -156,7 +156,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "isProtectedSystemPath: /System/Library/CoreServices is blocked on macOS",
+  name:
+    "isProtectedSystemPath: /System/Library/CoreServices is blocked on macOS",
   ignore: !IS_MACOS,
   fn() {
     assertEquals(isProtectedSystemPath("/System/Library/CoreServices"), true);

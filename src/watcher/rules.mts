@@ -46,8 +46,7 @@ const BROWSER_RELOAD_PATTERNS = [
 export const shouldIgnoreEvent = (
   event: Deno.FsEvent,
   ignorePatterns: string[],
-): boolean =>
-  event.paths.some((path) => matchesPattern(path, ignorePatterns));
+): boolean => event.paths.some((path) => matchesPattern(path, ignorePatterns));
 
 /**
  * Determines whether the server should restart based on the provided file paths.

@@ -3,7 +3,6 @@ import type { Config } from "../types.mts";
 const LEVELS: Record<string, number> = { debug: 0, info: 1, error: 2 };
 let currentLevel: Config["logLevel"] = "info";
 
-
 /**
  * Sets the current logging level for the logger.
  * @param level - The logging level to set, as defined in the Config type
