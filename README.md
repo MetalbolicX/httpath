@@ -1,6 +1,6 @@
 # httpath — zero-dep static file server for Deno
 
-> **[paθ]** — /ˈeɪtʃ.tiː.pæθ/ — A lightweight, zero-dependency static file
+> A lightweight, zero-dependency static file
 > server with live-reload, directory listings, and smart file watching. Think
 > `python -m
 > http.server` with superpowers, in pure Deno.
@@ -149,8 +149,6 @@ deno task test     # Run the full test suite
 deno task fmt      # Format code
 deno task lint     # Lint code
 ```
-
-See [docs/workflow.md](docs/workflow.md) for the full development workflow.
 
 ---
 
