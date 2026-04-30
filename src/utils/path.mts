@@ -24,6 +24,102 @@ export const matchesPattern = (
     (pattern) => path.includes(pattern) || path.endsWith(pattern),
   );
 
+// Protected system paths per platform.
+// Matching is done against the resolved absolute path with a trailing separator
+// so that e.g. "/etc" does NOT match "/etc-custom".
+const PROTECTED_PATHS: Record<string, string[]> = {
+  linux: [
+    "/etc",
+    "/bin",
+    "/sbin",
+    "/boot",
+    "/dev",
+    "/proc",
+    "/sys",
+    "/root",
+    "/lib",
+    "/lib64",
+    "/lost+found",
+  ],
+  darwin: [
+    "/etc",
+    "/bin",
+    "/sbin",
+    "/boot",
+    "/dev",
+    "/proc",
+    "/sys",
+    "/root",
+    "/lib",
+    "/lib64",
+    "/lost+found",
+    "/System",
+    "/Library",
+    "/private/etc",
+  ],
+  windows: [
+    "C:\\Windows",
+    "C:\\WinNT",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+    "C:\\ProgramData",
+    "C:\\System Volume Information",
+    "C:\\Recovery",
+    "C:\\$Recycle.Bin",
+    "C:\\PerfLogs",
+    "C:\\Documents and Settings",
+  ],
+};
+
+/**
+ * Returns `true` when the given path is, or is inside, a known protected
+ * system/OS directory on the current platform.
+ *
+ * The check is purely path-based (no filesystem access required). Paths are
+ * resolved and normalised before comparison; Windows comparisons are
+ * case-insensitive. The function returns `false` for any platform that does
+ * not have an entry in the blocklist (e.g. "android", future Deno targets).
+ *
+ * @param dirPath - The absolute path to check (will be resolved internally)
+ *
+ * @example
+ * ```typescript
+ * // Linux
+ * isProtectedSystemPath("/etc");          // true
+ * isProtectedSystemPath("/etc/nginx");    // true
+ * isProtectedSystemPath("/etc-custom");   // false
+ * isProtectedSystemPath("/home/user");    // false
+ *
+ * // Windows
+ * isProtectedSystemPath("C:\\Windows");   // true
+ * isProtectedSystemPath("C:\\Users\\me"); // false
+ * ```
+ */
+export const isProtectedSystemPath = (dirPath: string): boolean => {
+  const os = Deno.build.os as string;
+  const protectedPaths = PROTECTED_PATHS[os];
+
+  // Unknown platform — don't block
+  if (!protectedPaths) return false;
+
+  const isWindows = os === "windows";
+  const resolvedDir = resolve(dirPath);
+
+  // Normalise to lowercase on Windows for case-insensitive matching
+  const normalised = isWindows ? resolvedDir.toLowerCase() : resolvedDir;
+
+  return protectedPaths.some((protected_) => {
+    const normProtected = isWindows ? protected_.toLowerCase() : protected_;
+    const sep = isWindows ? "\\" : "/";
+
+    // Exact match OR the path is inside the protected directory
+    return (
+      normalised === normProtected ||
+      normalised.startsWith(normProtected + sep)
+    );
+  });
+};
+
 /**
  * Resolves a safe file path by validating it stays within a base directory.
  *

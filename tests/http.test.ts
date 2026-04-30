@@ -11,6 +11,7 @@ const createConfig = (overrides: Partial<Config> = {}): Config => ({
   logLevel: "error",
   enableLiveReload: false,
   restartOnChange: false,
+  allowProtectedDir: false,
   ...overrides,
 });
 

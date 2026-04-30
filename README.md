@@ -1,133 +1,168 @@
-# httpath
+# httpath — zero-dep static file server for Deno
 
-> **HTTPath** - A lightweight, feature-rich static file server similar to
-> Python's `python -m http.server` but with only the standard Deno modules.
+> **[paθ]** — /ˈeɪtʃ.tiː.pæθ/ — A lightweight, zero-dependency static file server
+> with live-reload, directory listings, and smart file watching. Think `python -m
+> http.server` with superpowers, in pure Deno.
 
-![Deno](https://img.shields.io/badge/deno->=2.0.0-green)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
-
-## ✨ Features
-
-- 📁 Static File Streaming - Efficient file serving using Node.js streams
-- 🎯 MIME Type Detection - Automatic content-type detection for common file
-  types
-- 📂 Directory Indexing - Beautiful directory listings with navigation
-- 🔒 Path Sanitization - Built-in security against directory traversal attacks
-- 🔄 Hot-Reload - Automatic browser refresh when files change
-- **No Dependencies:** Built entirely on standard Deno modules (`@std/cli`,
-  `@std/path`, `@std/media-types`).
-
-## Prerequisites
-
-- [Deno](https://deno.land/) 2.x or higher installed on your system.
-
-## Usage
-
-You can run `httpath` directly from the source or install it globally via Deno.
-
-### Running from Source
-
-Because Deno supports executing directly from a URL or local file, you can start
-the server using the Deno task defined in the `deno.json`:
-
-You can run directly:
-
-```sh
-./httpath.ts [OPTIONS]
-```
-
-**Options**
-
-Usage: `httpath [OPTIONS]`
-
-- `-d, --dir <directory>`: Specify the directory to serve (defaults to the current
-  directory).
-- `-p, --port <port>`: Specify the port to listen on (defaults to 8080).
-- `-i, --ignore <patterns>`: Comma-separated list of file patterns to ignore (default:
-  `.git,node_modules,.DS_Store`).
-- `--no-listing`: Disable directory listing (returns 403 Forbidden for directories).
-- `--no-live-reload`: Disable the live reload feature (file changes will not trigger
-  browser refresh).
-- `-r, --restart-on-change`: Restart the server process on file changes instead of
-  just reloading the browser (default is to reload the browser only).
-- `--log <level>`: Set the logging level (info, debug, error) (default: info).
-- `-h, --help`: Show the help message and exit.
-
-## Examples
-
-- Serve the current directory on port 8080:
-  ```sh
-  httpath
-  ```
-
-- Serve a specific directory on default port:
-  ```sh
-  httpath -d /path/to/directory
-  ```
-
-- Serve the current directory on port 8081:
-  ```sh
-  httpath -p 8081
-  ```
-
-## Arquitecture
-
-```text
-httpath/
-├── deno.json                 # Deno tasks and standard library import maps
-├── httpath.ts                   # Entry point and orchestrator
-├── src/
-│   ├── types.mts              # Shared interfaces (Config, FileEntry)
-│   ├── cli/
-│   │   └── parser.mts         # Argument parsing and defaults
-│   ├── server/
-│   │   ├── http.mts           # Request routing and static file serving
-│   │   └── websocket.mts      # Live reload client state management
-│   ├── watcher/
-│   │   ├── monitor.mts        # File system watcher and debounce logic
-│   │   └── rules.mts          # Rules for reloading vs restarting
-│   ├── ui/
-│   │   ├── templates.mts      # HTML/CSS generation for directory listing
-│   │   └── injector.mts       # Live reload script generation and DOM injection
-│   └── utils/
-│       ├── logger.mts         # Console logging utility
-│       ├── path.mts           # Path resolution and security
-│       ├── mime.mts           # MIME type detection
-│       └── debounce.mts       # Debounce utility
-└── README.md                 # Project documentation
-```
-
-## 📋 Requirements
-
-- **Deno** >= 2.0.0
-- **Operating System**: Windows, macOS, Linux
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-Released under [MIT License](LICENSE) by
-[@MetalbolicX](https://github.com/MetalbolicX).
-
-## 🔗 Related Projects
-
-- [live-server](https://github.com/tapio/live-server) - Live reloading for
-  development
-- [http-server](https://github.com/http-party/http-server) - Simple HTTP server
-- [serve](https://github.com/vercel/serve) - Static file serving and directory
-  listing
+<p align="center">
+  <img src="https://img.shields.io/badge/deno->=2.0.0-272e33?logo=deno&logoColor=white" alt="Deno">
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178c6" alt="TypeScript">
+  <img src="https://img.shields.io/badge/dependencies-none-brightgreen" alt="Dependencies">
+</p>
 
 ---
 
-<div align="center">
-  Made with ❤️ by <a href="https://github.com/MetalbolicX">José Martínez Santana</a>
-</div>
+## Why httpath?
+
+**One command, zero config.** Point it at any directory — it serves files with
+automatic MIME types, generates beautiful directory listings, and reloads your
+browser the instant you save a change.
+
+| Feature | httpath | `python -m http.server` | `serve` (Vercel) | `http-server` |
+|---------|---------|------------------------|------------------|---------------|
+| Live reload | ✅ Smart (server restart OR browser reload) | ❌ | ❌ | ✅ |
+| Directory listing | ✅ Beautiful HTML with dark mode | ✅ Plain text | ❌ | ✅ |
+| File watching | ✅ 2 modes: smart + legacy | ❌ | ❌ | ❌ |
+| HEAD requests | ✅ | ❌ | ❌ | ❌ |
+| System dir guard | ✅ | ❌ | ❌ | ❌ |
+| Dependencies | **ZERO** (only `@std/*`) | Built-in | 30+ npm | 10+ npm |
+| Runtime | Deno | Python | Node | Node |
+
+---
+
+## Install
+
+```sh
+# Run directly (no install needed)
+deno run -RN --allow-run --sloppy-imports https://raw.githubusercontent.com/metalbolicx/httpath/main/httpath.ts
+
+# Install globally
+deno install -RN --allow-run --sloppy-imports -n httpath https://raw.githubusercontent.com/metalbolicx/httpath/main/httpath.ts
+
+# Or run from source
+./httpath.ts
+```
+
+---
+
+## Quick Start
+
+```sh
+# Serve the current directory (default: http://localhost:8080)
+./httpath.ts
+
+# Serve a specific directory on a custom port
+./httpath.ts -d ./my-project -p 3000
+
+# Disable live reload and directory listing
+./httpath.ts --no-live-reload --no-listing
+```
+
+---
+
+## CLI Reference
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-d, --dir <path>` | `.` (current dir) | Directory to serve |
+| `-p, --port <n>` | `8080` | Port to listen on (1–65535) |
+| `-i, --ignore <patterns>` | `.git,node_modules,.DS_Store` | Comma-separated patterns to exclude |
+| `--no-listing` | `false` | Disable directory listing (returns 403) |
+| `--no-live-reload` | `false` | Disable automatic browser refresh |
+| `-r, --restart-on-change` | `false` | Legacy mode: restart server on **any** file change |
+| `--log <level>` | `info` | One of: `info`, `debug`, `error` |
+| `--allow-protected-dir` | `false` | Allow serving system directories (`/etc`, `C:\Windows`, etc.) |
+| `-h, --help` | | Show help and exit |
+
+### Smart Mode vs Legacy Mode
+
+In **smart mode** (default), the watcher analyses file extensions:
+
+| When you change… | The server… |
+|------------------|-------------|
+| `.ts`, `.json`, `deno.json` | Restarts (config/runtime files) |
+| `.html`, `.css`, `.js`, `.png` | Reloads the browser only |
+| `.log`, `.txt`, etc. | Does nothing (not a monitored type) |
+
+In **legacy mode** (`--restart-on-change`), **any** file change triggers a full
+server restart.
+
+---
+
+## Security
+
+httpath protects you at three levels:
+
+1. **Startup Guard** — Refuses to serve system directories (`/etc`, `/boot`,
+   `C:\Windows`, etc.) unless `--allow-protected-dir` is passed.
+2. **Traversal Prevention** — Paths like `../../../etc/passwd` are rejected
+   before they reach the filesystem.
+3. **Ignore Patterns** — Sensitive project directories (`.git`, `node_modules`)
+   are automatically blocked, even when explicitly requested.
+
+---
+
+## Project Status
+
+**Stable.** Used in daily development. All 130+ tests pass. Supports Linux,
+macOS, and Windows.
+
+---
+
+## Architecture
+
+For a deep dive into the internals — module map, Mermaid flow diagrams,
+concurrency model, and all 10 design decisions with rationale — see:
+
+➡️ [docs/architecture.md](docs/architecture.md)
+
+> Covers: startup flow, HTTP request handling, file watcher decision matrix,
+> live reload flow, 3-layer security model, concurrent `Promise.race` design,
+> and why closures over classes, hoisted regex constants, and server-side HTML
+> injection.
+
+---
+
+## Development
+
+```sh
+deno task dev      # Run with file watching
+deno task test     # Run the full test suite
+deno task fmt      # Format code
+deno task lint     # Lint code
+```
+
+See [docs/workflow.md](docs/workflow.md) for the full development workflow.
+
+---
+
+## Roadmap
+
+- [x] Static file serving with MIME detection
+- [x] Directory listing with dark mode
+- [x] Smart live reload (browser vs server restart)
+- [x] HEAD request support
+- [x] Protected system directory guard
+- [ ] Range request support (partial content)
+- [ ] Request logging to file
+- [ ] Basic authentication
+- [ ] HTTPS / TLS support
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE) by [José Martínez Santana](https://github.com/MetalbolicX).
+
+---
+
+## Contributing
+
+Pull requests are welcome. Please open an issue first to discuss what you'd like
+to change.
+
+1. Fork the repo
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes
+4. Push and open a Pull Request

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run -RN --allow-run --sloppy-imports
 import { parseArguments } from "./src/cli/index.ts";
-import { log, setLogLevel } from "./src/utils/index.ts";
+import { isProtectedSystemPath, log, setLogLevel } from "./src/utils/index.ts";
 import { startHttpServer } from "./src/server/index.ts";
 import { startFileWatcher } from "./src/watcher/index.ts";
 
@@ -69,6 +69,13 @@ export const main = async (): Promise<void> => {
         throw new Error(`Directory not found: ${config.directory}`);
       }
       throw error;
+    }
+
+    if (!config.allowProtectedDir && isProtectedSystemPath(config.directory)) {
+      throw new Error(
+        `Refusing to serve "${config.directory}" — protected system directory.\n` +
+          `Use --allow-protected-dir to override this safety check.`,
+      );
     }
 
     const abortController = new AbortController();

@@ -10,6 +10,7 @@ export const DEFAULT_CONFIG: Config = {
   logLevel: "info",
   enableLiveReload: true,
   restartOnChange: false,
+  allowProtectedDir: false,
 };
 
 /**
@@ -39,7 +40,7 @@ export const DEFAULT_CONFIG: Config = {
 export const parseArguments = (args: string[]): Config => {
   const parsed = parseArgs(args, {
     string: ["dir", "port", "ignore", "log"],
-    boolean: ["no-listing", "help", "no-live-reload", "restart-on-change"],
+    boolean: ["no-listing", "help", "no-live-reload", "restart-on-change", "allow-protected-dir"],
     default: {
       dir: DEFAULT_CONFIG.directory,
       port: DEFAULT_CONFIG.port.toString(),
@@ -48,6 +49,7 @@ export const parseArguments = (args: string[]): Config => {
       "no-listing": false,
       "no-live-reload": false,
       "restart-on-change": false,
+      "allow-protected-dir": false,
     },
     alias: {
       d: "dir",
@@ -72,6 +74,7 @@ Options:
   --no-live-reload         Disable live reload feature
   -r, --restart-on-change      Restart server process on file changes (default: browser reload only)
   --log <level>            Log level: info, debug, error (default: info)
+  --allow-protected-dir    Allow serving a known system/OS directory (use with caution)
   -h, --help               Show this help message
 
 Examples:
@@ -104,5 +107,6 @@ Examples:
     logLevel: parsed.log as Config["logLevel"],
     enableLiveReload: !parsed["no-live-reload"],
     restartOnChange: parsed["restart-on-change"],
+    allowProtectedDir: parsed["allow-protected-dir"],
   };
 };

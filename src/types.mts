@@ -6,6 +6,8 @@ export interface Config {
   logLevel: "info" | "debug" | "error";
   enableLiveReload: boolean;
   restartOnChange: boolean;
+  /** Allow serving a known system/OS directory. Defaults to false. */
+  allowProtectedDir: boolean;
 }
 
 export const LIVE_RELOAD_ENDPOINT = "/livereload";
