@@ -1,7 +1,7 @@
 {
   "name": "@metalbolicx/httpath",
   "description": "A lightweight, feature-rich static file server similar to Python's `python -m http.server` but with only the standard Deno modules.",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "license": "MIT",
   "exports": "./httpath.ts",
   "tasks": {
