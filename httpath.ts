@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run -RN --allow-run --sloppy-imports
+#!/usr/bin/env -S deno run -RN --allow-run --allow-env --sloppy-imports
 import { parseArguments } from "./src/cli/index.ts";
 import { isProtectedSystemPath, log, setLogLevel } from "./src/utils/index.ts";
 import { startHttpServer } from "./src/server/index.ts";
@@ -58,6 +58,18 @@ export const main = async (): Promise<void> => {
   try {
     const config = parseArguments(Deno.args);
     setLogLevel(config.logLevel);
+
+    const httpAthUser = Deno.env.get("HTTPATH_USER");
+    const httpAthPass = Deno.env.get("HTTPATH_PASS");
+    if (httpAthUser && httpAthPass) {
+      config.auth = { username: httpAthUser, password: httpAthPass };
+      log("Basic Auth enabled");
+    } else if (httpAthUser || httpAthPass) {
+      log(
+        "HTTPATH_USER or HTTPATH_PASS is set but the other is missing — Basic Auth disabled",
+        "error",
+      );
+    }
 
     try {
       const dirInfo = await Deno.stat(config.directory);

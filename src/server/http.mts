@@ -154,8 +154,51 @@ const serveDirectory = async (
  * const response = await handler(request);
  * ```
  */
+/**
+ * Decodes and validates an HTTP Basic Auth header against the expected credentials.
+ *
+ * Returns `true` when the header is absent, malformed, or the decoded credentials
+ * do not match. Returns `false` (i.e. "rejected") only when a matching pair is
+ * found — naming follows the pattern "should reject?".
+ */
+const rejectBasicAuth = (
+  authHeader: string | null,
+  expected: { username: string; password: string },
+): boolean => {
+  if (!authHeader?.startsWith("Basic ")) return true;
+
+  let decoded: string;
+  try {
+    decoded = atob(authHeader.slice(6));
+  } catch {
+    return true;
+  }
+
+  const colon = decoded.indexOf(":");
+  const username = colon === -1 ? decoded : decoded.slice(0, colon);
+  const password = colon === -1 ? "" : decoded.slice(colon + 1);
+
+  return username !== expected.username || password !== expected.password;
+};
+
+const missingBasicAuthHeader = (authHeader: string | null): boolean =>
+  !authHeader || !authHeader.startsWith("Basic ");
+
 export const createRequestHandler =
   (config: Config) => async (request: Request): Promise<Response> => {
+    if (config.auth) {
+      const authHeader = request.headers.get("authorization");
+      if (missingBasicAuthHeader(authHeader)) {
+        return new Response("Unauthorized", {
+          status: 401,
+          headers: { "www-authenticate": `Basic realm="httpath"` },
+        });
+      }
+      if (rejectBasicAuth(authHeader, config.auth)) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+    }
+
     const method = request.method.toUpperCase();
     if (method !== "GET" && method !== "HEAD") {
       await request.body?.cancel();

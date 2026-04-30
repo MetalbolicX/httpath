@@ -35,6 +35,7 @@ export const reloadServer = (entrypoint?: string): void => {
       "run",
       "-NR",
       "--allow-run",
+      "--allow-env",
       "--sloppy-imports",
       script,
       ...Deno.args,
