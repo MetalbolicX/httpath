@@ -31,17 +31,15 @@ export const createDebouncer = (): (ms: number) => Promise<void> => {
 };
 
 /**
- * Creates a debounced promise that resolves after a specified delay.
- * If called multiple times before the delay completes, previous timeouts are cancelled
- * and the delay resets.
+ * Module-level singleton debouncer instance.
  *
- * @param ms - The debounce delay in milliseconds
- * @returns A promise that resolves after the debounce delay
+ * Convenience export for callers that need a single shared debounce channel.
+ * Use {@link createDebouncer} when you need isolated, independent debounce channels.
  *
  * @example
  * ```typescript
  * await debounce(300);
- * console.log('300ms have passed');
+ * console.log('300ms have passed since the last call');
  * ```
  */
 export const debounce = createDebouncer();

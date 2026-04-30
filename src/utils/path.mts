@@ -1,6 +1,30 @@
 import { join, normalize, relative, resolve } from "@std/path";
 
 /**
+ * Checks whether a path matches any of the given ignore patterns.
+ *
+ * Uses both substring inclusion and suffix matching so patterns like
+ * `"node_modules"` or `".git"` work against both full paths and filenames.
+ *
+ * @param path - The path (or filename) to test
+ * @param patterns - Array of patterns to match against
+ * @returns `true` if the path matches any pattern
+ *
+ * @example
+ * ```typescript
+ * matchesPattern("src/node_modules/foo.js", ["node_modules"]); // true
+ * matchesPattern("src/app.ts", [".git", "node_modules"]);      // false
+ * ```
+ */
+export const matchesPattern = (
+  path: string,
+  patterns: string[],
+): boolean =>
+  patterns.some(
+    (pattern) => path.includes(pattern) || path.endsWith(pattern),
+  );
+
+/**
  * Resolves a safe file path by validating it stays within a base directory.
  *
  * Prevents directory traversal attacks by ensuring the resolved path does not

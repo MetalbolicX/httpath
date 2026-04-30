@@ -32,6 +32,7 @@ export const log = (
   level: Config["logLevel"] = "info",
 ): void => {
   if (LEVELS[level] < LEVELS[currentLevel]) return;
+  // Allocate the timestamp only after the level check passes
   const timestamp = new Date().toISOString();
   const prefix = level.toUpperCase().padEnd(5);
   console.log(`[${timestamp}] ${prefix} ${message}`);

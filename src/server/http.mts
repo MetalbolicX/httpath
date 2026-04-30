@@ -1,12 +1,24 @@
 import type { Config, FileEntry } from "../types.mts";
 import { LIVE_RELOAD_ENDPOINT } from "../types.mts";
 import { join, relative, resolve } from "@std/path";
-import { getMimeType, log, resolveSafePath } from "../utils/index.ts";
+import { getMimeType, log, matchesPattern, resolveSafePath } from "../utils/index.ts";
 import {
   generateDirectoryListingHTML,
   injectLiveReloadScript,
 } from "../ui/index.ts";
 import { handleWebSocket } from "./websocket.mts";
+
+type SupportedMethod = "GET" | "HEAD";
+
+/**
+ * Returns true when the resolved safe path matches any configured ignore pattern,
+ * tested against the path relative to the serve directory.
+ */
+const isIgnoredSafePath = (safePath: string, config: Config): boolean => {
+  const relativePath = relative(resolve(config.directory), safePath);
+  // Normalise separators for cross-platform consistency
+  return matchesPattern(relativePath.replaceAll("\\", "/"), config.ignorePatterns);
+};
 
 /**
  * Serves a file with appropriate MIME type and headers.
@@ -16,33 +28,10 @@ import { handleWebSocket } from "./websocket.mts";
  *
  * @param filePath - The path to the file to serve
  * @param config - Configuration object containing enableLiveReload flag and port
- * @returns A Promise that resolves to a Response object with the file content and appropriate headers
- * @throws May throw an error if the file cannot be read or opened
- *
- * @example
- * ```typescript
- * const response = await serveFile('./index.html', {
- *   enableLiveReload: true,
- *   port: 3000
- * });
- * ```
+ * @param method - The HTTP method (GET or HEAD)
+ * @returns A Promise that resolves to a Response with the file content and appropriate headers
+ * @throws May throw if the file cannot be read or opened
  */
-type SupportedMethod = "GET" | "HEAD";
-
-const pathMatchesIgnorePattern = (
-  path: string,
-  ignorePatterns: string[],
-): boolean => {
-  const normalizedPath = path.replaceAll("\\", "/");
-  return ignorePatterns.some((pattern) =>
-    normalizedPath.includes(pattern) || normalizedPath.endsWith(pattern)
-  );
-};
-
-const isIgnoredSafePath = (safePath: string, config: Config): boolean => {
-  const relativePath = relative(resolve(config.directory), safePath);
-  return pathMatchesIgnorePattern(relativePath, config.ignorePatterns);
-};
 
 const serveFile = async (
   filePath: string,
@@ -119,8 +108,7 @@ const serveDirectory = async (
 
   const entries: FileEntry[] = (await Array.fromAsync(Deno.readDir(dirPath)))
     .filter(
-      (entry) =>
-        !config.ignorePatterns.some((pattern) => entry.name.includes(pattern)),
+      (entry) => !matchesPattern(entry.name, config.ignorePatterns),
     )
     .map((entry) => ({
       name: entry.name,
@@ -236,6 +224,9 @@ export const createRequestHandler =
           }
         }
       }
+
+      // Deno.stat can return symlinks or other special entries on some OSes
+      return new Response("Not Found", { status: 404 });
     } catch (error) {
       if (error instanceof Deno.errors.NotFound) {
         log(`File not found: ${pathname}`, "error");
@@ -244,8 +235,6 @@ export const createRequestHandler =
       log(`Server error: ${(error as Error).message}`, "error");
       return new Response("Internal Server Error", { status: 500 });
     }
-
-    return new Response("Bad Request", { status: 400 });
   };
 
 /**

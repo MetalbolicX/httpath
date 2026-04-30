@@ -1,8 +1,16 @@
 import { LIVE_RELOAD_ENDPOINT, LIVE_RELOAD_MESSAGE } from "../types.mts";
 import { log } from "../utils/index.ts";
 
-export const liveReloadClients = new Set<WebSocket>();
 export { LIVE_RELOAD_ENDPOINT, LIVE_RELOAD_MESSAGE };
+
+// Private — not exported. Use the accessor functions below.
+const liveReloadClients = new Set<WebSocket>();
+
+/**
+ * Returns the current number of connected live reload clients.
+ * Intended for logging and diagnostics only.
+ */
+export const getLiveReloadClientCount = (): number => liveReloadClients.size;
 
 /**
  * Handles WebSocket upgrade requests and manages live reload client connections.
@@ -79,7 +87,7 @@ export const notifyLiveReloadClients = (reason = "file change"): void => {
   }
 
   let successCount = 0;
-  let clientsToRemove: WebSocket[] = [];
+  const clientsToRemove: WebSocket[] = [];
 
   for (const client of liveReloadClients) {
     try {
@@ -87,10 +95,10 @@ export const notifyLiveReloadClients = (reason = "file change"): void => {
         client.send(LIVE_RELOAD_MESSAGE);
         successCount++;
       } else {
-        clientsToRemove = [...clientsToRemove, client];
+        clientsToRemove.push(client);
       }
     } catch (error) {
-      clientsToRemove = [...clientsToRemove, client];
+      clientsToRemove.push(client);
       log(`Failed to send reload signal to client: ${error}`, "debug");
     }
   }

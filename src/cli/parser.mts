@@ -89,6 +89,13 @@ Examples:
     throw new Error("Port must be a valid number between 1 and 65535");
   }
 
+  const validLogLevels: Config["logLevel"][] = ["info", "debug", "error"];
+  if (!validLogLevels.includes(parsed.log as Config["logLevel"])) {
+    throw new Error(
+      `Invalid log level: "${parsed.log}". Must be one of: ${validLogLevels.join(", ")}`,
+    );
+  }
+
   return {
     directory: resolve(parsed.dir),
     port,

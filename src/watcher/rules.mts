@@ -1,3 +1,36 @@
+import { matchesPattern } from "../utils/index.ts";
+
+// Hoisted to module level — no repeated allocation on hot file-watch events
+const SERVER_RESTART_PATTERNS = [
+  /\.ts$/,
+  /\.js$/,
+  /\.mjs$/,
+  /\.json$/,
+  /\.toml$/,
+  /\.yaml$/,
+  /\.yml$/,
+  /deno\.json/,
+  /deno\.lock/,
+  /package\.json/,
+];
+
+const BROWSER_RELOAD_PATTERNS = [
+  /\.html?$/,
+  /\.css$/,
+  /\.s[ac]ss$/,
+  /\.less$/,
+  /\.js$/,
+  /\.jsx$/,
+  /\.ts$/,
+  /\.tsx$/,
+  /\.vue$/,
+  /\.svelte$/,
+  /\.md$/,
+  /\.(png|jpe?g|gif|svg|webp|ico)$/,
+  /\.(woff2?|ttf|eot)$/,
+  /\.json$/,
+];
+
 /**
  * Determines whether a file system event should be ignored based on configured patterns.
  *
@@ -14,11 +47,7 @@ export const shouldIgnoreEvent = (
   event: Deno.FsEvent,
   ignorePatterns: string[],
 ): boolean =>
-  event.paths.some((path) =>
-    ignorePatterns.some(
-      (pattern) => path.includes(pattern) || path.endsWith(pattern),
-    )
-  );
+  event.paths.some((path) => matchesPattern(path, ignorePatterns));
 
 /**
  * Determines whether the server should restart based on the provided file paths.
@@ -41,24 +70,10 @@ export const shouldIgnoreEvent = (
  * shouldRestartServer(['deno.json', 'styles.css']) // true
  * ```
  */
-export const shouldRestartServer = (filePaths: string[]): boolean => {
-  const serverRestartPatterns = [
-    /\.ts$/,
-    /\.js$/,
-    /\.mjs$/,
-    /\.json$/,
-    /\.toml$/,
-    /\.yaml$/,
-    /\.yml$/,
-    /deno\.json/,
-    /deno\.lock/,
-    /package\.json/,
-  ];
-
-  return filePaths.some((path) =>
-    serverRestartPatterns.some((pattern) => pattern.test(path))
+export const shouldRestartServer = (filePaths: string[]): boolean =>
+  filePaths.some((path) =>
+    SERVER_RESTART_PATTERNS.some((pattern) => pattern.test(path))
   );
-};
 
 /**
  * Determines whether a browser reload should be triggered based on the provided file paths.
@@ -78,25 +93,7 @@ export const shouldRestartServer = (filePaths: string[]): boolean => {
  * // Returns: false
  * ```
  */
-export const shouldTriggerBrowserReload = (filePaths: string[]): boolean => {
-  const browserReloadPatterns = [
-    /\.html?$/,
-    /\.css$/,
-    /\.s[ac]ss$/,
-    /\.less$/,
-    /\.js$/,
-    /\.jsx$/,
-    /\.ts$/,
-    /\.tsx$/,
-    /\.vue$/,
-    /\.svelte$/,
-    /\.md$/,
-    /\.(png|jpe?g|gif|svg|webp|ico)$/,
-    /\.(woff2?|ttf|eot)$/,
-    /\.json$/,
-  ];
-
-  return filePaths.some((path) =>
-    browserReloadPatterns.some((pattern) => pattern.test(path))
+export const shouldTriggerBrowserReload = (filePaths: string[]): boolean =>
+  filePaths.some((path) =>
+    BROWSER_RELOAD_PATTERNS.some((pattern) => pattern.test(path))
   );
-};

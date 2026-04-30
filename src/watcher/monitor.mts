@@ -121,7 +121,11 @@ export const startFileWatcher = async (
           reloadServer(entrypoint);
         } else {
           const shouldRestart = shouldRestartServer(event.paths);
-          const shouldReload = shouldTriggerBrowserReload(event.paths);
+
+          // Short-circuit: only evaluate browser reload when restart is not needed
+          const shouldReload = shouldRestart
+            ? false
+            : shouldTriggerBrowserReload(event.paths);
 
           log(
             `File analysis: restart=${shouldRestart}, reload=${shouldReload}`,
@@ -147,9 +151,10 @@ export const startFileWatcher = async (
           }
         }
       } finally {
-        setTimeout(() => {
-          isProcessingChange = false;
-        }, 1000);
+        // Reset immediately after processing completes, not via a fixed timer,
+        // to prevent the race where a 1 s timeout fires before the current
+        // debounce+work cycle has actually finished.
+        isProcessingChange = false;
       }
     }
   } catch (error) {
