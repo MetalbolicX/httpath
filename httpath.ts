@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run -RN --allow-run --allow-env --sloppy-imports
-import { parseArguments } from "./src/cli/index.ts";
+import { getPublicHostWarning, parseArguments } from "./src/cli/index.ts";
 import { isProtectedSystemPath, log, setLogLevel } from "./src/utils/index.ts";
 import { startHttpServer } from "./src/server/index.ts";
 import { startFileWatcher } from "./src/watcher/index.ts";
@@ -58,6 +58,11 @@ export const main = async (): Promise<void> => {
   try {
     const config = parseArguments(Deno.args);
     setLogLevel(config.logLevel);
+
+    const hostWarning = getPublicHostWarning(config.hostname);
+    if (hostWarning) {
+      log(hostWarning, "error");
+    }
 
     const httpAthUser = Deno.env.get("HTTPATH_USER");
     const httpAthPass = Deno.env.get("HTTPATH_PASS");

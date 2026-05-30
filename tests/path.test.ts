@@ -1,4 +1,8 @@
-import { isProtectedSystemPath, resolveSafePath } from "../src/utils/path.mts";
+import {
+  isProtectedSystemPath,
+  matchesPattern,
+  resolveSafePath,
+} from "../src/utils/path.mts";
 import { createRequestHandler } from "../src/server/http.mts";
 import { resolve } from "@std/path";
 import { assertEquals } from "@std/assert";
@@ -15,6 +19,7 @@ const createConfig = (overrides = {}) => ({
   logLevel: "error" as const,
   enableLiveReload: false,
   restartOnChange: false,
+  trustProxy: false,
   allowProtectedDir: false,
   ...overrides,
 });
@@ -113,6 +118,17 @@ Deno.test("resolveSafePath: deeply nested path inside returns resolved path", ()
   assertEquals(result, resolve(base, "a/b/c/d/file.txt"));
 });
 
+Deno.test("matchesPattern: matches full path segments", () => {
+  assertEquals(
+    matchesPattern("src/node_modules/package/index.js", ["node_modules"]),
+    true,
+  );
+});
+
+Deno.test("matchesPattern: does not match partial substrings", () => {
+  assertEquals(matchesPattern("src/.gitignore", [".git"]), false);
+});
+
 Deno.test("createRequestHandler: rejects symlinked file paths", async () => {
   const handler = createRequestHandler(createConfig());
   const { lstatStub, statStub } = stubSymlinkEntry();
@@ -120,6 +136,29 @@ Deno.test("createRequestHandler: rejects symlinked file paths", async () => {
   let response: Response;
   try {
     response = await handler(new Request("http://localhost/linked-file.txt"));
+  } finally {
+    lstatStub.restore();
+    statStub.restore();
+  }
+
+  assertEquals(response.status, 403);
+});
+
+Deno.test("createRequestHandler: rejects symlinked intermediate path segments", async () => {
+  const handler = createRequestHandler(createConfig());
+  const lstatStub = stub(Deno, "lstat", async (path: string | URL) => {
+    const pathText = typeof path === "string" ? path : path.pathname;
+    if (pathText.endsWith("/linked")) {
+      return await Promise.resolve(stubFileInfo(true));
+    }
+
+    return await Promise.resolve(stubFileInfo(false));
+  });
+  const statStub = stub(Deno, "stat", async () => await Promise.resolve(stubFileInfo(false)));
+
+  let response: Response;
+  try {
+    response = await handler(new Request("http://localhost/linked/file.txt"));
   } finally {
     lstatStub.restore();
     statStub.restore();

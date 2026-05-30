@@ -3,6 +3,14 @@ import type { Config } from "../types.mts";
 const LEVELS: Record<string, number> = { debug: 0, info: 1, error: 2 };
 let currentLevel: Config["logLevel"] = "info";
 
+const ABSOLUTE_PATH_RE =
+  /(^|[\s"'`(\[])((?:[A-Za-z]:\\|\/(?!\/))[^\s"'`<>|]+)/g;
+
+export const redactAbsolutePaths = (message: string): string =>
+  message.replace(ABSOLUTE_PATH_RE, (_match, prefix: string) => {
+    return `${prefix}[path]`;
+  });
+
 /**
  * Sets the current logging level for the logger.
  * @param level - The logging level to set, as defined in the Config type
@@ -34,5 +42,5 @@ export const log = (
   // Allocate the timestamp only after the level check passes
   const timestamp = new Date().toISOString();
   const prefix = level.toUpperCase().padEnd(5);
-  console.log(`[${timestamp}] ${prefix} ${message}`);
+  console.log(`[${timestamp}] ${prefix} ${redactAbsolutePaths(message)}`);
 };

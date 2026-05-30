@@ -19,10 +19,53 @@ import { join, normalize, relative, resolve } from "@std/path";
 export const matchesPattern = (
   path: string,
   patterns: string[],
-): boolean =>
-  patterns.some(
-    (pattern) => path.includes(pattern) || path.endsWith(pattern),
-  );
+): boolean => {
+  const pathSegments = path.replaceAll("\\", "/").split("/").filter(Boolean);
+
+  return patterns.some((pattern) => {
+    const patternSegments = pattern.replaceAll("\\", "/").split("/").filter(Boolean);
+    if (patternSegments.length === 0 || patternSegments.length > pathSegments.length) {
+      return false;
+    }
+
+    return pathSegments.some((_, index) =>
+      patternSegments.every((segment, offset) => pathSegments[index + offset] === segment)
+    );
+  });
+};
+
+/**
+ * Checks whether any prefix of `targetPath` under `baseDir` is a symlink.
+ *
+ * The check walks path segments one by one so intermediate symlinks are
+ * caught before file reads or directory listings resolve through them.
+ */
+export const hasSymlinkPrefix = async (
+  baseDir: string,
+  targetPath: string,
+): Promise<boolean> => {
+  const resolvedBase = resolve(baseDir);
+  const resolvedTarget = resolve(targetPath);
+  const rel = relative(resolvedBase, resolvedTarget);
+
+  if (rel.startsWith("..")) return false;
+
+  const segments = rel.split(/[\\/]/).filter(Boolean);
+  let current = resolvedBase;
+
+  for (const segment of segments) {
+    current = join(current, segment);
+    try {
+      const info = await Deno.lstat(current);
+      if (info.isSymlink) return true;
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) return false;
+      throw error;
+    }
+  }
+
+  return false;
+};
 
 // Protected system paths per platform.
 // Matching is done against the resolved absolute path with a trailing separator

@@ -1,9 +1,10 @@
 import type { Config, FileEntry } from "../types.mts";
 import { LIVE_RELOAD_ENDPOINT } from "../types.mts";
-import { join, relative, resolve } from "@std/path";
+import { basename, join, relative, resolve } from "@std/path";
 import {
   getMimeType,
   log,
+  hasSymlinkPrefix,
   matchesPattern,
   resolveSafePath,
 } from "../utils/index.ts";
@@ -17,6 +18,47 @@ import {
 import { handleWebSocket } from "./websocket.mts";
 
 type SupportedMethod = "GET" | "HEAD";
+
+const DIRECTORY_LISTING_ENTRY_LIMIT = 100;
+
+const compareDirectoryEntries = (a: FileEntry, b: FileEntry): number => {
+  if (a.isDirectory && !b.isDirectory) return -1;
+  if (!a.isDirectory && b.isDirectory) return 1;
+  return a.name.localeCompare(b.name);
+};
+
+export interface RequestContext {
+  remoteAddr: {
+    hostname: string;
+    port: number;
+    transport: string;
+  };
+}
+
+export const resolveRateLimitClientKey = (
+  request: Request,
+  context: RequestContext | undefined,
+  trustProxy: boolean,
+): string => {
+  if (trustProxy) {
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const [clientIp] = forwardedFor?.split(",") ?? [];
+    if (clientIp?.trim()) return clientIp.trim();
+  }
+
+  return context?.remoteAddr.hostname ?? "unknown";
+};
+
+export const isAllowedWebSocketOrigin = (request: Request): boolean => {
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+
+  try {
+    return origin === new URL(request.url).origin;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Returns true when the resolved safe path matches any configured ignore pattern,
@@ -75,10 +117,14 @@ const serveFile = async (
     });
   }
 
-  const headers = {
+  const headers: Record<string, string> = {
     "content-type": mimeType,
     "cache-control": "no-cache",
   };
+
+  if (mimeType === "image/svg+xml") {
+    headers["content-disposition"] = `attachment; filename="${basename(filePath)}"`;
+  }
 
   if (method === "HEAD") {
     return new Response(null, { headers });
@@ -130,9 +176,23 @@ const serveDirectory = async (
       url: urlPath === "/"
         ? `/${encodeURIComponent(entry.name)}`
         : `${urlPath}/${encodeURIComponent(entry.name)}`,
-    }));
+    }))
+    .sort(compareDirectoryEntries);
 
-  let html = generateDirectoryListingHTML(entries, urlPath);
+  const truncatedCount = Math.max(
+    entries.length - DIRECTORY_LISTING_ENTRY_LIMIT,
+    0,
+  );
+  const visibleEntries = entries.slice(0, DIRECTORY_LISTING_ENTRY_LIMIT);
+
+  let html = generateDirectoryListingHTML(visibleEntries, urlPath);
+
+  if (truncatedCount > 0) {
+    html = html.replace(
+      "</main>",
+      `<div class="empty-state">Directory listing truncated after ${DIRECTORY_LISTING_ENTRY_LIMIT} entries (${truncatedCount} more not shown)</div></main>`,
+    );
+  }
 
   if (config.enableLiveReload) {
     html = injectLiveReloadScript(html, config.port);
@@ -201,21 +261,29 @@ const rejectBasicAuth = (
 const missingBasicAuthHeader = (authHeader: string | null): boolean =>
   !authHeader || !authHeader.startsWith("Basic ");
 
-const getClientIp = (request: Request): string => {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-
-  if (!forwardedFor) return "unknown";
-
-  const [clientIp] = forwardedFor.split(",");
-  return clientIp?.trim() || "unknown";
-};
-
 export const createRequestHandler = (config: Config) => {
   const rateLimiter = createRateLimiter();
 
-  return async (request: Request): Promise<Response> => {
+  return async (
+    request: Request,
+    context?: RequestContext,
+  ): Promise<Response> => {
+    const requestBody = request.body as ReadableStream<Uint8Array> | null;
+    if (requestBody) {
+      await requestBody.cancel();
+      return withSecurityHeaders(
+        new Response("Payload Too Large", {
+          status: 413,
+        }),
+      );
+    }
+
     if (config.auth) {
-      const clientIp = getClientIp(request);
+      const clientIp = resolveRateLimitClientKey(
+        request,
+        context,
+        config.trustProxy,
+      );
       const authHeader = request.headers.get("authorization");
       if (missingBasicAuthHeader(authHeader)) {
         if (!rateLimiter.check(clientIp)) {
@@ -250,7 +318,10 @@ export const createRequestHandler = (config: Config) => {
 
     const method = request.method.toUpperCase();
     if (method !== "GET" && method !== "HEAD") {
-      await request.body?.cancel();
+      const requestBody = request.body as ReadableStream<Uint8Array> | null;
+      if (requestBody) {
+        await requestBody.cancel();
+      }
       return withSecurityHeaders(
         new Response("Method Not Allowed", {
           status: 405,
@@ -279,6 +350,9 @@ export const createRequestHandler = (config: Config) => {
       pathname === LIVE_RELOAD_ENDPOINT &&
       request.headers.get("upgrade") === "websocket"
     ) {
+      if (!isAllowedWebSocketOrigin(request)) {
+        return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+      }
       return withSecurityHeaders(handleWebSocket(request));
     }
 
@@ -294,6 +368,11 @@ export const createRequestHandler = (config: Config) => {
     }
 
     try {
+      if (await hasSymlinkPrefix(config.directory, safePath)) {
+        log(`Blocked symlink access: ${pathname}`, "error");
+        return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+      }
+
       const symlinkInfo = await Deno.lstat(safePath);
 
       if (symlinkInfo.isSymlink) {

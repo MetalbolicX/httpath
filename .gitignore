@@ -78,6 +78,7 @@ web_modules/
 
 # dotenv environment variable files
 .env
+secrets/
 .env.development.local
 .env.test.local
 .env.production.local
@@ -158,3 +159,6 @@ dist
 
 # For elm language
 /elm-stuff
+
+# SDD / skill registry artifacts
+.atl/

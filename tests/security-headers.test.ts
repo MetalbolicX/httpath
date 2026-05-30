@@ -23,4 +23,14 @@ Deno.test("addSecurityHeaders: adds the complete security header set", async () 
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     assertEquals(secured.headers.get(key), value);
   }
+
+  assertEquals(secured.headers.get("cross-origin-opener-policy"), "same-origin");
+  assertEquals(
+    secured.headers.get("cross-origin-resource-policy"),
+    "same-origin",
+  );
+  assertEquals(
+    secured.headers.get("x-permitted-cross-domain-policies"),
+    "none",
+  );
 });

@@ -29,12 +29,12 @@ Deno.test("shouldIgnoreEvent: regular file returns false", () => {
   assertEquals(shouldIgnoreEvent(event, [".git", "node_modules"]), false);
 });
 
-Deno.test("shouldIgnoreEvent: matches partial string in path", () => {
+Deno.test("shouldIgnoreEvent: does not match partial string in path", () => {
   const event = {
     kind: "modify",
     paths: ["/project/.gitignore"],
   } as Deno.FsEvent;
-  assertEquals(shouldIgnoreEvent(event, [".git"]), true);
+  assertEquals(shouldIgnoreEvent(event, [".git"]), false);
 });
 
 Deno.test("shouldIgnoreEvent: .DS_Store path returns true", () => {

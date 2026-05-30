@@ -128,4 +128,36 @@ Deno.test("log: level filtering via console output capture", async (t) => {
       console.log = original;
     }
   });
+
+  await t.step("absolute filesystem paths are redacted", () => {
+    setLogLevel("info");
+    let output = "";
+    const original = console.log;
+    console.log = (o: string) => {
+      output = o;
+    };
+    try {
+      const path = Deno.cwd();
+      log(`Serving directory: ${path}`, "info");
+      assertEquals(output.includes(path), false);
+      assertEquals(output.includes("[path]"), true);
+    } finally {
+      console.log = original;
+    }
+  });
+
+  await t.step("relative paths are preserved", () => {
+    setLogLevel("info");
+    let output = "";
+    const original = console.log;
+    console.log = (o: string) => {
+      output = o;
+    };
+    try {
+      log("Serving directory: ./public", "info");
+      assertEquals(output.includes("./public"), true);
+    } finally {
+      console.log = original;
+    }
+  });
 });

@@ -3,6 +3,9 @@ export const SECURITY_HEADERS = Object.freeze({
   "x-frame-options": "DENY",
   "referrer-policy": "no-referrer",
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
+  "x-permitted-cross-domain-policies": "none",
 });
 
 export const addSecurityHeaders = (response: Response): Response => {

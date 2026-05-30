@@ -7,6 +7,7 @@ export interface Config {
   logLevel: "info" | "debug" | "error";
   enableLiveReload: boolean;
   restartOnChange: boolean;
+  trustProxy: boolean;
   /** Allow serving a known system/OS directory. Defaults to false. */
   allowProtectedDir: boolean;
   /**

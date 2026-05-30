@@ -2,15 +2,26 @@ import { parseArgs } from "@std/cli";
 import { resolve } from "@std/path";
 import type { Config } from "../types.mts";
 
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
+
+export const getPublicHostWarning = (hostname: string): string | null => {
+  const normalized = hostname.trim().toLowerCase();
+
+  if (LOOPBACK_HOSTNAMES.has(normalized)) return null;
+
+  return `Warning: binding to ${hostname} may expose httpath beyond localhost. Use 127.0.0.1 for localhost-only access.`;
+};
+
 export const DEFAULT_CONFIG: Config = {
   directory: Deno.cwd(),
   hostname: "127.0.0.1",
   port: 8080,
   ignorePatterns: [".git", "node_modules", ".DS_Store"],
-  enableDirectoryListing: true,
+  enableDirectoryListing: false,
   logLevel: "info",
   enableLiveReload: true,
   restartOnChange: false,
+  trustProxy: false,
   allowProtectedDir: false,
 };
 
@@ -43,11 +54,13 @@ export const parseArguments = (args: string[]): Config => {
   const parsed = parseArgs(args, {
     string: ["dir", "host", "port", "ignore", "log"],
     boolean: [
+      "listing",
       "no-listing",
       "help",
       "no-live-reload",
       "restart-on-change",
       "allow-protected-dir",
+      "trust-proxy",
     ],
     default: {
       dir: DEFAULT_CONFIG.directory,
@@ -55,10 +68,12 @@ export const parseArguments = (args: string[]): Config => {
       port: DEFAULT_CONFIG.port.toString(),
       ignore: DEFAULT_CONFIG.ignorePatterns.join(","),
       log: DEFAULT_CONFIG.logLevel,
+      listing: false,
       "no-listing": false,
       "no-live-reload": false,
       "restart-on-change": false,
       "allow-protected-dir": false,
+      "trust-proxy": false,
     },
     alias: {
       d: "dir",
@@ -80,11 +95,13 @@ Options:
   --host <hostname>         Hostname to bind to (default: 127.0.0.1)
   -p, --port <port>         Port to listen on (default: 8080)
   -i, --ignore <patterns>   Comma-separated patterns to ignore (default: .git,node_modules,.DS_Store)
-  --no-listing             Disable directory listing
+  --listing               Enable directory listing
+  --no-listing            Disable directory listing
   --no-live-reload         Disable live reload feature
-  -r, --restart-on-change      Restart server process on file changes (default: browser reload only)
-  --log <level>            Log level: info, debug, error (default: info)
-  --allow-protected-dir    Allow serving a known system/OS directory (use with caution)
+   -r, --restart-on-change      Restart server process on file changes (default: browser reload only)
+   --trust-proxy             Trust proxy forwarding headers for client identity (default: false)
+   --log <level>            Log level: info, debug, error (default: info)
+   --allow-protected-dir    Allow serving a known system/OS directory (use with caution)
   -h, --help               Show this help message
 
 Examples:
@@ -116,10 +133,11 @@ Examples:
     hostname: parsed.host,
     port,
     ignorePatterns: parsed.ignore.split(",").map((pattern) => pattern.trim()),
-    enableDirectoryListing: !parsed["no-listing"],
+    enableDirectoryListing: parsed.listing && !parsed["no-listing"],
     logLevel: parsed.log as Config["logLevel"],
     enableLiveReload: !parsed["no-live-reload"],
     restartOnChange: parsed["restart-on-change"],
+    trustProxy: parsed["trust-proxy"],
     allowProtectedDir: parsed["allow-protected-dir"],
   };
 };

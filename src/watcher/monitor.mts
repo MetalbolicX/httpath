@@ -9,6 +9,31 @@ import {
 
 let isProcessingChange = false;
 
+const RESTART_COOLDOWN_MS = 1_000;
+
+export const buildRestartArgs = (
+  entrypoint: string,
+  additionalArgs: string[] = Deno.args,
+): string[] => [
+  "run",
+  "-RN",
+  "--allow-run",
+  "--allow-env",
+  "--sloppy-imports",
+  entrypoint,
+  ...additionalArgs,
+];
+
+export const createRestartCooldownGate = (cooldownMs = RESTART_COOLDOWN_MS) => {
+  let lastRestartAt = -Infinity;
+
+  return (now = Date.now()): boolean => {
+    if (now - lastRestartAt < cooldownMs) return false;
+    lastRestartAt = now;
+    return true;
+  };
+};
+
 /**
  * Reloads the server by spawning a new Deno process with the specified entrypoint.
  *
@@ -29,16 +54,10 @@ export const reloadServer = (entrypoint?: string): void => {
   log("Reloading server...");
 
   const script = entrypoint ?? "httpath.ts";
+  const restartArgs = buildRestartArgs(script);
 
   const command = new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-NR",
-      "--allow-env",
-      "--sloppy-imports",
-      script,
-      ...Deno.args,
-    ],
+    args: restartArgs,
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -82,6 +101,7 @@ export const startFileWatcher = async (
 ): Promise<void> => {
   const watcher = Deno.watchFs(config.directory);
   const debounceChange = createDebouncer();
+  const allowRestart = createRestartCooldownGate();
 
   log(`Watching for file changes in: ${config.directory}`);
   if (config.restartOnChange) {
@@ -114,6 +134,10 @@ export const startFileWatcher = async (
 
         if (config.restartOnChange) {
           log("Legacy mode: Restarting server for any file change");
+          if (!allowRestart()) {
+            log("Skipping restart during cooldown window", "debug");
+            continue;
+          }
           if (config.enableLiveReload) {
             notifyLiveReloadClients("server restart");
             await new Promise((resolve) => setTimeout(resolve, 100));
@@ -136,6 +160,10 @@ export const startFileWatcher = async (
             log(
               "Server configuration files changed, restarting server...",
             );
+            if (!allowRestart()) {
+              log("Skipping restart during cooldown window", "debug");
+              continue;
+            }
             if (config.enableLiveReload) {
               notifyLiveReloadClients("server restart");
               await new Promise((resolve) => setTimeout(resolve, 100));

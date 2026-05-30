@@ -1,4 +1,8 @@
-import { DEFAULT_CONFIG, parseArguments } from "../src/cli/parser.mts";
+import {
+  DEFAULT_CONFIG,
+  getPublicHostWarning,
+  parseArguments,
+} from "../src/cli/parser.mts";
 import { assertEquals, assertThrows } from "@std/assert";
 
 Deno.test("DEFAULT_CONFIG has expected defaults", () => {
@@ -10,10 +14,14 @@ Deno.test("DEFAULT_CONFIG has expected defaults", () => {
     "node_modules",
     ".DS_Store",
   ]);
-  assertEquals(DEFAULT_CONFIG.enableDirectoryListing, true);
+  assertEquals(DEFAULT_CONFIG.enableDirectoryListing, false);
   assertEquals(DEFAULT_CONFIG.logLevel, "info");
   assertEquals(DEFAULT_CONFIG.enableLiveReload, true);
   assertEquals(DEFAULT_CONFIG.restartOnChange, false);
+  assertEquals(
+    (DEFAULT_CONFIG as unknown as { trustProxy: boolean }).trustProxy,
+    false,
+  );
 });
 
 Deno.test("parseArguments: empty args uses defaults", () => {
@@ -21,10 +29,16 @@ Deno.test("parseArguments: empty args uses defaults", () => {
   assertEquals(config.directory, DEFAULT_CONFIG.directory);
   assertEquals(config.hostname, DEFAULT_CONFIG.hostname);
   assertEquals(config.port, 8080);
-  assertEquals(config.enableDirectoryListing, true);
+  assertEquals(config.enableDirectoryListing, false);
   assertEquals(config.enableLiveReload, true);
   assertEquals(config.restartOnChange, false);
   assertEquals(config.logLevel, "info");
+  assertEquals((config as unknown as { trustProxy: boolean }).trustProxy, false);
+});
+
+Deno.test("parseArguments: --listing enables directory listing", () => {
+  const config = parseArguments(["--listing"]);
+  assertEquals(config.enableDirectoryListing, true);
 });
 
 Deno.test("parseArguments: -p sets custom port", () => {
@@ -50,6 +64,20 @@ Deno.test("parseArguments: --dir sets custom directory", () => {
 Deno.test("parseArguments: --host sets custom hostname", () => {
   const config = parseArguments(["--host", "0.0.0.0"]);
   assertEquals(config.hostname, "0.0.0.0");
+});
+
+Deno.test("getPublicHostWarning: loopback hosts do not warn", () => {
+  assertEquals(getPublicHostWarning("127.0.0.1"), null);
+  assertEquals(getPublicHostWarning("localhost"), null);
+  assertEquals(getPublicHostWarning("::1"), null);
+});
+
+Deno.test("getPublicHostWarning: public hosts emit a warning", () => {
+  const warning = getPublicHostWarning("0.0.0.0");
+
+  assertEquals(warning !== null, true);
+  assertEquals(warning?.includes("0.0.0.0"), true);
+  assertEquals(warning?.includes("localhost-only"), true);
 });
 
 Deno.test("parseArguments: -i parses comma-separated ignore patterns", () => {
@@ -85,6 +113,11 @@ Deno.test("parseArguments: --log debug sets debug log level", () => {
 Deno.test("parseArguments: --log error sets error log level", () => {
   const config = parseArguments(["--log", "error"]);
   assertEquals(config.logLevel, "error");
+});
+
+Deno.test("parseArguments: --trust-proxy enables proxy trust", () => {
+  const config = parseArguments(["--trust-proxy"]);
+  assertEquals((config as unknown as { trustProxy: boolean }).trustProxy, true);
 });
 
 Deno.test("parseArguments: port 0 throws", () => {
