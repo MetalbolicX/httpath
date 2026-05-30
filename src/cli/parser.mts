@@ -4,6 +4,7 @@ import type { Config } from "../types.mts";
 
 export const DEFAULT_CONFIG: Config = {
   directory: Deno.cwd(),
+  hostname: "127.0.0.1",
   port: 8080,
   ignorePatterns: [".git", "node_modules", ".DS_Store"],
   enableDirectoryListing: true,
@@ -18,6 +19,7 @@ export const DEFAULT_CONFIG: Config = {
  *
  * Supports the following options:
  * - `--dir, -d`: Directory to serve (default: current directory)
+ * - `--host`: Hostname to bind to (default: 127.0.0.1)
  * - `--port, -p`: Port to listen on (default: 8080)
  * - `--ignore, -i`: Comma-separated patterns to ignore
  * - `--no-listing`: Disable directory listing
@@ -39,7 +41,7 @@ export const DEFAULT_CONFIG: Config = {
  */
 export const parseArguments = (args: string[]): Config => {
   const parsed = parseArgs(args, {
-    string: ["dir", "port", "ignore", "log"],
+    string: ["dir", "host", "port", "ignore", "log"],
     boolean: [
       "no-listing",
       "help",
@@ -49,6 +51,7 @@ export const parseArguments = (args: string[]): Config => {
     ],
     default: {
       dir: DEFAULT_CONFIG.directory,
+      host: DEFAULT_CONFIG.hostname,
       port: DEFAULT_CONFIG.port.toString(),
       ignore: DEFAULT_CONFIG.ignorePatterns.join(","),
       log: DEFAULT_CONFIG.logLevel,
@@ -74,6 +77,7 @@ Usage: httpath [OPTIONS]
 
 Options:
   -d, --dir <directory>     Directory to serve (default: current directory)
+  --host <hostname>         Hostname to bind to (default: 127.0.0.1)
   -p, --port <port>         Port to listen on (default: 8080)
   -i, --ignore <patterns>   Comma-separated patterns to ignore (default: .git,node_modules,.DS_Store)
   --no-listing             Disable directory listing
@@ -109,6 +113,7 @@ Examples:
 
   return {
     directory: resolve(parsed.dir),
+    hostname: parsed.host,
     port,
     ignorePatterns: parsed.ignore.split(",").map((pattern) => pattern.trim()),
     enableDirectoryListing: !parsed["no-listing"],

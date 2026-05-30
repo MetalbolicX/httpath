@@ -3,6 +3,7 @@ import { assertEquals, assertThrows } from "@std/assert";
 
 Deno.test("DEFAULT_CONFIG has expected defaults", () => {
   assertEquals(DEFAULT_CONFIG.directory, Deno.cwd());
+  assertEquals(DEFAULT_CONFIG.hostname, "127.0.0.1");
   assertEquals(DEFAULT_CONFIG.port, 8080);
   assertEquals(DEFAULT_CONFIG.ignorePatterns, [
     ".git",
@@ -18,6 +19,7 @@ Deno.test("DEFAULT_CONFIG has expected defaults", () => {
 Deno.test("parseArguments: empty args uses defaults", () => {
   const config = parseArguments([]);
   assertEquals(config.directory, DEFAULT_CONFIG.directory);
+  assertEquals(config.hostname, DEFAULT_CONFIG.hostname);
   assertEquals(config.port, 8080);
   assertEquals(config.enableDirectoryListing, true);
   assertEquals(config.enableLiveReload, true);
@@ -43,6 +45,11 @@ Deno.test("parseArguments: -d sets custom directory", () => {
 Deno.test("parseArguments: --dir sets custom directory", () => {
   const config = parseArguments(["--dir", "/var/log"]);
   assertEquals(config.directory, "/var/log");
+});
+
+Deno.test("parseArguments: --host sets custom hostname", () => {
+  const config = parseArguments(["--host", "0.0.0.0"]);
+  assertEquals(config.hostname, "0.0.0.0");
 });
 
 Deno.test("parseArguments: -i parses comma-separated ignore patterns", () => {

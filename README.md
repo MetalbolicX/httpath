@@ -1,9 +1,9 @@
 # httpath — zero-dep static file server for Deno
 
-> A lightweight, zero-dependency static file
-> server with live-reload, directory listings, and smart file watching. Think
-> `python -m
-> http.server` with superpowers, in pure Deno.
+> A lightweight, zero-dependency static file server with live-reload, directory
+> listings, and smart file watching. Think `python -m
+> http.server` with
+> superpowers, in pure Deno.
 
 <p align="center">
   <img src="https://img.shields.io/badge/deno->=2.0.0-272e33?logo=deno&logoColor=white" alt="Deno">

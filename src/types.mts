@@ -1,5 +1,6 @@
 export interface Config {
   directory: string;
+  hostname: string;
   port: number;
   ignorePatterns: string[];
   enableDirectoryListing: boolean;

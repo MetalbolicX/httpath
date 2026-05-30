@@ -34,7 +34,6 @@ export const reloadServer = (entrypoint?: string): void => {
     args: [
       "run",
       "-NR",
-      "--allow-run",
       "--allow-env",
       "--sloppy-imports",
       script,

@@ -7,6 +7,9 @@ import {
   matchesPattern,
   resolveSafePath,
 } from "../utils/index.ts";
+import { addSecurityHeaders } from "../security/headers.mts";
+import { createRateLimiter } from "../security/rate-limiter.mts";
+import { timingSafeEqual } from "../security/timing-safe.mts";
 import {
   generateDirectoryListingHTML,
   injectLiveReloadScript,
@@ -27,6 +30,9 @@ const isIgnoredSafePath = (safePath: string, config: Config): boolean => {
     config.ignorePatterns,
   );
 };
+
+const withSecurityHeaders = (response: Response): Response =>
+  addSecurityHeaders(response);
 
 /**
  * Serves a file with appropriate MIME type and headers.
@@ -186,36 +192,73 @@ const rejectBasicAuth = (
   const username = colon === -1 ? decoded : decoded.slice(0, colon);
   const password = colon === -1 ? "" : decoded.slice(colon + 1);
 
-  return username !== expected.username || password !== expected.password;
+  const usernameMatches = timingSafeEqual(username, expected.username);
+  const passwordMatches = timingSafeEqual(password, expected.password);
+
+  return !usernameMatches || !passwordMatches;
 };
 
 const missingBasicAuthHeader = (authHeader: string | null): boolean =>
   !authHeader || !authHeader.startsWith("Basic ");
 
-export const createRequestHandler =
-  (config: Config) => async (request: Request): Promise<Response> => {
+const getClientIp = (request: Request): string => {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+
+  if (!forwardedFor) return "unknown";
+
+  const [clientIp] = forwardedFor.split(",");
+  return clientIp?.trim() || "unknown";
+};
+
+export const createRequestHandler = (config: Config) => {
+  const rateLimiter = createRateLimiter();
+
+  return async (request: Request): Promise<Response> => {
     if (config.auth) {
+      const clientIp = getClientIp(request);
       const authHeader = request.headers.get("authorization");
       if (missingBasicAuthHeader(authHeader)) {
-        return new Response("Unauthorized", {
-          status: 401,
-          headers: { "www-authenticate": `Basic realm="httpath"` },
-        });
+        if (!rateLimiter.check(clientIp)) {
+          return withSecurityHeaders(
+            new Response("Too Many Requests", {
+              status: 429,
+            }),
+          );
+        }
+        return withSecurityHeaders(
+          new Response("Unauthorized", {
+            status: 401,
+            headers: { "www-authenticate": `Basic realm="httpath"` },
+          }),
+        );
       }
       if (rejectBasicAuth(authHeader, config.auth)) {
-        return new Response("Unauthorized", { status: 401 });
+        if (!rateLimiter.check(clientIp)) {
+          return withSecurityHeaders(
+            new Response("Too Many Requests", {
+              status: 429,
+            }),
+          );
+        }
+        return withSecurityHeaders(
+          new Response("Unauthorized", {
+            status: 401,
+          }),
+        );
       }
     }
 
     const method = request.method.toUpperCase();
     if (method !== "GET" && method !== "HEAD") {
       await request.body?.cancel();
-      return new Response("Method Not Allowed", {
-        status: 405,
-        headers: {
-          "allow": "GET, HEAD",
-        },
-      });
+      return withSecurityHeaders(
+        new Response("Method Not Allowed", {
+          status: 405,
+          headers: {
+            "allow": "GET, HEAD",
+          },
+        }),
+      );
     }
 
     const supportedMethod = method as SupportedMethod;
@@ -226,7 +269,7 @@ export const createRequestHandler =
       pathname = decodeURIComponent(url.pathname);
     } catch {
       log(`Malformed URL path: ${url.pathname}`, "error");
-      return new Response("Bad Request", { status: 400 });
+      return withSecurityHeaders(new Response("Bad Request", { status: 400 }));
     }
 
     log(`${supportedMethod} ${pathname}`, "debug");
@@ -236,57 +279,84 @@ export const createRequestHandler =
       pathname === LIVE_RELOAD_ENDPOINT &&
       request.headers.get("upgrade") === "websocket"
     ) {
-      return handleWebSocket(request);
+      return withSecurityHeaders(handleWebSocket(request));
     }
 
     const safePath = resolveSafePath(config.directory, pathname);
     if (!safePath) {
       log(`Forbidden access attempt: ${pathname}`, "error");
-      return new Response("Forbidden", { status: 403 });
+      return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
     }
 
     if (isIgnoredSafePath(safePath, config)) {
       log(`Blocked ignored path access: ${pathname}`, "debug");
-      return new Response("Forbidden", { status: 403 });
+      return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
     }
 
     try {
+      const symlinkInfo = await Deno.lstat(safePath);
+
+      if (symlinkInfo.isSymlink) {
+        log(`Blocked symlink access: ${pathname}`, "error");
+        return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+      }
+
       const fileInfo = await Deno.stat(safePath);
 
       if (fileInfo.isFile) {
-        return await serveFile(safePath, config, supportedMethod);
+        return withSecurityHeaders(
+          await serveFile(safePath, config, supportedMethod),
+        );
       } else if (fileInfo.isDirectory) {
         if (config.enableDirectoryListing) {
-          return await serveDirectory(
-            safePath,
-            pathname,
-            config,
-            supportedMethod,
+          return withSecurityHeaders(
+            await serveDirectory(
+              safePath,
+              pathname,
+              config,
+              supportedMethod,
+            ),
           );
         } else {
           const indexPath = join(safePath, "index.html");
           try {
+            const indexInfo = await Deno.lstat(indexPath);
+
+            if (indexInfo.isSymlink) {
+              log(`Blocked symlink access: ${pathname}/index.html`, "error");
+              return withSecurityHeaders(
+                new Response("Forbidden", { status: 403 }),
+              );
+            }
+
             await Deno.stat(indexPath);
-            return await serveFile(indexPath, config, supportedMethod);
+            return withSecurityHeaders(
+              await serveFile(indexPath, config, supportedMethod),
+            );
           } catch {
-            return new Response("Directory listing disabled", {
-              status: 403,
-            });
+            return withSecurityHeaders(
+              new Response("Directory listing disabled", {
+                status: 403,
+              }),
+            );
           }
         }
       }
 
       // Deno.stat can return symlinks or other special entries on some OSes
-      return new Response("Not Found", { status: 404 });
+      return withSecurityHeaders(new Response("Not Found", { status: 404 }));
     } catch (error) {
       if (error instanceof Deno.errors.NotFound) {
         log(`File not found: ${pathname}`, "error");
-        return new Response("Not Found", { status: 404 });
+        return withSecurityHeaders(new Response("Not Found", { status: 404 }));
       }
       log(`Server error: ${(error as Error).message}`, "error");
-      return new Response("Internal Server Error", { status: 500 });
+      return withSecurityHeaders(
+        new Response("Internal Server Error", { status: 500 }),
+      );
     }
   };
+};
 
 /**
  * Starts an HTTP server with the provided configuration.
@@ -312,6 +382,7 @@ export const startHttpServer = async (
   log(`Serving directory: ${config.directory}`);
 
   await Deno.serve({
+    hostname: config.hostname,
     port: config.port,
     signal: abortController.signal,
     handler,

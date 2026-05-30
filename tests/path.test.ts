@@ -1,8 +1,61 @@
 import { isProtectedSystemPath, resolveSafePath } from "../src/utils/path.mts";
+import { createRequestHandler } from "../src/server/http.mts";
 import { resolve } from "@std/path";
 import { assertEquals } from "@std/assert";
+import { stub } from "@std/testing/mock";
 
 const TEST_DIR = "/tmp/httpath_test";
+
+const createConfig = (overrides = {}) => ({
+  directory: Deno.cwd(),
+  hostname: "127.0.0.1",
+  port: 8080,
+  ignorePatterns: [".git", "node_modules", ".DS_Store"],
+  enableDirectoryListing: true,
+  logLevel: "error" as const,
+  enableLiveReload: false,
+  restartOnChange: false,
+  allowProtectedDir: false,
+  ...overrides,
+});
+
+const stubFileInfo = (isSymlink: boolean) => ({
+  isFile: !isSymlink,
+  isDirectory: false,
+  isSymlink,
+  size: 0,
+  mtime: null,
+  atime: null,
+  birthtime: null,
+  dev: 0,
+  ino: 0,
+  mode: null,
+  nlink: null,
+  uid: null,
+  gid: null,
+  rdev: null,
+  blksize: null,
+  blocks: null,
+  isBlockDevice: false,
+  isCharDevice: false,
+  isFifo: false,
+  isSocket: false,
+} as Deno.FileInfo);
+
+const stubSymlinkEntry = () => {
+  const lstatStub = stub(
+    Deno,
+    "lstat",
+    async () => await Promise.resolve(stubFileInfo(true)),
+  );
+  const statStub = stub(
+    Deno,
+    "stat",
+    async () => await Promise.resolve(stubFileInfo(false)),
+  );
+
+  return { lstatStub, statStub };
+};
 
 Deno.test("resolveSafePath: normal file inside base returns resolved path", () => {
   const base = resolve(TEST_DIR);
@@ -60,6 +113,36 @@ Deno.test("resolveSafePath: deeply nested path inside returns resolved path", ()
   assertEquals(result, resolve(base, "a/b/c/d/file.txt"));
 });
 
+Deno.test("createRequestHandler: rejects symlinked file paths", async () => {
+  const handler = createRequestHandler(createConfig());
+  const { lstatStub, statStub } = stubSymlinkEntry();
+
+  let response: Response;
+  try {
+    response = await handler(new Request("http://localhost/linked-file.txt"));
+  } finally {
+    lstatStub.restore();
+    statStub.restore();
+  }
+
+  assertEquals(response.status, 403);
+});
+
+Deno.test("createRequestHandler: rejects symlinked directory paths", async () => {
+  const handler = createRequestHandler(createConfig());
+  const { lstatStub, statStub } = stubSymlinkEntry();
+
+  let response: Response;
+  try {
+    response = await handler(new Request("http://localhost/linked-dir/"));
+  } finally {
+    lstatStub.restore();
+    statStub.restore();
+  }
+
+  assertEquals(response.status, 403);
+});
+
 // ---------------------------------------------------------------------------
 // isProtectedSystemPath
 // Tests are written against the real current OS so the blocklist is exercised
@@ -68,7 +151,6 @@ Deno.test("resolveSafePath: deeply nested path inside returns resolved path", ()
 
 const IS_WINDOWS = Deno.build.os === "windows";
 const IS_MACOS = Deno.build.os === "darwin";
-const IS_LINUX = Deno.build.os === "linux";
 
 // -- Unix (Linux + macOS) shared paths --------------------------------------
 
