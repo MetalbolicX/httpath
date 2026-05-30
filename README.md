@@ -69,6 +69,8 @@ cp .env.example .env   # edit credentials (optional)
 | Flag                      | Default                       | Description                                                   |
 | ------------------------- | ----------------------------- | ------------------------------------------------------------- |
 | `-d, --dir <path>`        | `.` (current dir)             | Directory to serve                                            |
+| `--host <hostname>`       | `127.0.0.1`                   | Hostname to bind to (use `0.0.0.0` for LAN access)            |
+| `-l, --lan`               | `false`                       | Bind to all network interfaces (`0.0.0.0`) for LAN access    |
 | `-p, --port <n>`          | `8080`                        | Port to listen on (1–65535)                                   |
 | `-i, --ignore <patterns>` | `.git,node_modules,.DS_Store` | Comma-separated patterns to exclude                           |
 | `--no-listing`            | `false`                       | Disable directory listing (returns 403)                       |
@@ -101,6 +103,27 @@ In **smart mode** (default), the watcher analyses file extensions:
 
 In **legacy mode** (`--restart-on-change`), **any** file change triggers a full
 server restart.
+
+### LAN Access
+
+To make httpath accessible from other machines on your local network, use the `--lan` flag (or `-l`):
+
+```sh
+httpath --lan
+# Server binds to 0.0.0.0 and displays LAN URLs on startup:
+# 📡 LAN access enabled
+#    http://192.168.1.42:8080 (eth0)
+#    http://10.0.0.5:8080 (wlan0)
+```
+
+You can also manually set the hostname:
+
+```sh
+httpath --host 0.0.0.0
+```
+
+Any non-localhost binding (including `--lan` and `--host 0.0.0.0`) will trigger
+the same LAN URL display on startup.
 
 ---
 

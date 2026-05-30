@@ -16,6 +16,11 @@ export interface Config {
    * Populated from the `HTTPATH_USER` and `HTTPATH_PASS` environment variables.
    */
   auth?: { username: string; password: string };
+  /**
+   * Enable LAN access by binding to all network interfaces (0.0.0.0).
+   * When true, the server will be accessible from other machines on the LAN.
+   */
+  lan?: boolean;
 }
 
 export const LIVE_RELOAD_ENDPOINT = "/livereload";

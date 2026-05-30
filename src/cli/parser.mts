@@ -23,6 +23,7 @@ export const DEFAULT_CONFIG: Config = {
   restartOnChange: false,
   trustProxy: false,
   allowProtectedDir: false,
+  lan: false,
 };
 
 /**
@@ -61,6 +62,7 @@ export const parseArguments = (args: string[]): Config => {
       "restart-on-change",
       "allow-protected-dir",
       "trust-proxy",
+      "lan",
     ],
     default: {
       dir: DEFAULT_CONFIG.directory,
@@ -74,6 +76,7 @@ export const parseArguments = (args: string[]): Config => {
       "restart-on-change": false,
       "allow-protected-dir": false,
       "trust-proxy": false,
+      lan: false,
     },
     alias: {
       d: "dir",
@@ -81,6 +84,7 @@ export const parseArguments = (args: string[]): Config => {
       i: "ignore",
       h: "help",
       r: "restart-on-change",
+      l: "lan",
     },
   });
 
@@ -92,8 +96,9 @@ Usage: httpath [OPTIONS]
 
 Options:
   -d, --dir <directory>     Directory to serve (default: current directory)
-  --host <hostname>         Hostname to bind to (default: 127.0.0.1)
-  -p, --port <port>         Port to listen on (default: 8080)
+  --host <hostname>        Hostname to bind to (default: 127.0.0.1)
+  -l, --lan               Bind to all network interfaces (0.0.0.0) for LAN access
+  -p, --port <port>        Port to listen on (default: 8080)
   -i, --ignore <patterns>   Comma-separated patterns to ignore (default: .git,node_modules,.DS_Store)
   --listing               Enable directory listing
   --no-listing            Disable directory listing
@@ -107,6 +112,7 @@ Options:
 Examples:
   httpath                                      # Smart mode: browser reload for HTML/CSS/JS, server restart for config
   httpath --dir ./public --port 3000          # Serve from ./public on port 3000
+  httpath -l                                  # Enable LAN access (bind to 0.0.0.0)
   httpath --restart-on-change                 # Legacy mode: always restart server on any file change
   httpath --no-live-reload                    # Disable all live reload features
   httpath --ignore "*.log,temp*" --no-listing
@@ -128,9 +134,16 @@ Examples:
     );
   }
 
+  // Note: explicit --host flag takes precedence over --lan.
+  // If hostname is not default (user passed --host), use their value.
+  // Otherwise, if --lan is set, bind to all interfaces.
+  const hostname = parsed.host !== DEFAULT_CONFIG.hostname
+    ? parsed.host
+    : (parsed.lan ? "0.0.0.0" : parsed.host);
+
   return {
     directory: resolve(parsed.dir),
-    hostname: parsed.host,
+    hostname,
     port,
     ignorePatterns: parsed.ignore.split(",").map((pattern) => pattern.trim()),
     enableDirectoryListing: parsed.listing && !parsed["no-listing"],
@@ -139,5 +152,6 @@ Examples:
     restartOnChange: parsed["restart-on-change"],
     trustProxy: parsed["trust-proxy"],
     allowProtectedDir: parsed["allow-protected-dir"],
+    lan: parsed.lan,
   };
 };

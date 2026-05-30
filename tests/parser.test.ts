@@ -143,3 +143,26 @@ Deno.test("parseArguments: negative port throws", () => {
     "Port must be a valid number",
   );
 });
+
+Deno.test("parseArguments: --lan sets hostname to 0.0.0.0 and lan to true", () => {
+  const config = parseArguments(["--lan"]);
+  assertEquals(config.hostname, "0.0.0.0");
+  assertEquals(config.lan, true);
+});
+
+Deno.test("parseArguments: -l produces same result as --lan", () => {
+  const config = parseArguments(["-l"]);
+  assertEquals(config.hostname, "0.0.0.0");
+  assertEquals(config.lan, true);
+});
+
+Deno.test("parseArguments: --lan and --host together uses --host value", () => {
+  // --host takes precedence over --lan
+  const config = parseArguments(["--lan", "--host", "192.168.1.100"]);
+  assertEquals(config.hostname, "192.168.1.100");
+  assertEquals(config.lan, true);
+});
+
+Deno.test("DEFAULT_CONFIG has lan: false by default", () => {
+  assertEquals(DEFAULT_CONFIG.lan, false);
+});
