@@ -1,5 +1,10 @@
 #!/usr/bin/env -S deno run -RN --allow-run --allow-env --sloppy-imports
-import { getPublicHostWarning, parseArguments } from "./src/cli/index.ts";
+import {
+  getPublicHostWarning,
+  getPortWarning,
+  getTrustProxyWarning,
+  parseArguments,
+} from "./src/cli/index.ts";
 import {
   getLocalIPs,
   isProtectedSystemPath,
@@ -67,6 +72,16 @@ export const main = async (): Promise<void> => {
     const hostWarning = getPublicHostWarning(config.hostname);
     if (hostWarning) {
       log(hostWarning, "error");
+    }
+
+    const trustProxyWarning = getTrustProxyWarning(config.trustProxy);
+    if (trustProxyWarning) {
+      log(trustProxyWarning, "error");
+    }
+
+    const portWarning = getPortWarning(config.port);
+    if (portWarning) {
+      log(portWarning, "error");
     }
 
     // When binding to non-loopback (--lan or --host 0.0.0.0), show LAN URLs

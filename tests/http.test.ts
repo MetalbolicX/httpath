@@ -252,6 +252,31 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "createRequestHandler: svg filename with quotes is sanitized in content-disposition",
+  async () => {
+    const handler = createRequestHandler(createConfig());
+    const { lstatStub, statStub, openStub } = stubReadableFile();
+
+    let response: Response;
+    try {
+      response = await handler(
+        new Request("http://localhost/icon\".svg"),
+      );
+    } finally {
+      lstatStub.restore();
+      statStub.restore();
+      openStub.restore();
+    }
+
+    assertEquals(response.status, 200);
+    assertEquals(
+      response.headers.get("content-disposition"),
+      'attachment; filename="icon.svg"',
+    );
+  },
+);
+
 Deno.test("createRequestHandler: non-svg files do not force download", async () => {
   const handler = createRequestHandler(createConfig());
   const { lstatStub, statStub, openStub } = stubReadableFile();

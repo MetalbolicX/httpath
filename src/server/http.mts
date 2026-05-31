@@ -133,7 +133,7 @@ const serveFile = async (
 
   if (mimeType === "image/svg+xml") {
     headers["content-disposition"] = `attachment; filename="${
-      basename(filePath)
+      basename(filePath).replace(/"/g, "")
     }"`;
   }
 

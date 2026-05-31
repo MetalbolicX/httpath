@@ -6,6 +6,8 @@ export const SECURITY_HEADERS = Object.freeze({
   "cross-origin-opener-policy": "same-origin",
   "cross-origin-resource-policy": "same-origin",
   "x-permitted-cross-domain-policies": "none",
+  "content-security-policy":
+    "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:",
 });
 
 export const addSecurityHeaders = (response: Response): Response => {

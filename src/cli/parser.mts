@@ -12,6 +12,18 @@ export const getPublicHostWarning = (hostname: string): string | null => {
   return `Warning: binding to ${hostname} may expose httpath beyond localhost. Use 127.0.0.1 for localhost-only access.`;
 };
 
+export const getPortWarning = (port: number): string | null => {
+  if (port === 0) {
+    return "Port 0 will use a random ephemeral port assigned by the OS";
+  }
+  return null;
+};
+
+export const getTrustProxyWarning = (trustProxy: boolean): string | null => {
+  if (!trustProxy) return null;
+  return "Warning: --trust-proxy is enabled. X-Forwarded-For headers will be trusted for rate limiting. Ensure httpath is behind a trusted reverse proxy.";
+};
+
 export const DEFAULT_CONFIG: Config = {
   directory: Deno.cwd(),
   hostname: "127.0.0.1",
@@ -141,6 +153,16 @@ Examples:
     throw new Error("Port must be a valid number between 0 and 65535");
   }
 
+  const rateLimitMaxRequests = parseInt(parsed["rate-limit-max-requests"]);
+  if (isNaN(rateLimitMaxRequests) || rateLimitMaxRequests < 1) {
+    throw new Error("--rate-limit-max-requests must be a positive integer");
+  }
+
+  const rateLimitWindowMs = parseInt(parsed["rate-limit-window-ms"]);
+  if (isNaN(rateLimitWindowMs) || rateLimitWindowMs < 1) {
+    throw new Error("--rate-limit-window-ms must be a positive integer");
+  }
+
   const validLogLevels: Config["logLevel"][] = ["info", "debug", "error"];
   if (!validLogLevels.includes(parsed.log as Config["logLevel"])) {
     throw new Error(
@@ -161,8 +183,8 @@ Examples:
     directory: resolve(parsed.dir),
     hostname,
     port,
-    rateLimitMaxRequests: parseInt(parsed["rate-limit-max-requests"]),
-    rateLimitWindowMs: parseInt(parsed["rate-limit-window-ms"]),
+    rateLimitMaxRequests,
+    rateLimitWindowMs,
     ignorePatterns: parsed.ignore.split(",").map((pattern) => pattern.trim()),
     enableDirectoryListing: parsed.listing && !parsed["no-listing"],
     logLevel: parsed.log as Config["logLevel"],

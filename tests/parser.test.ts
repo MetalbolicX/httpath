@@ -1,6 +1,8 @@
 import {
   DEFAULT_CONFIG,
+  getPortWarning,
   getPublicHostWarning,
+  getTrustProxyWarning,
   parseArguments,
 } from "../src/cli/parser.mts";
 import { assertEquals, assertThrows } from "@std/assert";
@@ -181,4 +183,67 @@ Deno.test("parseArguments: --lan and --host together uses --host value", () => {
 
 Deno.test("DEFAULT_CONFIG has lan: false by default", () => {
   assertEquals(DEFAULT_CONFIG.lan, false);
+});
+
+Deno.test("parseArguments: --rate-limit-max-requests with NaN throws", () => {
+  assertThrows(
+    () => parseArguments(["--rate-limit-max-requests", "abc"]),
+    Error,
+    "positive integer",
+  );
+});
+
+Deno.test("parseArguments: --rate-limit-max-requests with zero throws", () => {
+  assertThrows(
+    () => parseArguments(["--rate-limit-max-requests", "0"]),
+    Error,
+    "positive integer",
+  );
+});
+
+Deno.test("parseArguments: --rate-limit-max-requests with negative throws", () => {
+  assertThrows(
+    () => parseArguments(["--rate-limit-max-requests", "-5"]),
+    Error,
+    "positive integer",
+  );
+});
+
+Deno.test("parseArguments: --rate-limit-window-ms with NaN throws", () => {
+  assertThrows(
+    () => parseArguments(["--rate-limit-window-ms", "xyz"]),
+    Error,
+    "positive integer",
+  );
+});
+
+Deno.test("parseArguments: --rate-limit-window-ms with zero throws", () => {
+  assertThrows(
+    () => parseArguments(["--rate-limit-window-ms", "0"]),
+    Error,
+    "positive integer",
+  );
+});
+
+Deno.test("getPortWarning: port 0 returns warning", () => {
+  const warning = getPortWarning(0);
+  assertEquals(warning !== null, true);
+  assertEquals(warning?.includes("ephemeral"), true);
+});
+
+Deno.test("getPortWarning: non-zero port returns null", () => {
+  assertEquals(getPortWarning(80), null);
+  assertEquals(getPortWarning(8080), null);
+  assertEquals(getPortWarning(1), null);
+  assertEquals(getPortWarning(65535), null);
+});
+
+Deno.test("getTrustProxyWarning: trustProxy true returns warning", () => {
+  const warning = getTrustProxyWarning(true);
+  assertEquals(warning !== null, true);
+  assertEquals(warning?.includes("reverse proxy"), true);
+});
+
+Deno.test("getTrustProxyWarning: trustProxy false returns null", () => {
+  assertEquals(getTrustProxyWarning(false), null);
 });
