@@ -120,10 +120,18 @@ export const main = async (): Promise<void> => {
 
     const entrypoint = new URL(import.meta.url).pathname;
 
-    await Promise.race([
-      startFileWatcher(config, abortController, entrypoint),
-      startHttpServer(config, abortController),
-    ]);
+    const watcherPromise = startFileWatcher(config, abortController, entrypoint);
+    const serverPromise = startHttpServer(config, abortController);
+
+    // If either fails, abort the other immediately so it shuts down cleanly
+    watcherPromise.catch(() => abortController.abort());
+    serverPromise.catch(() => abortController.abort());
+
+    try {
+      await Promise.race([watcherPromise, serverPromise]);
+    } finally {
+      abortController.abort();
+    }
   } catch (error) {
     log(`Error: ${(error as Error).message}`, "error");
     Deno.exit(1);

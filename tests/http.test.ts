@@ -295,6 +295,64 @@ Deno.test("createRequestHandler: non-svg files do not force download", async () 
   assertSecurityHeaders(response);
 });
 
+Deno.test(
+  "createRequestHandler: 429 response includes Retry-After and X-RateLimit-Remaining headers",
+  async () => {
+    const handler = createRequestHandler(
+      createConfig({ rateLimitMaxRequests: 1, rateLimitWindowMs: 60_000 }),
+    );
+    const { lstatStub, statStub, openStub } = stubReadableFile();
+
+    let response: Response;
+    try {
+      // First request succeeds
+      const first = await handler(new Request("http://localhost/file.txt"));
+      assertEquals(first.status, 200);
+      assertEquals(
+        first.headers.get("x-ratelimit-remaining"),
+        "0",
+      );
+
+      // Second request is rate-limited
+      response = await handler(new Request("http://localhost/file.txt"));
+      assertEquals(response.status, 429);
+      assertEquals(await response.text(), "Too Many Requests");
+      assertEquals(response.headers.get("x-ratelimit-remaining"), "0");
+      assertEquals(
+        response.headers.get("retry-after"),
+        "60",
+      );
+    } finally {
+      lstatStub.restore();
+      statStub.restore();
+      openStub.restore();
+    }
+  },
+);
+
+Deno.test(
+  "createRequestHandler: successful response includes X-RateLimit-Remaining header",
+  async () => {
+    const handler = createRequestHandler(
+      createConfig({ rateLimitMaxRequests: 5, rateLimitWindowMs: 60_000 }),
+    );
+    const { lstatStub, statStub, openStub } = stubReadableFile();
+
+    try {
+      const response = await handler(new Request("http://localhost/file.txt"));
+      assertEquals(response.status, 200);
+      assertEquals(
+        response.headers.get("x-ratelimit-remaining"),
+        "4",
+      );
+    } finally {
+      lstatStub.restore();
+      statStub.restore();
+      openStub.restore();
+    }
+  },
+);
+
 Deno.test("createRequestHandler: ignored file cannot be accessed directly", async () => {
   const handler = createRequestHandler(
     createConfig({ ignorePatterns: ["README.md"] }),

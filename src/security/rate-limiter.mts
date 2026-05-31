@@ -1,3 +1,9 @@
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  retryAfter: number;
+}
+
 export interface RateLimiterOptions {
   maxAttempts?: number;
   maxEntries?: number;
@@ -52,7 +58,7 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
   const now = options.now ?? Date.now;
   const entries = new Map<string, RateLimitEntry>();
 
-  const check = (key: string): boolean => {
+  const check = (key: string): RateLimitResult => {
     const currentTime = now();
     purgeExpiredEntries(entries, currentTime);
 
@@ -67,17 +73,30 @@ export const createRateLimiter = (options: RateLimiterOptions = {}) => {
         expiresAt: currentTime + windowMs,
       });
 
-      return true;
+      return {
+        allowed: true,
+        remaining: maxAttempts - 1,
+        retryAfter: Math.ceil(windowMs / 1000),
+      };
     }
 
     if (existing.expiresAt <= currentTime) {
       existing.count = 1;
       existing.expiresAt = currentTime + windowMs;
-      return true;
+      return {
+        allowed: true,
+        remaining: maxAttempts - 1,
+        retryAfter: Math.ceil(windowMs / 1000),
+      };
     }
 
     existing.count += 1;
-    return existing.count <= maxAttempts;
+    const allowed = existing.count <= maxAttempts;
+    return {
+      allowed,
+      remaining: allowed ? maxAttempts - existing.count : 0,
+      retryAfter: Math.ceil((existing.expiresAt - currentTime) / 1000),
+    };
   };
 
   const reset = (key?: string): void => {

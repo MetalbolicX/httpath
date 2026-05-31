@@ -17,10 +17,13 @@ Deno.test("createRateLimiter: allows five attempts then blocks", () => {
   const limiter = createRateLimiter({ now: clock.now });
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    assertEquals(limiter.check("203.0.113.10"), true);
+    const result = limiter.check("203.0.113.10");
+    assertEquals(result.allowed, true);
   }
 
-  assertEquals(limiter.check("203.0.113.10"), false);
+  const blocked = limiter.check("203.0.113.10");
+  assertEquals(blocked.allowed, false);
+  assertEquals(blocked.remaining, 0);
 });
 
 Deno.test("createRateLimiter: resets after the window expires", () => {
@@ -28,21 +31,30 @@ Deno.test("createRateLimiter: resets after the window expires", () => {
   const limiter = createRateLimiter({ now: clock.now, windowMs: 1_000 });
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    assertEquals(limiter.check("203.0.113.11"), true);
+    const result = limiter.check("203.0.113.11");
+    assertEquals(result.allowed, true);
   }
 
-  assertEquals(limiter.check("203.0.113.11"), false);
+  const blocked = limiter.check("203.0.113.11");
+  assertEquals(blocked.allowed, false);
   clock.advance(1_001);
-  assertEquals(limiter.check("203.0.113.11"), true);
+  const reset = limiter.check("203.0.113.11");
+  assertEquals(reset.allowed, true);
 });
 
 Deno.test("createRateLimiter: keeps attempts isolated per IP", () => {
   const clock = createClock();
   const limiter = createRateLimiter({ now: clock.now, maxAttempts: 1 });
 
-  assertEquals(limiter.check("203.0.113.12"), true);
-  assertEquals(limiter.check("203.0.113.12"), false);
-  assertEquals(limiter.check("203.0.113.13"), true);
+  const first = limiter.check("203.0.113.12");
+  assertEquals(first.allowed, true);
+  assertEquals(first.remaining, 0);
+
+  const blocked = limiter.check("203.0.113.12");
+  assertEquals(blocked.allowed, false);
+
+  const second = limiter.check("203.0.113.13");
+  assertEquals(second.allowed, true);
 });
 
 Deno.test("createRateLimiter: evicts oldest entries when maxEntries is reached", () => {
@@ -53,8 +65,15 @@ Deno.test("createRateLimiter: evicts oldest entries when maxEntries is reached",
     maxEntries: 2,
   });
 
-  assertEquals(limiter.check("a"), true);
-  assertEquals(limiter.check("b"), true);
-  assertEquals(limiter.check("c"), true);
-  assertEquals(limiter.check("a"), true);
+  const a1 = limiter.check("a");
+  assertEquals(a1.allowed, true);
+
+  const b1 = limiter.check("b");
+  assertEquals(b1.allowed, true);
+
+  const c1 = limiter.check("c");
+  assertEquals(c1.allowed, true);
+
+  const a2 = limiter.check("a");
+  assertEquals(a2.allowed, true);
 });

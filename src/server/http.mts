@@ -85,6 +85,20 @@ const isIgnoredSafePath = (safePath: string, config: Config): boolean => {
 const withSecurityHeaders = (response: Response): Response =>
   addSecurityHeaders(response);
 
+/** Adds X-RateLimit-Remaining header to a response. */
+const withRateLimitHeader = (
+  response: Response,
+  remaining: number,
+): Response => {
+  const headers = new Headers(response.headers);
+  headers.set("x-ratelimit-remaining", String(remaining));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
 /**
  * Serves a file with appropriate MIME type and headers.
  *
@@ -265,10 +279,16 @@ export const createRequestHandler = (config: Config) => {
       config.trustProxy,
     );
 
-    if (!rateLimiter.check(clientIp)) {
+    const rateLimitResult = rateLimiter.check(clientIp);
+
+    if (!rateLimitResult.allowed) {
       return withSecurityHeaders(
         new Response("Too Many Requests", {
           status: 429,
+          headers: {
+            "retry-after": String(rateLimitResult.retryAfter),
+            "x-ratelimit-remaining": "0",
+          },
         }),
       );
     }
@@ -279,13 +299,16 @@ export const createRequestHandler = (config: Config) => {
       if (requestBody) {
         await requestBody.cancel();
       }
-      return withSecurityHeaders(
-        new Response("Method Not Allowed", {
-          status: 405,
-          headers: {
-            "allow": "GET, HEAD",
-          },
-        }),
+      return withRateLimitHeader(
+        withSecurityHeaders(
+          new Response("Method Not Allowed", {
+            status: 405,
+            headers: {
+              "allow": "GET, HEAD",
+            },
+          }),
+        ),
+        rateLimitResult.remaining,
       );
     }
 
@@ -297,7 +320,10 @@ export const createRequestHandler = (config: Config) => {
       pathname = decodeURIComponent(url.pathname);
     } catch {
       log(`Malformed URL path: ${url.pathname}`, "error");
-      return withSecurityHeaders(new Response("Bad Request", { status: 400 }));
+      return withRateLimitHeader(
+        withSecurityHeaders(new Response("Bad Request", { status: 400 })),
+        rateLimitResult.remaining,
+      );
     }
 
     log(`${supportedMethod} ${pathname}`, "debug");
@@ -308,50 +334,74 @@ export const createRequestHandler = (config: Config) => {
       request.headers.get("upgrade") === "websocket"
     ) {
       if (!isAllowedWebSocketOrigin(request)) {
-        return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+        return withRateLimitHeader(
+          withSecurityHeaders(new Response("Forbidden", { status: 403 })),
+          rateLimitResult.remaining,
+        );
       }
-      return withSecurityHeaders(handleWebSocket(request));
+      return withRateLimitHeader(
+        withSecurityHeaders(handleWebSocket(request)),
+        rateLimitResult.remaining,
+      );
     }
 
     const safePath = resolveSafePath(config.directory, pathname);
     if (!safePath) {
       log(`Forbidden access attempt: ${pathname}`, "error");
-      return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+      return withRateLimitHeader(
+        withSecurityHeaders(new Response("Forbidden", { status: 403 })),
+        rateLimitResult.remaining,
+      );
     }
 
     if (isIgnoredSafePath(safePath, config)) {
       log(`Blocked ignored path access: ${pathname}`, "debug");
-      return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+      return withRateLimitHeader(
+        withSecurityHeaders(new Response("Forbidden", { status: 403 })),
+        rateLimitResult.remaining,
+      );
     }
 
     try {
       if (await hasSymlinkPrefix(config.directory, safePath)) {
         log(`Blocked symlink access: ${pathname}`, "error");
-        return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+        return withRateLimitHeader(
+          withSecurityHeaders(new Response("Forbidden", { status: 403 })),
+          rateLimitResult.remaining,
+        );
       }
 
       const symlinkInfo = await Deno.lstat(safePath);
 
       if (symlinkInfo.isSymlink) {
         log(`Blocked symlink access: ${pathname}`, "error");
-        return withSecurityHeaders(new Response("Forbidden", { status: 403 }));
+        return withRateLimitHeader(
+          withSecurityHeaders(new Response("Forbidden", { status: 403 })),
+          rateLimitResult.remaining,
+        );
       }
 
       const fileInfo = await Deno.stat(safePath);
 
       if (fileInfo.isFile) {
-        return withSecurityHeaders(
-          await serveFile(safePath, config, supportedMethod),
+        return withRateLimitHeader(
+          withSecurityHeaders(
+            await serveFile(safePath, config, supportedMethod),
+          ),
+          rateLimitResult.remaining,
         );
       } else if (fileInfo.isDirectory) {
         if (config.enableDirectoryListing) {
-          return withSecurityHeaders(
-            await serveDirectory(
-              safePath,
-              pathname,
-              config,
-              supportedMethod,
+          return withRateLimitHeader(
+            withSecurityHeaders(
+              await serveDirectory(
+                safePath,
+                pathname,
+                config,
+                supportedMethod,
+              ),
             ),
+            rateLimitResult.remaining,
           );
         } else {
           const indexPath = join(safePath, "index.html");
@@ -360,35 +410,53 @@ export const createRequestHandler = (config: Config) => {
 
             if (indexInfo.isSymlink) {
               log(`Blocked symlink access: ${pathname}/index.html`, "error");
-              return withSecurityHeaders(
-                new Response("Forbidden", { status: 403 }),
+              return withRateLimitHeader(
+                withSecurityHeaders(
+                  new Response("Forbidden", { status: 403 }),
+                ),
+                rateLimitResult.remaining,
               );
             }
 
             await Deno.stat(indexPath);
-            return withSecurityHeaders(
-              await serveFile(indexPath, config, supportedMethod),
+            return withRateLimitHeader(
+              withSecurityHeaders(
+                await serveFile(indexPath, config, supportedMethod),
+              ),
+              rateLimitResult.remaining,
             );
           } catch {
-            return withSecurityHeaders(
-              new Response("Directory listing disabled", {
-                status: 403,
-              }),
+            return withRateLimitHeader(
+              withSecurityHeaders(
+                new Response("Directory listing disabled", {
+                  status: 403,
+                }),
+              ),
+              rateLimitResult.remaining,
             );
           }
         }
       }
 
       // Deno.stat can return symlinks or other special entries on some OSes
-      return withSecurityHeaders(new Response("Not Found", { status: 404 }));
+      return withRateLimitHeader(
+        withSecurityHeaders(new Response("Not Found", { status: 404 })),
+        rateLimitResult.remaining,
+      );
     } catch (error) {
       if (error instanceof Deno.errors.NotFound) {
         log(`File not found: ${pathname}`, "error");
-        return withSecurityHeaders(new Response("Not Found", { status: 404 }));
+        return withRateLimitHeader(
+          withSecurityHeaders(new Response("Not Found", { status: 404 })),
+          rateLimitResult.remaining,
+        );
       }
       log(`Server error: ${(error as Error).message}`, "error");
-      return withSecurityHeaders(
-        new Response("Internal Server Error", { status: 500 }),
+      return withRateLimitHeader(
+        withSecurityHeaders(
+          new Response("Internal Server Error", { status: 500 }),
+        ),
+        rateLimitResult.remaining,
       );
     }
   };
