@@ -27,7 +27,6 @@ browser the instant you save a change.
 | File watching     | ✅ 2 modes: smart + legacy                  | ❌                      | ❌               | ❌            |
 | HEAD requests     | ✅                                          | ❌                      | ❌               | ❌            |
 | System dir guard  | ✅                                          | ❌                      | ❌               | ❌            |
-| Basic Auth        | ✅ (env-var based)                          | ❌                      | ❌               | ❌            |
 | Dependencies      | **ZERO** (only `@std/*`)                    | Built-in                | 30+ npm          | 10+ npm       |
 | Runtime           | Deno                                        | Python                  | Node             | Node          |
 
@@ -43,7 +42,6 @@ deno run -RN --allow-run --allow-env --sloppy-imports https://raw.githubusercont
 deno install -RN --allow-run --allow-env --sloppy-imports -n httpath https://raw.githubusercontent.com/metalbolicx/httpath/main/httpath.ts
 
 # Or run from source
-cp .env.example .env   # edit credentials (optional)
 ./httpath.ts
 ```
 
@@ -70,7 +68,7 @@ cp .env.example .env   # edit credentials (optional)
 | ------------------------- | ----------------------------- | ------------------------------------------------------------- |
 | `-d, --dir <path>`        | `.` (current dir)             | Directory to serve                                            |
 | `--host <hostname>`       | `127.0.0.1`                   | Hostname to bind to (use `0.0.0.0` for LAN access)            |
-| `-l, --lan`               | `false`                       | Bind to all network interfaces (`0.0.0.0`) for LAN access    |
+| `-l, --lan`               | `false`                       | Bind to all network interfaces (`0.0.0.0`) for LAN access     |
 | `-p, --port <n>`          | `8080`                        | Port to listen on (1–65535)                                   |
 | `-i, --ignore <patterns>` | `.git,node_modules,.DS_Store` | Comma-separated patterns to exclude                           |
 | `--no-listing`            | `false`                       | Disable directory listing (returns 403)                       |
@@ -79,17 +77,6 @@ cp .env.example .env   # edit credentials (optional)
 | `--log <level>`           | `info`                        | One of: `info`, `debug`, `error`                              |
 | `--allow-protected-dir`   | `false`                       | Allow serving system directories (`/etc`, `C:\Windows`, etc.) |
 | `-h, --help`              |                               | Show help and exit                                            |
-
-### Basic Auth (optional)
-
-Set `HTTPATH_USER` and `HTTPATH_PASS` in a `.env` file to enable HTTP Basic Auth
-for all endpoints (HTTP + WebSocket `/livereload`).
-
-```sh
-cp .env.example .env   # then edit the credentials
-```
-
-See [.env.example](.env.example).
 
 ### Smart Mode vs Legacy Mode
 
@@ -106,7 +93,8 @@ server restart.
 
 ### LAN Access
 
-To make httpath accessible from other machines on your local network, use the `--lan` flag (or `-l`):
+To make httpath accessible from other machines on your local network, use the
+`--lan` flag (or `-l`):
 
 ```sh
 httpath --lan
@@ -129,7 +117,7 @@ the same LAN URL display on startup.
 
 ## Security
 
-httpath protects you at four levels:
+httpath protects you at three levels:
 
 1. **Startup Guard** — Refuses to serve system directories (`/etc`, `/boot`,
    `C:\Windows`, etc.) unless `--allow-protected-dir` is passed.
@@ -137,16 +125,12 @@ httpath protects you at four levels:
    before they reach the filesystem.
 3. **Ignore Patterns** — Sensitive project directories (`.git`, `node_modules`)
    are automatically blocked, even when explicitly requested.
-4. **Basic Auth** (optional) — When `HTTPATH_USER` / `HTTPATH_PASS` are set,
-   every request requires a valid `Authorization: Basic <base64>` header. The
-   live-reload WebSocket is also protected.
 
 ---
 
 ## Project Status
 
-**Stable.** Used in daily development. All 137+ tests pass. Supports Linux,
-macOS, and Windows.
+**Stable.** Used in daily development. Supports Linux, macOS, and Windows.
 
 ---
 
@@ -158,9 +142,9 @@ concurrency model, and all 12 design decisions with rationale — see:
 ➡️ [docs/architecture.md](docs/architecture.md)
 
 > Covers: startup flow, HTTP request handling, file watcher decision matrix,
-> live reload flow, 4-layer security model (including Basic Auth), concurrent
-> `Promise.race` design, and why closures over classes, hoisted regex constants,
-> server-side HTML injection, and env-var-based credentials.
+> live reload flow, 3-layer security model, concurrent `Promise.race` design,
+> and why closures over classes, hoisted regex constants, and server-side HTML
+> injection.
 
 ---
 
@@ -182,10 +166,8 @@ deno task lint     # Lint code
 - [x] Smart live reload (browser vs server restart)
 - [x] HEAD request support
 - [x] Protected system directory guard
-- [x] Basic authentication
 - [ ] Range request support (partial content)
 - [ ] Request logging to file
-- [ ] Basic authentication
 - [ ] HTTPS / TLS support
 
 ---

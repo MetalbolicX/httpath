@@ -2,6 +2,8 @@ export interface Config {
   directory: string;
   hostname: string;
   port: number;
+  rateLimitMaxRequests: number;
+  rateLimitWindowMs: number;
   ignorePatterns: string[];
   enableDirectoryListing: boolean;
   logLevel: "info" | "debug" | "error";
@@ -10,12 +12,6 @@ export interface Config {
   trustProxy: boolean;
   /** Allow serving a known system/OS directory. Defaults to false. */
   allowProtectedDir: boolean;
-  /**
-   * Basic Auth credentials. When set, every request (including WebSocket
-   * live-reload) requires a valid `Authorization: Basic <base64>` header.
-   * Populated from the `HTTPATH_USER` and `HTTPATH_PASS` environment variables.
-   */
-  auth?: { username: string; password: string };
   /**
    * Enable LAN access by binding to all network interfaces (0.0.0.0).
    * When true, the server will be accessible from other machines on the LAN.

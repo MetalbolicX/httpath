@@ -9,6 +9,8 @@ Deno.test("DEFAULT_CONFIG has expected defaults", () => {
   assertEquals(DEFAULT_CONFIG.directory, Deno.cwd());
   assertEquals(DEFAULT_CONFIG.hostname, "127.0.0.1");
   assertEquals(DEFAULT_CONFIG.port, 8080);
+  assertEquals(DEFAULT_CONFIG.rateLimitMaxRequests, 5);
+  assertEquals(DEFAULT_CONFIG.rateLimitWindowMs, 60_000);
   assertEquals(DEFAULT_CONFIG.ignorePatterns, [
     ".git",
     "node_modules",
@@ -29,11 +31,16 @@ Deno.test("parseArguments: empty args uses defaults", () => {
   assertEquals(config.directory, DEFAULT_CONFIG.directory);
   assertEquals(config.hostname, DEFAULT_CONFIG.hostname);
   assertEquals(config.port, 8080);
+  assertEquals(config.rateLimitMaxRequests, 5);
+  assertEquals(config.rateLimitWindowMs, 60_000);
   assertEquals(config.enableDirectoryListing, false);
   assertEquals(config.enableLiveReload, true);
   assertEquals(config.restartOnChange, false);
   assertEquals(config.logLevel, "info");
-  assertEquals((config as unknown as { trustProxy: boolean }).trustProxy, false);
+  assertEquals(
+    (config as unknown as { trustProxy: boolean }).trustProxy,
+    false,
+  );
 });
 
 Deno.test("parseArguments: --listing enables directory listing", () => {
@@ -64,6 +71,18 @@ Deno.test("parseArguments: --dir sets custom directory", () => {
 Deno.test("parseArguments: --host sets custom hostname", () => {
   const config = parseArguments(["--host", "0.0.0.0"]);
   assertEquals(config.hostname, "0.0.0.0");
+});
+
+Deno.test("parseArguments: rate limit flags set custom limits", () => {
+  const config = parseArguments([
+    "--rate-limit-max-requests",
+    "12",
+    "--rate-limit-window-ms",
+    "2500",
+  ]);
+
+  assertEquals(config.rateLimitMaxRequests, 12);
+  assertEquals(config.rateLimitWindowMs, 2500);
 });
 
 Deno.test("getPublicHostWarning: loopback hosts do not warn", () => {
@@ -120,12 +139,9 @@ Deno.test("parseArguments: --trust-proxy enables proxy trust", () => {
   assertEquals((config as unknown as { trustProxy: boolean }).trustProxy, true);
 });
 
-Deno.test("parseArguments: port 0 throws", () => {
-  assertThrows(
-    () => parseArguments(["--port", "0"]),
-    Error,
-    "Port must be a valid number",
-  );
+Deno.test("parseArguments: port 0 is allowed for ephemeral allocation", () => {
+  const config = parseArguments(["--port", "0"]);
+  assertEquals(config.port, 0);
 });
 
 Deno.test("parseArguments: port 66666 throws", () => {

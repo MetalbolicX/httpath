@@ -16,6 +16,8 @@ export const DEFAULT_CONFIG: Config = {
   directory: Deno.cwd(),
   hostname: "127.0.0.1",
   port: 8080,
+  rateLimitMaxRequests: 5,
+  rateLimitWindowMs: 60_000,
   ignorePatterns: [".git", "node_modules", ".DS_Store"],
   enableDirectoryListing: false,
   logLevel: "info",
@@ -33,6 +35,8 @@ export const DEFAULT_CONFIG: Config = {
  * - `--dir, -d`: Directory to serve (default: current directory)
  * - `--host`: Hostname to bind to (default: 127.0.0.1)
  * - `--port, -p`: Port to listen on (default: 8080)
+ * - `--rate-limit-max-requests`: Maximum requests per client within the window
+ * - `--rate-limit-window-ms`: Rate limit window size in milliseconds
  * - `--ignore, -i`: Comma-separated patterns to ignore
  * - `--no-listing`: Disable directory listing
  * - `--no-live-reload`: Disable live reload feature
@@ -53,7 +57,15 @@ export const DEFAULT_CONFIG: Config = {
  */
 export const parseArguments = (args: string[]): Config => {
   const parsed = parseArgs(args, {
-    string: ["dir", "host", "port", "ignore", "log"],
+    string: [
+      "dir",
+      "host",
+      "port",
+      "ignore",
+      "log",
+      "rate-limit-max-requests",
+      "rate-limit-window-ms",
+    ],
     boolean: [
       "listing",
       "no-listing",
@@ -70,6 +82,8 @@ export const parseArguments = (args: string[]): Config => {
       port: DEFAULT_CONFIG.port.toString(),
       ignore: DEFAULT_CONFIG.ignorePatterns.join(","),
       log: DEFAULT_CONFIG.logLevel,
+      "rate-limit-max-requests": DEFAULT_CONFIG.rateLimitMaxRequests.toString(),
+      "rate-limit-window-ms": DEFAULT_CONFIG.rateLimitWindowMs.toString(),
       listing: false,
       "no-listing": false,
       "no-live-reload": false,
@@ -97,9 +111,11 @@ Usage: httpath [OPTIONS]
 Options:
   -d, --dir <directory>     Directory to serve (default: current directory)
   --host <hostname>        Hostname to bind to (default: 127.0.0.1)
-  -l, --lan               Bind to all network interfaces (0.0.0.0) for LAN access
-  -p, --port <port>        Port to listen on (default: 8080)
-  -i, --ignore <patterns>   Comma-separated patterns to ignore (default: .git,node_modules,.DS_Store)
+   -l, --lan               Bind to all network interfaces (0.0.0.0) for LAN access
+   -p, --port <port>        Port to listen on (default: 8080)
+   --rate-limit-max-requests <n>  Max requests per client within the window (default: 5)
+   --rate-limit-window-ms <n>     Rate limit window in milliseconds (default: 60000)
+   -i, --ignore <patterns>   Comma-separated patterns to ignore (default: .git,node_modules,.DS_Store)
   --listing               Enable directory listing
   --no-listing            Disable directory listing
   --no-live-reload         Disable live reload feature
@@ -121,8 +137,8 @@ Examples:
   }
 
   const port = parseInt(parsed.port);
-  if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error("Port must be a valid number between 1 and 65535");
+  if (isNaN(port) || port < 0 || port > 65535) {
+    throw new Error("Port must be a valid number between 0 and 65535");
   }
 
   const validLogLevels: Config["logLevel"][] = ["info", "debug", "error"];
@@ -145,6 +161,8 @@ Examples:
     directory: resolve(parsed.dir),
     hostname,
     port,
+    rateLimitMaxRequests: parseInt(parsed["rate-limit-max-requests"]),
+    rateLimitWindowMs: parseInt(parsed["rate-limit-window-ms"]),
     ignorePatterns: parsed.ignore.split(",").map((pattern) => pattern.trim()),
     enableDirectoryListing: parsed.listing && !parsed["no-listing"],
     logLevel: parsed.log as Config["logLevel"],

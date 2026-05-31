@@ -23,13 +23,20 @@ export const matchesPattern = (
   const pathSegments = path.replaceAll("\\", "/").split("/").filter(Boolean);
 
   return patterns.some((pattern) => {
-    const patternSegments = pattern.replaceAll("\\", "/").split("/").filter(Boolean);
-    if (patternSegments.length === 0 || patternSegments.length > pathSegments.length) {
+    const patternSegments = pattern.replaceAll("\\", "/").split("/").filter(
+      Boolean,
+    );
+    if (
+      patternSegments.length === 0 ||
+      patternSegments.length > pathSegments.length
+    ) {
       return false;
     }
 
     return pathSegments.some((_, index) =>
-      patternSegments.every((segment, offset) => pathSegments[index + offset] === segment)
+      patternSegments.every((segment, offset) =>
+        pathSegments[index + offset] === segment
+      )
     );
   });
 };

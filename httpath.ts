@@ -81,18 +81,6 @@ export const main = async (): Promise<void> => {
       }
     }
 
-    const httpAthUser = Deno.env.get("HTTPATH_USER");
-    const httpAthPass = Deno.env.get("HTTPATH_PASS");
-    if (httpAthUser && httpAthPass) {
-      config.auth = { username: httpAthUser, password: httpAthPass };
-      log("Basic Auth enabled");
-    } else if (httpAthUser || httpAthPass) {
-      log(
-        "HTTPATH_USER or HTTPATH_PASS is set but the other is missing — Basic Auth disabled",
-        "error",
-      );
-    }
-
     try {
       const dirInfo = await Deno.stat(config.directory);
       if (!dirInfo.isDirectory) {

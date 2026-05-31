@@ -3,14 +3,13 @@ import { LIVE_RELOAD_ENDPOINT } from "../types.mts";
 import { basename, join, relative, resolve } from "@std/path";
 import {
   getMimeType,
-  log,
   hasSymlinkPrefix,
+  log,
   matchesPattern,
   resolveSafePath,
 } from "../utils/index.ts";
 import { addSecurityHeaders } from "../security/headers.mts";
 import { createRateLimiter } from "../security/rate-limiter.mts";
-import { timingSafeEqual } from "../security/timing-safe.mts";
 import {
   generateDirectoryListingHTML,
   injectLiveReloadScript,
@@ -51,7 +50,17 @@ export const resolveRateLimitClientKey = (
 
 export const isAllowedWebSocketOrigin = (request: Request): boolean => {
   const origin = request.headers.get("origin");
-  if (!origin) return false;
+  if (!origin) {
+    // Allow requests with no origin header if they're targeting localhost/loopback
+    // This enables WebSocket connections from local processes and browser clients
+    // that don't send an explicit Origin header
+    try {
+      const hostname = new URL(request.url).hostname;
+      return new Set(["127.0.0.1", "localhost", "::1"]).has(hostname);
+    } catch {
+      return false;
+    }
+  }
 
   try {
     return origin === new URL(request.url).origin;
@@ -123,7 +132,9 @@ const serveFile = async (
   };
 
   if (mimeType === "image/svg+xml") {
-    headers["content-disposition"] = `attachment; filename="${basename(filePath)}"`;
+    headers["content-disposition"] = `attachment; filename="${
+      basename(filePath)
+    }"`;
   }
 
   if (method === "HEAD") {
@@ -228,41 +239,11 @@ const serveDirectory = async (
  * const response = await handler(request);
  * ```
  */
-/**
- * Decodes and validates an HTTP Basic Auth header against the expected credentials.
- *
- * Returns `true` when the header is absent, malformed, or the decoded credentials
- * do not match. Returns `false` (i.e. "rejected") only when a matching pair is
- * found — naming follows the pattern "should reject?".
- */
-const rejectBasicAuth = (
-  authHeader: string | null,
-  expected: { username: string; password: string },
-): boolean => {
-  if (!authHeader?.startsWith("Basic ")) return true;
-
-  let decoded: string;
-  try {
-    decoded = atob(authHeader.slice(6));
-  } catch {
-    return true;
-  }
-
-  const colon = decoded.indexOf(":");
-  const username = colon === -1 ? decoded : decoded.slice(0, colon);
-  const password = colon === -1 ? "" : decoded.slice(colon + 1);
-
-  const usernameMatches = timingSafeEqual(username, expected.username);
-  const passwordMatches = timingSafeEqual(password, expected.password);
-
-  return !usernameMatches || !passwordMatches;
-};
-
-const missingBasicAuthHeader = (authHeader: string | null): boolean =>
-  !authHeader || !authHeader.startsWith("Basic ");
-
 export const createRequestHandler = (config: Config) => {
-  const rateLimiter = createRateLimiter();
+  const rateLimiter = createRateLimiter({
+    maxAttempts: config.rateLimitMaxRequests,
+    windowMs: config.rateLimitWindowMs,
+  });
 
   return async (
     request: Request,
@@ -278,42 +259,18 @@ export const createRequestHandler = (config: Config) => {
       );
     }
 
-    if (config.auth) {
-      const clientIp = resolveRateLimitClientKey(
-        request,
-        context,
-        config.trustProxy,
+    const clientIp = resolveRateLimitClientKey(
+      request,
+      context,
+      config.trustProxy,
+    );
+
+    if (!rateLimiter.check(clientIp)) {
+      return withSecurityHeaders(
+        new Response("Too Many Requests", {
+          status: 429,
+        }),
       );
-      const authHeader = request.headers.get("authorization");
-      if (missingBasicAuthHeader(authHeader)) {
-        if (!rateLimiter.check(clientIp)) {
-          return withSecurityHeaders(
-            new Response("Too Many Requests", {
-              status: 429,
-            }),
-          );
-        }
-        return withSecurityHeaders(
-          new Response("Unauthorized", {
-            status: 401,
-            headers: { "www-authenticate": `Basic realm="httpath"` },
-          }),
-        );
-      }
-      if (rejectBasicAuth(authHeader, config.auth)) {
-        if (!rateLimiter.check(clientIp)) {
-          return withSecurityHeaders(
-            new Response("Too Many Requests", {
-              status: 429,
-            }),
-          );
-        }
-        return withSecurityHeaders(
-          new Response("Unauthorized", {
-            status: 401,
-          }),
-        );
-      }
     }
 
     const method = request.method.toUpperCase();
@@ -457,13 +414,16 @@ export const startHttpServer = async (
 ): Promise<void> => {
   const handler = createRequestHandler(config);
 
-  log(`Starting server on http://localhost:${config.port}`);
   log(`Serving directory: ${config.directory}`);
 
-  await Deno.serve({
+  const server = await Deno.serve({
     hostname: config.hostname,
     port: config.port,
     signal: abortController.signal,
     handler,
-  }).finished;
+  });
+
+  log(`Starting server on http://localhost:${server.addr.port}`);
+
+  await server.finished;
 };

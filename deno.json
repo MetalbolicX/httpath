@@ -6,7 +6,8 @@
   "exports": "./httpath.ts",
   "tasks": {
     "dev": "deno run --env-file=.env -RN --allow-run --allow-env --sloppy-imports httpath.ts",
-    "test": "deno test",
+    "test": "deno test tests/",
+    "integration-test": "deno test --allow-write --allow-run --allow-read --allow-env --allow-net integration/",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

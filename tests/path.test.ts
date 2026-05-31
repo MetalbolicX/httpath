@@ -14,6 +14,8 @@ const createConfig = (overrides = {}) => ({
   directory: Deno.cwd(),
   hostname: "127.0.0.1",
   port: 8080,
+  rateLimitMaxRequests: 5,
+  rateLimitWindowMs: 60_000,
   ignorePatterns: [".git", "node_modules", ".DS_Store"],
   enableDirectoryListing: true,
   logLevel: "error" as const,
@@ -154,7 +156,11 @@ Deno.test("createRequestHandler: rejects symlinked intermediate path segments", 
 
     return await Promise.resolve(stubFileInfo(false));
   });
-  const statStub = stub(Deno, "stat", async () => await Promise.resolve(stubFileInfo(false)));
+  const statStub = stub(
+    Deno,
+    "stat",
+    async () => await Promise.resolve(stubFileInfo(false)),
+  );
 
   let response: Response;
   try {
