@@ -14,16 +14,18 @@ function notImplementedHandler(_req) {
     _0: {
       status: 501,
       headers: [[
-          "content-type",
-          "text/plain; charset=utf-8"
-        ]],
-      body: "Empty"
-    }
+        "content-type",
+        "text/plain; charset=utf-8",
+      ]],
+      body: "Empty",
+    },
   });
 }
 
 function warnRestart() {
-  console.warn("[Httpath] restart-on-change requested but Restart module is not yet implemented");
+  console.warn(
+    "[Httpath] restart-on-change requested but Restart module is not yet implemented",
+  );
 }
 
 function start(handler, config) {
@@ -34,9 +36,16 @@ function start(handler, config) {
     return Promise.resolve();
   };
   Http.startServer(config.port, config.hostname, handler, onWsUpgrade, sig);
-  let monitorHandle = Monitor.start(config.directory, config.ignorePatterns, config.enableLiveReload, config.restartOnChange, WsHub.notifyReload, warnRestart);
+  let monitorHandle = Monitor.start(
+    config.directory,
+    config.ignorePatterns,
+    config.enableLiveReload,
+    config.restartOnChange,
+    WsHub.notifyReload,
+    warnRestart,
+  );
   let shutdownResolve = {
-    contents: undefined
+    contents: undefined,
   };
   let shutdownPromise = new Promise((resolve, _reject) => {
     shutdownResolve.contents = resolve;
@@ -69,7 +78,9 @@ function main() {
   }
   let e = config._0;
   if (typeof e !== "object") {
-    console.log("Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]");
+    console.log(
+      "Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]",
+    );
     Process.exit(0);
     return Promise.resolve();
   }
@@ -78,8 +89,5 @@ function main() {
   return Promise.resolve();
 }
 
-export {
-  main,
-  start,
-}
+export { main, start };
 /* Http Not a pure module */
