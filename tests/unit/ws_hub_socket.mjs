@@ -2,8 +2,15 @@
 // interface needed by the Events module. Records listener registrations for
 // test verification and supports throw/reject modes for failure scenario testing.
 // Extended for WsHub tests: write recording, throw/reject modes.
+//
+// Counter delegation: the hub's lifecycle callbacks increment a shared counter
+// in TestHelpers.mjs so both hub tests and Events tests can observe it.
+// ws_hub_socket.mjs delegates getCounter/resetCounter to TestHelpers.mjs.
 
-const _counter = { count: 0 };
+import {
+  getHubListenerCounter,
+  resetHubListenerCounter,
+} from "../../src/Node/TestHelpers.mjs"
 
 export function createFakeSocket() {
   const listeners = new Map();
@@ -83,7 +90,7 @@ export function callListeners(fakeSocket, eventName) {
 }
 
 export function getCounter() {
-  return _counter;
+  return getHubListenerCounter();
 }
 
 // Extended helpers for ws_hub_test.res
@@ -105,4 +112,8 @@ export function getLastWrite(fakeSocket) {
 
 export function clearWrites(fakeSocket) {
   fakeSocket._clearWrites();
+}
+
+export function resetCounter() {
+  resetHubListenerCounter();
 }

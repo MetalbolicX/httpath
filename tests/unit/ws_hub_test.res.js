@@ -2,7 +2,6 @@
 
 import * as Test from "rescript-test/src/Test.res.js";
 import * as WsHub from "../../src/Hub/WsHub.res.js";
-import * as Primitive_object from "@rescript/runtime/lib/es6/Primitive_object.js";
 import * as Ws_hub_socketMjs from "./ws_hub_socket.mjs";
 
 function createFakeSocket(prim) {
@@ -15,6 +14,10 @@ function getCounter(prim) {
 
 function callListeners(prim0, prim1) {
   Ws_hub_socketMjs.callListeners(prim0, prim1);
+}
+
+function resetCounter(prim) {
+  Ws_hub_socketMjs.resetCounter();
 }
 
 function setThrowMode(prim0, prim1) {
@@ -37,69 +40,93 @@ function clearWrites(prim) {
   Ws_hub_socketMjs.clearWrites(prim);
 }
 
-Test.test("WsHub.register does not throw for a new socket", () => {
+Test.test("WsHub.register grows live set size from 0 to 1", () => {
+  WsHub._testResetHub();
   let fake = Ws_hub_socketMjs.createFakeSocket();
+  let before = WsHub._testGetRegisteredCount();
   WsHub.register(fake);
-  Test.assertion("register new socket should not throw", "=", (a, b) => a === b, true, true);
+  let after = WsHub._testGetRegisteredCount();
+  Test.assertion("register new socket should grow live set from 0 to 1", "=", (a, b) => a === b, after, before + 1 | 0);
 });
 
-Test.test("WsHub.register is idempotent — second call is a no-op", () => {
+Test.test("WsHub.register is idempotent — second call leaves size at 1", () => {
+  WsHub._testResetHub();
   let fake = Ws_hub_socketMjs.createFakeSocket();
   WsHub.register(fake);
+  let before = WsHub._testGetRegisteredCount();
   WsHub.register(fake);
-  Test.assertion("double register should not throw", "=", (a, b) => a === b, true, true);
+  let after = WsHub._testGetRegisteredCount();
+  Test.assertion("idempotent register should not change live set size", "=", (a, b) => a === b, after, before);
 });
 
-Test.test("WsHub.unregister does not throw for a registered socket", () => {
+Test.test("WsHub.unregister returns live set size to 0", () => {
+  WsHub._testResetHub();
   let fake = Ws_hub_socketMjs.createFakeSocket();
   WsHub.register(fake);
+  let before = WsHub._testGetRegisteredCount();
   WsHub.unregister(fake);
-  Test.assertion("unregister registered socket should not throw", "=", (a, b) => a === b, true, true);
+  let after = WsHub._testGetRegisteredCount();
+  Test.assertion("unregister should shrink live set back to 0", "=", (a, b) => a === b, after, before - 1 | 0);
 });
 
-Test.test("WsHub.unregister is idempotent — unknown socket is a no-op", () => {
+Test.test("WsHub.unregister is idempotent — unknown socket leaves size unchanged", () => {
+  WsHub._testResetHub();
   let fake = Ws_hub_socketMjs.createFakeSocket();
+  let before = WsHub._testGetRegisteredCount();
   WsHub.unregister(fake);
-  Test.assertion("unregister unknown socket should not throw", "=", (a, b) => a === b, true, true);
+  let after = WsHub._testGetRegisteredCount();
+  Test.assertion("unregister unknown socket should not change live set size", "=", (a, b) => a === b, after, before);
 });
 
 Test.test("WsHub.register attaches close listener — socket close triggers unregister", () => {
+  WsHub._testResetHub();
+  Ws_hub_socketMjs.resetCounter();
   let fake = Ws_hub_socketMjs.createFakeSocket();
   let counter = Ws_hub_socketMjs.getCounter();
-  counter.count = 0;
   WsHub.register(fake);
+  let registeredCount = WsHub._testGetRegisteredCount();
+  Test.assertion("socket should be registered before close event", "=", (a, b) => a === b, registeredCount, 1);
   Ws_hub_socketMjs.callListeners(fake, "close");
-  let countBefore = counter.count;
+  let countAfterClose = WsHub._testGetRegisteredCount();
+  Test.assertion("socket should be auto-unregistered after close event", "=", (a, b) => a === b, countAfterClose, 0);
+  Test.assertion("close event should increment counter (listener fired)", "=", (a, b) => a === b, counter.count, 1);
   Ws_hub_socketMjs.callListeners(fake, "close");
-  let countAfter = counter.count;
-  Test.assertion("close event should fire listener once then be removed", "=", Primitive_object.equal, countAfter, countBefore);
+  Test.assertion("second close emit should not fire (listener detached)", "=", (a, b) => a === b, counter.count, 1);
 });
 
 Test.test("WsHub.register attaches error listener — socket error triggers unregister", () => {
+  WsHub._testResetHub();
+  Ws_hub_socketMjs.resetCounter();
   let fake = Ws_hub_socketMjs.createFakeSocket();
   let counter = Ws_hub_socketMjs.getCounter();
-  counter.count = 0;
   WsHub.register(fake);
+  let registeredCount = WsHub._testGetRegisteredCount();
+  Test.assertion("socket should be registered before error event", "=", (a, b) => a === b, registeredCount, 1);
   Ws_hub_socketMjs.callListeners(fake, "error");
-  let countBefore = counter.count;
+  let countAfterError = WsHub._testGetRegisteredCount();
+  Test.assertion("socket should be auto-unregistered after error event", "=", (a, b) => a === b, countAfterError, 0);
+  Test.assertion("error event should increment counter (listener fired)", "=", (a, b) => a === b, counter.count, 1);
   Ws_hub_socketMjs.callListeners(fake, "error");
-  let countAfter = counter.count;
-  Test.assertion("error event should fire listener once then be removed", "=", Primitive_object.equal, countAfter, countBefore);
+  Test.assertion("second error emit should not fire (listener detached)", "=", (a, b) => a === b, counter.count, 1);
 });
 
 Test.test("WsHub.notifyReload on empty hub is a no-op", () => {
+  WsHub._testResetHub();
   WsHub.notifyReload();
   Test.assertion("notifyReload on empty hub should not throw", "=", (a, b) => a === b, true, true);
 });
 
 Test.test("WsHub.notifyReload writes to registered socket without throwing", () => {
+  WsHub._testResetHub();
   let fake = Ws_hub_socketMjs.createFakeSocket();
   WsHub.register(fake);
   WsHub.notifyReload();
-  Test.assertion("notifyReload with one client should not throw", "=", (a, b) => a === b, true, true);
+  let wc = Ws_hub_socketMjs.getWriteCount(fake);
+  Test.assertion("notifyReload with one client should produce exactly one write", "=", (a, b) => a === b, wc, 1);
 });
 
 Test.test("WsHub.notifyReload broadcasts to all registered clients", () => {
+  WsHub._testResetHub();
   let fake1 = Ws_hub_socketMjs.createFakeSocket();
   let fake2 = Ws_hub_socketMjs.createFakeSocket();
   WsHub.register(fake1);
@@ -112,6 +139,7 @@ Test.test("WsHub.notifyReload broadcasts to all registered clients", () => {
 });
 
 Test.test("WsHub.notifyReload broadcasts in registration order", () => {
+  WsHub._testResetHub();
   let fake1 = Ws_hub_socketMjs.createFakeSocket();
   let fake2 = Ws_hub_socketMjs.createFakeSocket();
   WsHub.register(fake1);
@@ -126,6 +154,7 @@ Test.test("WsHub.notifyReload broadcasts in registration order", () => {
 });
 
 Test.test("WsHub.notifyReload continues to remaining clients after sync throw", () => {
+  WsHub._testResetHub();
   let fake1 = Ws_hub_socketMjs.createFakeSocket();
   let fake2 = Ws_hub_socketMjs.createFakeSocket();
   WsHub.register(fake1);
@@ -144,6 +173,7 @@ export {
   createFakeSocket,
   getCounter,
   callListeners,
+  resetCounter,
   setThrowMode,
   setRejectMode,
   getWriteCount,

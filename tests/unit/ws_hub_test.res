@@ -13,6 +13,9 @@ external getCounter: unit => 'counter = "getCounter"
 @module("./ws_hub_socket.mjs")
 external callListeners: ('fakeSocket, string) => unit = "callListeners"
 
+@module("./ws_hub_socket.mjs")
+external resetCounter: unit => unit = "resetCounter"
+
 // Extend fake socket with write recording and throw/reject modes.
 @module("./ws_hub_socket.mjs")
 external setThrowMode: ('fakeSocket, bool) => unit = "setThrowMode"
@@ -33,80 +36,88 @@ external clearWrites: 'fakeSocket => unit = "clearWrites"
 external asServerSocket: 'a => Http.serverSocket = "%identity"
 
 // ---------------------------------------------------------------------------
-// Scenario: Register a single client — no throw
+// Scenario: Register a single client — live set size grows to 1
 // ---------------------------------------------------------------------------
-test("WsHub.register does not throw for a new socket", () => {
+test("WsHub.register grows live set size from 0 to 1", () => {
+  WsHub._testResetHub()
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
-  // Should not throw.
+  let before = WsHub._testGetRegisteredCount()
   WsHub.register(sock)
+  let after = WsHub._testGetRegisteredCount()
 
   assertion(
-    ~message="register new socket should not throw",
+    ~message="register new socket should grow live set from 0 to 1",
     ~operator="=",
     (a, b) => a == b,
-    true,
-    true,
+    after,
+    before + 1,
   )
 })
 
 // ---------------------------------------------------------------------------
-// Scenario: Register is idempotent — second register is a no-op (no throw)
+// Scenario: Register is idempotent — second register is a no-op (size stays 1)
 // ---------------------------------------------------------------------------
-test("WsHub.register is idempotent — second call is a no-op", () => {
+test("WsHub.register is idempotent — second call leaves size at 1", () => {
+  WsHub._testResetHub()
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
   WsHub.register(sock)
-  // Second registration should be a no-op (no throw, no error).
+  let before = WsHub._testGetRegisteredCount()
   WsHub.register(sock)
+  let after = WsHub._testGetRegisteredCount()
 
   assertion(
-    ~message="double register should not throw",
+    ~message="idempotent register should not change live set size",
     ~operator="=",
     (a, b) => a == b,
-    true,
-    true,
+    after,
+    before,
   )
 })
 
 // ---------------------------------------------------------------------------
-// Scenario: Unregister a registered client — no throw
+// Scenario: Unregister a registered client — live set size returns to 0
 // ---------------------------------------------------------------------------
-test("WsHub.unregister does not throw for a registered socket", () => {
+test("WsHub.unregister returns live set size to 0", () => {
+  WsHub._testResetHub()
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
   WsHub.register(sock)
-  // Should not throw.
+  let before = WsHub._testGetRegisteredCount()
   WsHub.unregister(sock)
+  let after = WsHub._testGetRegisteredCount()
 
   assertion(
-    ~message="unregister registered socket should not throw",
+    ~message="unregister should shrink live set back to 0",
     ~operator="=",
     (a, b) => a == b,
-    true,
-    true,
+    after,
+    before - 1,
   )
 })
 
 // ---------------------------------------------------------------------------
-// Scenario: Unregister an unknown client — idempotent, no throw
+// Scenario: Unregister an unknown client — idempotent, no throw, size stays 0
 // ---------------------------------------------------------------------------
-test("WsHub.unregister is idempotent — unknown socket is a no-op", () => {
+test("WsHub.unregister is idempotent — unknown socket leaves size unchanged", () => {
+  WsHub._testResetHub()
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
-  // Never registered — should be a no-op, no throw.
+  let before = WsHub._testGetRegisteredCount()
   WsHub.unregister(sock)
+  let after = WsHub._testGetRegisteredCount()
 
   assertion(
-    ~message="unregister unknown socket should not throw",
+    ~message="unregister unknown socket should not change live set size",
     ~operator="=",
     (a, b) => a == b,
-    true,
-    true,
+    after,
+    before,
   )
 })
 
@@ -114,30 +125,54 @@ test("WsHub.unregister is idempotent — unknown socket is a no-op", () => {
 // Scenario: Socket emits close — auto-unregistration (via listener attachment)
 // ---------------------------------------------------------------------------
 test("WsHub.register attaches close listener — socket close triggers unregister", () => {
+  WsHub._testResetHub()
+  resetCounter()
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
   let counter = getCounter()
-  counter["count"] = 0
 
   WsHub.register(sock)
-  // Emit a close event — the hub's close listener should fire.
-  callListeners(fake, "close")
+  let registeredCount = WsHub._testGetRegisteredCount()
 
-  // The counter increments when the listener fires.
-  // Since the close listener calls unregister (which removes the close listener),
-  // re-emitting close should NOT increment again (listener was detached).
-  let countBefore = counter["count"]
-  callListeners(fake, "close")
-  let countAfter = counter["count"]
-
-  // Close listener fires on first emit; second emit should not fire
-  // (listener was removed by unregister).
+  // Verify the socket is registered (count == 1).
   assertion(
-    ~message="close event should fire listener once then be removed",
+    ~message="socket should be registered before close event",
     ~operator="=",
     (a, b) => a == b,
-    countAfter,
-    countBefore,
+    registeredCount,
+    1,
+  )
+
+  // Emit a close event — the hub's close listener fires and calls unregister.
+  callListeners(fake, "close")
+  let countAfterClose = WsHub._testGetRegisteredCount()
+
+  // The socket should have been auto-unregistered (count == 0).
+  assertion(
+    ~message="socket should be auto-unregistered after close event",
+    ~operator="=",
+    (a, b) => a == b,
+    countAfterClose,
+    0,
+  )
+
+  // The counter should have been incremented (close listener fired once).
+  assertion(
+    ~message="close event should increment counter (listener fired)",
+    ~operator="=",
+    (a, b) => a == b,
+    counter["count"],
+    1,
+  )
+
+  // Second emit should not increment (listener was removed by unregister).
+  callListeners(fake, "close")
+  assertion(
+    ~message="second close emit should not fire (listener detached)",
+    ~operator="=",
+    (a, b) => a == b,
+    counter["count"],
+    1,
   )
 })
 
@@ -145,35 +180,66 @@ test("WsHub.register attaches close listener — socket close triggers unregiste
 // Scenario: Socket emits error — auto-unregistration
 // ---------------------------------------------------------------------------
 test("WsHub.register attaches error listener — socket error triggers unregister", () => {
+  WsHub._testResetHub()
+  resetCounter()
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
   let counter = getCounter()
-  counter["count"] = 0
 
   WsHub.register(sock)
-  // Emit an error event — the hub's error listener should fire.
-  callListeners(fake, "error")
+  let registeredCount = WsHub._testGetRegisteredCount()
 
-  let countBefore = counter["count"]
-  callListeners(fake, "error")
-  let countAfter = counter["count"]
-
+  // Verify the socket is registered.
   assertion(
-    ~message="error event should fire listener once then be removed",
+    ~message="socket should be registered before error event",
     ~operator="=",
     (a, b) => a == b,
-    countAfter,
-    countBefore,
+    registeredCount,
+    1,
+  )
+
+  // Emit an error event — the hub's error listener fires and calls unregister.
+  callListeners(fake, "error")
+  let countAfterError = WsHub._testGetRegisteredCount()
+
+  // The socket should have been auto-unregistered.
+  assertion(
+    ~message="socket should be auto-unregistered after error event",
+    ~operator="=",
+    (a, b) => a == b,
+    countAfterError,
+    0,
+  )
+
+  // The counter should have been incremented (error listener fired once).
+  assertion(
+    ~message="error event should increment counter (listener fired)",
+    ~operator="=",
+    (a, b) => a == b,
+    counter["count"],
+    1,
+  )
+
+  // Second emit should not increment (listener was removed).
+  callListeners(fake, "error")
+  assertion(
+    ~message="second error emit should not fire (listener detached)",
+    ~operator="=",
+    (a, b) => a == b,
+    counter["count"],
+    1,
   )
 })
 
 // ---------------------------------------------------------------------------
-// Scenario: Notify with zero clients — no throw
+// Scenario: Notify with zero clients — no throw, no socket write attempted
 // ---------------------------------------------------------------------------
 test("WsHub.notifyReload on empty hub is a no-op", () => {
+  WsHub._testResetHub()
   // With no sockets registered, notifyReload should be a no-op (no throw).
   WsHub.notifyReload()
 
+  // No exception means the test passes — this is the spec behavior.
   assertion(
     ~message="notifyReload on empty hub should not throw",
     ~operator="=",
@@ -187,6 +253,7 @@ test("WsHub.notifyReload on empty hub is a no-op", () => {
 // Scenario: notifyReload does not throw with one healthy client (write succeeds)
 // ---------------------------------------------------------------------------
 test("WsHub.notifyReload writes to registered socket without throwing", () => {
+  WsHub._testResetHub()
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
@@ -194,12 +261,14 @@ test("WsHub.notifyReload writes to registered socket without throwing", () => {
   // notifyReload should not throw even when write succeeds.
   WsHub.notifyReload()
 
+  // Verify the write actually happened (observable side-effect).
+  let wc = getWriteCount(fake)
   assertion(
-    ~message="notifyReload with one client should not throw",
+    ~message="notifyReload with one client should produce exactly one write",
     ~operator="=",
     (a, b) => a == b,
-    true,
-    true,
+    wc,
+    1,
   )
 })
 
@@ -207,6 +276,7 @@ test("WsHub.notifyReload writes to registered socket without throwing", () => {
 // Scenario: notifyReload with N clients — all receive the frame
 // ---------------------------------------------------------------------------
 test("WsHub.notifyReload broadcasts to all registered clients", () => {
+  WsHub._testResetHub()
   let fake1 = createFakeSocket()
   let fake2 = createFakeSocket()
   let sock1 = asServerSocket(fake1)
@@ -240,6 +310,7 @@ test("WsHub.notifyReload broadcasts to all registered clients", () => {
 // Scenario: notifyReload preserves insertion order (deterministic broadcast)
 // ---------------------------------------------------------------------------
 test("WsHub.notifyReload broadcasts in registration order", () => {
+  WsHub._testResetHub()
   let fake1 = createFakeSocket()
   let fake2 = createFakeSocket()
   let sock1 = asServerSocket(fake1)
@@ -276,6 +347,7 @@ test("WsHub.notifyReload broadcasts in registration order", () => {
 // Scenario: notifyReload — sync throw pruning (one fails, others survive)
 // ---------------------------------------------------------------------------
 test("WsHub.notifyReload continues to remaining clients after sync throw", () => {
+  WsHub._testResetHub()
   let fake1 = createFakeSocket()
   let fake2 = createFakeSocket()
   let sock1 = asServerSocket(fake1)
@@ -312,3 +384,11 @@ test("WsHub.notifyReload continues to remaining clients after sync throw", () =>
     1,
   )
 })
+
+// NOTE: Async rejection via error-event pruning is not covered by a spec scenario.
+// The notifyReload sync-throw pruning is covered by the "One failing write" scenario
+// (assertion wc1=0, wc2=1 above). Async rejection (setRejectMode) is a different
+// failure mode: the write() call succeeds but the callback receives an error.
+// Since socketWriteBuffer is synchronous and doesn't await the callback, the hub
+// cannot detect this failure synchronously. This would require a design change
+// (async socketWriteBuffer that the hub awaits). Out of scope for this change.

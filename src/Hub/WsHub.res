@@ -19,6 +19,12 @@ type client = {
 // The state is not exported in WsHub.resi — encapsulated.
 let clients: ref<array<client>> = ref([])
 
+// test-only: increment the shared counter in the test fake.
+// This is called by the onClose/onError callbacks so tests can verify
+// that the hub's lifecycle listeners were actually invoked.
+@module("../Node/TestHelpers.mjs")
+external _testIncrementCounter: unit => unit = "incrementHubListenerCounter"
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
@@ -90,8 +96,14 @@ let rec register = (socket: Http.serverSocket): unit => {
   if clientExists(socket) {
     ()
   } else {
-    let onClose = () => unregister(socket)
-    let onError = () => unregister(socket)
+    let onClose = () => {
+      _testIncrementCounter()
+      unregister(socket)
+    }
+    let onError = () => {
+      _testIncrementCounter()
+      unregister(socket)
+    }
     let _ = Events.on(socket, "close", onClose)
     let _ = Events.on(socket, "error", onError)
     let entry = {socket, onClose, onError}
@@ -112,6 +124,16 @@ and unregister = (socket: Http.serverSocket): unit => {
     }
   | None => ()
   }
+}
+
+// test-only: expose registered client count for unit-test assertions.
+let _testGetRegisteredCount = (): int => Array.length(clients.contents)
+
+// test-only: reset hub state — clears all registered clients.
+// Used by unit tests to ensure a clean baseline before each test.
+let _testResetHub = (): unit => {
+  clients := []
+  ()
 }
 
 // Broadcast "reload" frame to all registered clients.

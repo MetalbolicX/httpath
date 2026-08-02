@@ -3,6 +3,7 @@
 import * as Http from "../Node/Http.res.js";
 import * as Buffer from "../Node/Buffer.res.js";
 import * as Events from "../Node/Events.res.js";
+import * as TestHelpersMjs from "../Node/TestHelpers.mjs";
 
 let clients = {
   contents: []
@@ -68,8 +69,14 @@ function register(socket) {
   if (clientExists(socket)) {
     return;
   }
-  let onClose = () => unregister(socket);
-  let onError = () => unregister(socket);
+  let onClose = () => {
+    TestHelpersMjs.incrementHubListenerCounter();
+    unregister(socket);
+  };
+  let onError = () => {
+    TestHelpersMjs.incrementHubListenerCounter();
+    unregister(socket);
+  };
   Events.on(socket, "close", onClose);
   Events.on(socket, "error", onError);
   let entry = {
@@ -78,6 +85,14 @@ function register(socket) {
     onError: onError
   };
   clients.contents = clients.contents.concat([entry]);
+}
+
+function _testGetRegisteredCount() {
+  return clients.contents.length;
+}
+
+function _testResetHub() {
+  clients.contents = [];
 }
 
 function notifyReload() {
@@ -109,5 +124,7 @@ export {
   register,
   unregister,
   notifyReload,
+  _testGetRegisteredCount,
+  _testResetHub,
 }
 /* Http Not a pure module */
