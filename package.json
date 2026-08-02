@@ -13,7 +13,7 @@
     "build": "rescript",
     "dev": "rescript build -watch",
     "start": "node bin.mjs",
-    "test:unit": "npm run build && node_modules/.bin/retest src/Utils/Mime_test.res.js src/Utils/Debounce_test.res.js src/Utils/Logger_test.res.js src/Security/Headers_test.res.js src/Security/RateLimiter_test.res.js src/Watcher/Rules_test.res.js src/Utils/Path_test.res.js src/Cli/Parser_test.res.js src/Ui/Templates_test.res.js src/Ui/Injector_test.res.js src/Server/Handler_test.res.js tests/unit/node_buffer_test.res.js tests/unit/node_events_test.res.js tests/unit/ws_hub_test.res.js",
+    "test:unit": "npm run build && node_modules/.bin/retest src/Utils/Mime_test.res.js src/Utils/Debounce_test.res.js src/Utils/Logger_test.res.js src/Security/Headers_test.res.js src/Security/RateLimiter_test.res.js src/Watcher/Rules_test.res.js src/Utils/Path_test.res.js src/Cli/Parser_test.res.js src/Ui/Templates_test.res.js src/Ui/Injector_test.res.js src/Server/Handler_test.res.js tests/unit/node_buffer_test.res.js tests/unit/node_events_test.res.js tests/unit/ws_hub_test.res.js tests/unit/process_test.res.js",
     "test:integration": "node --test tests/integration/node_bindings_fs.test.js tests/integration/node_bindings_sys.test.js tests/integration/http_server.test.js tests/integration/ws_hub.test.js",
     "test": "npm run build && npm run test:unit && npm run test:integration"
   },
