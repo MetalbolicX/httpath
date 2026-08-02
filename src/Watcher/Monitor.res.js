@@ -3,156 +3,104 @@
 import * as Rules from "./Rules.res.js";
 import * as Timers from "../Node/Timers.res.js";
 import * as FsWatch from "../Node/FsWatch.res.js";
-import * as Signals from "../Node/Signals.res.js";
 import * as IgnoreMatcher from "./IgnoreMatcher.res.js";
 import * as Primitive_option from "@rescript/runtime/lib/es6/Primitive_option.js";
 
 function start(dir, ignorePatterns, enableLiveReload, restartOnChange, onReload, onRestart) {
-  let cooldownActive = {
-    contents: false
+  let lastRestartAt = {
+    contents: 0.0
   };
-  let cancelled = {
-    contents: false
-  };
-  let processing = {
-    contents: false
-  };
-  let pendingTimeoutId = {
-    contents: undefined
+  let h = {
+    watcher: null,
+    cancelled: false,
+    processing: false,
+    pendingTimeoutId: undefined,
+    _emit: param => {}
   };
   let checkCooldown = () => {
-    if (cooldownActive.contents) {
+    let now = Date.now();
+    if (now - lastRestartAt.contents < 1000.0) {
       return false;
     } else {
-      cooldownActive.contents = true;
+      lastRestartAt.contents = now;
       return true;
     }
   };
   let onEvent = event => {
+    if (typeof event !== "object") {
+      return;
+    }
     if (event.TAG !== "Modified") {
       return;
     }
-    if (cancelled.contents || processing.contents) {
+    if (h.cancelled || h.processing) {
       return;
     }
     let filename = event._0;
-    processing.contents = true;
-    try {
-      if (IgnoreMatcher.matchesIgnorePattern(filename, ignorePatterns)) {
-        processing.contents = false;
+    h.processing = true;
+    if (IgnoreMatcher.matchesIgnorePattern(filename, ignorePatterns)) {
+      h.processing = false;
+      return;
+    }
+    let id = h.pendingTimeoutId;
+    if (id !== undefined) {
+      Timers.clearTimeout(Primitive_option.valFromOption(id));
+    }
+    let timeoutId = Timers.setTimeout(() => {
+      if (h.cancelled) {
+        h.pendingTimeoutId = undefined;
+        h.processing = false;
         return;
       }
-      let id = pendingTimeoutId.contents;
-      if (id !== undefined) {
-        Timers.clearTimeout(Primitive_option.valFromOption(id));
-      }
-      let timeoutId = Timers.setTimeout(() => {
-        if (cancelled.contents) {
-          pendingTimeoutId.contents = undefined;
-          processing.contents = false;
-          return;
-        }
-        let action = restartOnChange ? "Restart" : Rules.decide(filename);
-        switch (action) {
-          case "Restart" :
-            if (checkCooldown()) {
-              if (enableLiveReload) {
-                onReload();
-              }
-              onRestart();
-            }
-            break;
-          case "BrowserReload" :
+      let action = restartOnChange ? "Restart" : Rules.decide(filename);
+      switch (action) {
+        case "Restart" :
+          if (checkCooldown()) {
             if (enableLiveReload) {
               onReload();
             }
-            break;
-          case "Ignore" :
-            break;
-        }
-        pendingTimeoutId.contents = undefined;
-        processing.contents = false;
-      }, 500);
-      pendingTimeoutId.contents = Primitive_option.some(timeoutId);
-      return;
-    } catch (exn) {
-      pendingTimeoutId.contents = undefined;
-      processing.contents = false;
-      return;
-    }
+            onRestart();
+          }
+          break;
+        case "BrowserReload" :
+          if (enableLiveReload) {
+            onReload();
+          }
+          break;
+        case "Ignore" :
+          break;
+      }
+      h.pendingTimeoutId = undefined;
+      h.processing = false;
+    }, 500);
+    h.pendingTimeoutId = Primitive_option.some(timeoutId);
   };
-  let watcher = FsWatch.watch(dir, {
+  h._emit = onEvent;
+  let watcher = FsWatch.startWatcher(dir, {
     recursive: true
   }, onEvent);
-  let sigintHandlerRef = {
-    contents: undefined
-  };
-  let sigtermHandlerRef = {
-    contents: undefined
-  };
-  let sigintHandler = () => {
-    cancelled.contents = true;
-    let h = sigintHandlerRef.contents;
-    if (h !== undefined) {
-      Signals.offSignal("SIGINT", h);
-    }
-    let h$1 = sigtermHandlerRef.contents;
-    if (h$1 !== undefined) {
-      Signals.offSignal("SIGTERM", h$1);
-    }
-    FsWatch.close(watcher);
-    let id = pendingTimeoutId.contents;
-    if (id !== undefined) {
-      Timers.clearTimeout(Primitive_option.valFromOption(id));
-    }
-    pendingTimeoutId.contents = undefined;
-  };
-  let sigtermHandler = () => {
-    cancelled.contents = true;
-    let h = sigintHandlerRef.contents;
-    if (h !== undefined) {
-      Signals.offSignal("SIGINT", h);
-    }
-    let h$1 = sigtermHandlerRef.contents;
-    if (h$1 !== undefined) {
-      Signals.offSignal("SIGTERM", h$1);
-    }
-    FsWatch.close(watcher);
-    let id = pendingTimeoutId.contents;
-    if (id !== undefined) {
-      Timers.clearTimeout(Primitive_option.valFromOption(id));
-    }
-    pendingTimeoutId.contents = undefined;
-  };
-  sigintHandlerRef.contents = sigintHandler;
-  sigtermHandlerRef.contents = sigtermHandler;
-  Signals.onSignal("SIGINT", sigintHandler);
-  Signals.onSignal("SIGTERM", sigtermHandler);
-  return {
-    watcher: watcher,
-    pendingTimeout: undefined,
-    cancelled: false,
-    processing: false,
-    sigintHandler: sigintHandler,
-    sigtermHandler: sigtermHandler
-  };
+  h.watcher = watcher;
+  return h;
 }
 
 function cancel(h) {
   h.cancelled = true;
-  Signals.offSignal("SIGINT", h.sigintHandler);
-  Signals.offSignal("SIGTERM", h.sigtermHandler);
   FsWatch.close(h.watcher);
-  let id = h.pendingTimeout;
+  let id = h.pendingTimeoutId;
   if (id !== undefined) {
     Timers.clearTimeout(Primitive_option.valFromOption(id));
   }
-  h.pendingTimeout = undefined;
+  h.pendingTimeoutId = undefined;
   h.processing = false;
+}
+
+function _testEmit(h, event) {
+  h._emit(event);
 }
 
 export {
   start,
   cancel,
+  _testEmit,
 }
-/* FsWatch Not a pure module */
+/* No side effect */

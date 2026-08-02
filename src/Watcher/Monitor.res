@@ -14,8 +14,6 @@ type handle = {
   mutable cancelled: bool,
   mutable processing: bool,
   mutable pendingTimeoutId: option<Timers.timeoutId>,
-  mutable sigintHandler: unit => unit,
-  mutable sigtermHandler: unit => unit,
   mutable _emit: Types.fsEvent => unit,
 }
 
@@ -40,8 +38,6 @@ let start = (
     cancelled: false,
     processing: false,
     pendingTimeoutId: None,
-    sigintHandler: () => (),
-    sigtermHandler: () => (),
     _emit: (_) => (),
   }
 
@@ -115,68 +111,18 @@ let start = (
   // Now set the test seam before starting the watcher.
   h._emit = onEvent
 
-  let watcher = FsWatch.watch(
+  let watcher = FsWatch.startWatcher(
     ~path=dir,
     ~options={recursive: true},
     ~onEvent,
   )
   h.watcher = watcher
 
-  // Signal handlers — stored in refs so they can reference each other.
-  let sigintHandlerRef = ref(None: option<unit => unit>)
-  let sigtermHandlerRef = ref(None: option<unit => unit>)
-
-  let sigintHandler = () => {
-    h.cancelled = true
-    switch sigintHandlerRef.contents {
-    | Some(handler) => Signals.offSignal("SIGINT", handler)
-    | None => ()
-    }
-    switch sigtermHandlerRef.contents {
-    | Some(handler) => Signals.offSignal("SIGTERM", handler)
-    | None => ()
-    }
-    FsWatch.close(h.watcher)
-    switch h.pendingTimeoutId {
-    | Some(id) => Timers.clearTimeout(id)
-    | None => ()
-    }
-    h.pendingTimeoutId = None
-  }
-
-  let sigtermHandler = () => {
-    h.cancelled = true
-    switch sigintHandlerRef.contents {
-    | Some(handler) => Signals.offSignal("SIGINT", handler)
-    | None => ()
-    }
-    switch sigtermHandlerRef.contents {
-    | Some(handler) => Signals.offSignal("SIGTERM", handler)
-    | None => ()
-    }
-    FsWatch.close(h.watcher)
-    switch h.pendingTimeoutId {
-    | Some(id) => Timers.clearTimeout(id)
-    | None => ()
-    }
-    h.pendingTimeoutId = None
-  }
-
-  sigintHandlerRef := Some(sigintHandler)
-  sigtermHandlerRef := Some(sigtermHandler)
-  h.sigintHandler = sigintHandler
-  h.sigtermHandler = sigtermHandler
-
-  Signals.onSignal("SIGINT", sigintHandler)
-  Signals.onSignal("SIGTERM", sigtermHandler)
-
   h
 }
 
 let cancel = (h: handle): unit => {
   h.cancelled = true
-  Signals.offSignal("SIGINT", h.sigintHandler)
-  Signals.offSignal("SIGTERM", h.sigtermHandler)
   FsWatch.close(h.watcher)
   switch h.pendingTimeoutId {
   | Some(id) => Timers.clearTimeout(id)
