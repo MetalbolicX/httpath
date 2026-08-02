@@ -16,16 +16,16 @@ let makeAbortCallback = () => {
 // Test: make creates an AbortController instance
 // ---------------------------------------------------------------------------
 
-test("AbortController.make creates a controller", () => {
+test("AbortController.make creates a controller with a valid signal", () => {
   let controller = AbortController.make()
-  let t = switch controller {
-  | _ => true
-  }
+  let sig = AbortController.signal(controller)
+  // Verify the binding returns a truthy JS object (typeof !== "undefined").
+  let isObject = Js.typeof(sig) != "undefined"
   assertion(
-    ~message="make returns a controller instance",
-    ~operator="=",
+    ~message="make returns a controller with a valid signal (typeof !== undefined)",
+    ~operator="==",
     (a, b) => a == b,
-    t,
+    isObject,
     true,
   )
 })
