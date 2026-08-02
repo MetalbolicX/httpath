@@ -7,18 +7,17 @@
 // - No global state; start returns a handle.
 // - Dispatch is synchronous after debounce.
 
+@scope("Date") @val external now: unit => float = "now"
+
 type handle = {
-  watcher: FsWatch.watcher,
-  mutable pendingTimeout: option<Timers.timeoutId>,
+  mutable watcher: FsWatch.watcher,
   mutable cancelled: bool,
   mutable processing: bool,
-  sigintHandler: unit => unit,
-  sigtermHandler: unit => unit,
+  mutable pendingTimeoutId: option<Timers.timeoutId>,
+  mutable sigintHandler: unit => unit,
+  mutable sigtermHandler: unit => unit,
+  mutable _emit: Types.fsEvent => unit,
 }
-
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -32,150 +31,146 @@ let start = (
   ~onReload: unit => unit,
   ~onRestart: unit => unit,
 ): handle => {
-  let cooldownActive = ref(false)
-  let cancelled = ref(false)
-  let processing = ref(false)
+  let cooldownMs = 1000.0
+  let lastRestartAt = ref(0.0)
 
-  // pendingTimeoutId ref is used by both callbacks and cancel.
-  // When timeout fires, it sets itself to None.
-  // When cancel is called, it clears the timeout and sets to None.
-  // When new event arrives, it replaces the old timeout.
-  let pendingTimeoutId = ref(None: option<Timers.timeoutId>)
+  // Allocate handle first so callbacks can capture it.
+  let h: handle = {
+    watcher: Obj.magic(null),
+    cancelled: false,
+    processing: false,
+    pendingTimeoutId: None,
+    sigintHandler: () => (),
+    sigtermHandler: () => (),
+    _emit: (_) => (),
+  }
 
   let checkCooldown = (): bool => {
-    if cooldownActive.contents {
+    let now = now()
+    if now -. lastRestartAt.contents < cooldownMs {
       false
     } else {
-      cooldownActive.contents = true
+      lastRestartAt := now
       true
     }
   }
 
-  // File change callback.
+  // File change callback — reads/writes handle fields directly.
   let onEvent = (event: Types.fsEvent) => {
     switch event {
     | Types.Modified(filename) =>
-      if cancelled.contents || processing.contents {
+      if h.cancelled || h.processing {
         () // drop: cancelled or re-entrancy guard
       } else {
-        processing := true
-        try {
-          if IgnoreMatcher.matchesIgnorePattern(filename, ignorePatterns) {
-            processing := false
-            () // drop: ignored
-          } else {
-            // Clear existing timeout (trailing debounce — last event wins).
-            switch pendingTimeoutId.contents {
-            | Some(id) => Timers.clearTimeout(id)
-            | None => ()
-            }
-            let timeoutId = Timers.setTimeout(
-              () => {
-                if cancelled.contents {
-                  pendingTimeoutId := None
-                  processing := false
-                  ()
-                } else {
-                  // Determine action.
-                  let action =
-                    if restartOnChange {
-                      Rules.Restart
-                    } else {
-                      Rules.decide(filename)
-                    }
-                  switch action {
-                  | Rules.Ignore => ()
-                  | Rules.BrowserReload =>
+        h.processing = true
+        if IgnoreMatcher.matchesIgnorePattern(filename, ignorePatterns) {
+          h.processing = false
+          () // drop: ignored
+        } else {
+          // Clear existing timeout (trailing debounce — last event wins).
+          switch h.pendingTimeoutId {
+          | Some(id) => Timers.clearTimeout(id)
+          | None => ()
+          }
+          let timeoutId = Timers.setTimeout(
+            () => {
+              if h.cancelled {
+                h.pendingTimeoutId = None
+                h.processing = false
+                ()
+              } else {
+                let action =
+                  if restartOnChange {
+                    Rules.Restart
+                  } else {
+                    Rules.decide(filename)
+                  }
+                switch action {
+                | Rules.Ignore => ()
+                | Rules.BrowserReload =>
+                  if enableLiveReload {
+                    onReload()
+                  }
+                | Rules.Restart =>
+                  if checkCooldown() {
                     if enableLiveReload {
                       onReload()
                     }
-                  | Rules.Restart =>
-                    if checkCooldown() {
-                      // onReload first if enableLiveReload (REQ-FW-6).
-                      if enableLiveReload {
-                        onReload()
-                      }
-                      onRestart()
-                    }
+                    onRestart()
                   }
-                  pendingTimeoutId := None
-                  processing := false
                 }
-              },
-              500,
-            )
-            pendingTimeoutId := Some(timeoutId)
-          }
-        } catch {
-        | _ =>
-          pendingTimeoutId := None
-          processing := false
+                h.pendingTimeoutId = None
+                h.processing = false
+              }
+            },
+            500,
+          )
+          h.pendingTimeoutId = Some(timeoutId)
         }
       }
     | _ => () // only Modified from FsWatch
     }
   }
 
+  // Now set the test seam before starting the watcher.
+  h._emit = onEvent
+
   let watcher = FsWatch.watch(
     ~path=dir,
     ~options={recursive: true},
     ~onEvent,
   )
+  h.watcher = watcher
 
   // Signal handlers — stored in refs so they can reference each other.
   let sigintHandlerRef = ref(None: option<unit => unit>)
   let sigtermHandlerRef = ref(None: option<unit => unit>)
 
   let sigintHandler = () => {
-    cancelled := true
+    h.cancelled = true
     switch sigintHandlerRef.contents {
-    | Some(h) => Signals.offSignal("SIGINT", h)
+    | Some(handler) => Signals.offSignal("SIGINT", handler)
     | None => ()
     }
     switch sigtermHandlerRef.contents {
-    | Some(h) => Signals.offSignal("SIGTERM", h)
+    | Some(handler) => Signals.offSignal("SIGTERM", handler)
     | None => ()
     }
-    FsWatch.close(watcher)
-    switch pendingTimeoutId.contents {
+    FsWatch.close(h.watcher)
+    switch h.pendingTimeoutId {
     | Some(id) => Timers.clearTimeout(id)
     | None => ()
     }
-    pendingTimeoutId := None
+    h.pendingTimeoutId = None
   }
 
   let sigtermHandler = () => {
-    cancelled := true
+    h.cancelled = true
     switch sigintHandlerRef.contents {
-    | Some(h) => Signals.offSignal("SIGINT", h)
+    | Some(handler) => Signals.offSignal("SIGINT", handler)
     | None => ()
     }
     switch sigtermHandlerRef.contents {
-    | Some(h) => Signals.offSignal("SIGTERM", h)
+    | Some(handler) => Signals.offSignal("SIGTERM", handler)
     | None => ()
     }
-    FsWatch.close(watcher)
-    switch pendingTimeoutId.contents {
+    FsWatch.close(h.watcher)
+    switch h.pendingTimeoutId {
     | Some(id) => Timers.clearTimeout(id)
     | None => ()
     }
-    pendingTimeoutId := None
+    h.pendingTimeoutId = None
   }
 
   sigintHandlerRef := Some(sigintHandler)
   sigtermHandlerRef := Some(sigtermHandler)
+  h.sigintHandler = sigintHandler
+  h.sigtermHandler = sigtermHandler
 
   Signals.onSignal("SIGINT", sigintHandler)
   Signals.onSignal("SIGTERM", sigtermHandler)
 
-  {
-    watcher,
-    pendingTimeout: None,
-    cancelled: false,
-    processing: false,
-    sigintHandler,
-    sigtermHandler,
-  }
+  h
 }
 
 let cancel = (h: handle): unit => {
@@ -183,10 +178,17 @@ let cancel = (h: handle): unit => {
   Signals.offSignal("SIGINT", h.sigintHandler)
   Signals.offSignal("SIGTERM", h.sigtermHandler)
   FsWatch.close(h.watcher)
-  switch h.pendingTimeout {
+  switch h.pendingTimeoutId {
   | Some(id) => Timers.clearTimeout(id)
   | None => ()
   }
-  h.pendingTimeout = None
+  h.pendingTimeoutId = None
   h.processing = false
+}
+
+// test-only: emit a synthetic file-change event directly into the Monitor's
+// internal event path. Used by unit tests to exercise debounce, dispatch,
+// re-entrancy, and cooldown without requiring a real filesystem.
+let _testEmit = (h: handle, event: Types.fsEvent): unit => {
+  h._emit(event)
 }

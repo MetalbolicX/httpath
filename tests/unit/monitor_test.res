@@ -5,6 +5,19 @@
 open Test
 
 // ---------------------------------------------------------------------------
+// Fake clock import — controls setTimeout/clearTimeout globally.
+// ---------------------------------------------------------------------------
+
+@module("./monitor_socket.mjs")
+external makeFakeClock: unit => unit = "makeFakeClock"
+
+@module("./monitor_socket.mjs")
+external advanceTime: int => unit = "advanceTime"
+
+@module("./monitor_socket.mjs")
+external restoreClock: unit => unit = "restoreClock"
+
+// ---------------------------------------------------------------------------
 // Helper: collect reload/restart calls
 // ---------------------------------------------------------------------------
 
@@ -126,12 +139,205 @@ test("Monitor.start accepts all required labeled args", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Integration test: reload callback NOT called when enableLiveReload=false
-// (Using real 50ms timers — not using fake clock for simplicity)
-// This test exercises the enableLiveReload flag without fs.watch.
+// REQ-FW-2: Debounce 500ms — only one dispatch for rapid events
+// Uses fake clock to advance past debounce without real delays.
 // ---------------------------------------------------------------------------
 
-test("BrowserReload action does NOT call onReload when enableLiveReload=false", () => {
+test("Debounce collapses rapid events into one dispatch (REQ-FW-2)", () => {
+  makeFakeClock()
+  let tmpDir = "tests/unit/_tmp_monitor_test"
+  let (reloadFn, reloadCount) = makeReloadCallback()
+  let (restartFn, _restartCount) = makeRestartCallback()
+  let handle = Monitor.start(
+    ~dir=tmpDir,
+    ~ignorePatterns=[],
+    ~enableLiveReload=true,
+    ~restartOnChange=false,
+    ~onReload=reloadFn,
+    ~onRestart=restartFn,
+  )
+  // Fire 5 events within 100ms (fake time).
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  // Advance past 500ms debounce window.
+  advanceTime(600)
+  assertion(
+    ~message="only one dispatch fires despite 5 rapid events",
+    ~operator="=",
+    (a, b) => a == b,
+    reloadCount.contents,
+    1,
+  )
+  Monitor.cancel(handle)
+  restoreClock()
+})
+
+// ---------------------------------------------------------------------------
+// REQ-FW-5: BrowserReload dispatch — onReload called with enableLiveReload=true
+// Uses fake clock + _emit test seam.
+// ---------------------------------------------------------------------------
+
+test("BrowserReload dispatches onReload when enableLiveReload=true (REQ-FW-5)", () => {
+  makeFakeClock()
+  let tmpDir = "tests/unit/_tmp_monitor_test"
+  let (reloadFn, reloadCount) = makeReloadCallback()
+  let (restartFn, _restartCount) = makeRestartCallback()
+  let handle = Monitor.start(
+    ~dir=tmpDir,
+    ~ignorePatterns=[],
+    ~enableLiveReload=true,
+    ~restartOnChange=false,
+    ~onReload=reloadFn,
+    ~onRestart=restartFn,
+  )
+  // Emit a BrowserReload-classified file (index.html).
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  // Advance past 500ms debounce.
+  advanceTime(600)
+  assertion(
+    ~message="onReload called once for HTML file with enableLiveReload=true",
+    ~operator="=",
+    (a, b) => a == b,
+    reloadCount.contents,
+    1,
+  )
+  Monitor.cancel(handle)
+  restoreClock()
+})
+
+// ---------------------------------------------------------------------------
+// REQ-FW-6: Restart dispatch — onRestart called for JS/config files
+// Uses fake clock + _emit test seam.
+// ---------------------------------------------------------------------------
+
+test("Restart dispatches onRestart for JS file (REQ-FW-6)", () => {
+  makeFakeClock()
+  let tmpDir = "tests/unit/_tmp_monitor_test"
+  let (reloadFn, _reloadCount) = makeReloadCallback()
+  let (restartFn, restartCount) = makeRestartCallback()
+  let handle = Monitor.start(
+    ~dir=tmpDir,
+    ~ignorePatterns=[],
+    ~enableLiveReload=false,
+    ~restartOnChange=false,
+    ~onReload=reloadFn,
+    ~onRestart=restartFn,
+  )
+  // Emit a Restart-classified file (app.js).
+  Monitor._testEmit(handle, Types.Modified("app.js"))
+  // Advance past 500ms debounce.
+  advanceTime(600)
+  assertion(
+    ~message="onRestart called once for JS file",
+    ~operator="=",
+    (a, b) => a == b,
+    restartCount.contents,
+    1,
+  )
+  Monitor.cancel(handle)
+  restoreClock()
+})
+
+// ---------------------------------------------------------------------------
+// REQ-FW-7: Re-entrancy guard — concurrent events are dropped
+// ---------------------------------------------------------------------------
+
+test("Re-entrancy guard drops events during in-flight dispatch (REQ-FW-7)", () => {
+  makeFakeClock()
+  let tmpDir = "tests/unit/_tmp_monitor_test"
+  let (reloadFn, _reloadCount) = makeReloadCallback()
+  let (restartFn, restartCount) = makeRestartCallback()
+  let handle = Monitor.start(
+    ~dir=tmpDir,
+    ~ignorePatterns=[],
+    ~enableLiveReload=true,
+    ~restartOnChange=true, // restart on any change
+    ~onReload=reloadFn,
+    ~onRestart=restartFn,
+  )
+  // Fire first event — this sets processing=true and starts debounce timer.
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  // Fire second event while first debounce is still pending.
+  // Re-entrancy guard should drop it (processing is still true).
+  Monitor._testEmit(handle, Types.Modified("style.css"))
+  // Advance past 500ms debounce — only the first event should dispatch.
+  advanceTime(600)
+  assertion(
+    ~message="only one dispatch fires even with concurrent events",
+    ~operator="=",
+    (a, b) => a == b,
+    restartCount.contents,
+    1,
+  )
+  Monitor.cancel(handle)
+  restoreClock()
+})
+
+// ---------------------------------------------------------------------------
+// REQ-PR-2: Cooldown gate — second restart within 1000ms is dropped
+// ---------------------------------------------------------------------------
+
+test("Cooldown gate drops restart within 1000ms (REQ-PR-2)", () => {
+  makeFakeClock()
+  let tmpDir = "tests/unit/_tmp_monitor_test"
+  let (reloadFn, _reloadCount) = makeReloadCallback()
+  let (restartFn, restartCount) = makeRestartCallback()
+  let handle = Monitor.start(
+    ~dir=tmpDir,
+    ~ignorePatterns=[],
+    ~enableLiveReload=false,
+    ~restartOnChange=true, // restart on any change
+    ~onReload=reloadFn,
+    ~onRestart=restartFn,
+  )
+  // First event: debounce fires, restart dispatched, cooldown = 0.
+  Monitor._testEmit(handle, Types.Modified("app.js"))
+  advanceTime(600)
+  assertion(
+    ~message="first restart fires",
+    ~operator="=",
+    (a, b) => a == b,
+    restartCount.contents,
+    1,
+  )
+  // Second event within 500ms (fake time 0): new debounce timer started.
+  Monitor._testEmit(handle, Types.Modified("style.css"))
+  // Advance past debounce but BEFORE cooldown expires (cooldown = 0, need 1000ms).
+  // At fake time 1100: cooldown check: 1100 - 0 = 1100 >= 1000 → cooldown expired.
+  // So this second restart WOULD fire. We want to test when it's still active.
+  // Advance to fake time 800 (cooldown: 800 < 1000 → still active).
+  advanceTime(800) // fake time now 800 + 600 = 1400
+  // Timer fires at fake time 1100 (600 + 500), but cooldown at 1100: 1100 < 1000? No.
+  // Actually advanceTime(800) fires timers with fireAt <= 1400.
+  // Timer 1: fireAt=600 (from event 1). 600 <= 1400 → fires.
+  // Timer 2: fireAt=1100 (from event 2). 1100 <= 1400 → fires.
+  // But at t=1100, cooldown (from t=600) = 1100-600 = 500 < 1000 → blocked.
+  // Hmm, advanceTime(800) advances currentTime from 600 to 1400 and fires both timers.
+  // Timer 1: fires at fake time 600 (before advanceTime returns).
+  // Timer 2: fires at fake time 1100 (during advanceTime).
+  // After timer 2 at fake time 1100: cooldown = 1100-600 = 500 < 1000 → blocked.
+  // So restartCount stays at 1. Good!
+  assertion(
+    ~message="second restart within cooldown window is dropped",
+    ~operator="=",
+    (a, b) => a == b,
+    restartCount.contents,
+    1,
+  )
+  Monitor.cancel(handle)
+  restoreClock()
+})
+
+// ---------------------------------------------------------------------------
+// REQ-FW-5 (inverse): BrowserReload NOT called when enableLiveReload=false
+// Uses fake clock + _emit test seam. Replaces the old tautological test.
+// ---------------------------------------------------------------------------
+
+test("BrowserReload does NOT call onReload when enableLiveReload=false (REQ-FW-5)", () => {
+  makeFakeClock()
   let tmpDir = "tests/unit/_tmp_monitor_test"
   let (reloadFn, reloadCount) = makeReloadCallback()
   let (restartFn, _restartCount) = makeRestartCallback()
@@ -143,11 +349,10 @@ test("BrowserReload action does NOT call onReload when enableLiveReload=false", 
     ~onReload=reloadFn,
     ~onRestart=restartFn,
   )
-  // Sleep briefly to allow event processing.
-  let fn = () => ()
-  let _t = Timers.setTimeout(fn, 100)
-  Timers.clearTimeout(_t)
-  Monitor.cancel(handle)
+  // Emit a BrowserReload-classified file (index.html).
+  Monitor._testEmit(handle, Types.Modified("index.html"))
+  // Advance past 500ms debounce.
+  advanceTime(600)
   assertion(
     ~message="onReload not called when enableLiveReload=false",
     ~operator="=",
@@ -155,6 +360,8 @@ test("BrowserReload action does NOT call onReload when enableLiveReload=false", 
     reloadCount.contents,
     0,
   )
+  Monitor.cancel(handle)
+  restoreClock()
 })
 
 // ---------------------------------------------------------------------------

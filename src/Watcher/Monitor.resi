@@ -12,3 +12,8 @@ let start: (
 ) => handle
 
 let cancel: handle => unit
+
+// test-only: inject a synthetic file-change event directly into the Monitor's
+// internal event path. Used by unit tests to exercise debounce, dispatch,
+// re-entrancy, and cooldown without requiring a real filesystem.
+let _testEmit: (handle, Types.fsEvent) => unit
