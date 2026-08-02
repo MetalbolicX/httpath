@@ -88,6 +88,12 @@
       "jsr:@std/media-types@^1.1.0",
       "jsr:@std/path@^1.1.4",
       "jsr:@std/testing@^1.0.18"
-    ]
+    ],
+    "packageJson": {
+      "dependencies": [
+        "npm:rescript-test@8.0.1",
+        "npm:rescript@^12.3.0"
+      ]
+    }
   }
 }
