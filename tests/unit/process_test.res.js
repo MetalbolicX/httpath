@@ -33,6 +33,23 @@ Test.test("Process.exit(42) records exit code 42", () => {
   Test.assertion("exit(42) records code 42", "=", (a, b) => a === b, code, 42);
 });
 
+Test.test("Process.argv is an array with at least 2 elements", () => {
+  let len = Process.argv.length;
+  Test.assertion("argv has at least 2 elements (node + script)", ">=", (a, b) => a >= b, len, 2);
+});
+
+Test.test("Process.argv[0] is the node executable path", () => {
+  let p = Process.argv[0];
+  let nodePath = p !== undefined ? p : "";
+  Test.assertion("argv[0] is non-empty string", "=", (a, b) => a === b, nodePath !== "", true);
+});
+
+Test.test("Process.argv[1] is the script path", () => {
+  let p = Process.argv[1];
+  let scriptPath = p !== undefined ? p : "";
+  Test.assertion("argv[1] is non-empty string", "=", (a, b) => a === b, scriptPath !== "", true);
+});
+
 export {
   _getLastExitCode,
   _resetExitCode,
