@@ -2,11 +2,6 @@
 // Signal ownership: Httpath is the SOLE signal owner (per design Q3a).
 // Monitor does NOT register SIGINT/SIGTERM handlers.
 
-/// onRestart callback: warn that restart is not yet implemented.
-let warnRestart = () => {
-  Console.warn("[Httpath] restart-on-change requested but Restart module is not yet implemented")
-}
-
 /// Start the HTTP server + Monitor with the given handler and config.
 let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
   let controller = AbortController.make()
@@ -21,7 +16,7 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
     Promise.resolve()
   }
 
-  let {server: _server, closed} = Http.startServer(
+  let {server, closed} = Http.startServer(
     ~port=config.port,
     ~hostname=config.hostname,
     ~handler,
@@ -29,17 +24,40 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
     ~signal=sig,
   )
 
-  let monitorHandle = Monitor.start(
+  // Allocate the monitor handle first so the onRestart closure can reference
+  // it before Monitor.start returns (Monitor may invoke onRestart synchronously
+  // on the first file event).
+  let monitorHandle = ref((None: option<Monitor.handle>))
+
+  let onRestart = () => {
+    let _ = Http.closeServer(server)
+    switch monitorHandle.contents {
+    | Some(h) => Monitor.cancel(h)
+    | None => ()
+    }
+    WsHub.closeAll()
+    Restart.reload(
+      ~execPath=Process.execPath,
+      ~entrypoint="bin.mjs",
+      ~argv=Array.slice(Process.argv, ~start=2, ~end=Array.length(Process.argv)),
+    )
+  }
+
+  let handle = Monitor.start(
     ~dir=config.directory,
     ~ignorePatterns=config.ignorePatterns,
     ~enableLiveReload=config.enableLiveReload,
     ~restartOnChange=config.restartOnChange,
     ~onReload=WsHub.notifyReload,
-    ~onRestart=warnRestart,
+    ~onRestart,
   )
+  monitorHandle := Some(handle)
 
   let shutdown = () => {
-    Monitor.cancel(monitorHandle)
+    switch monitorHandle.contents {
+    | Some(h) => Monitor.cancel(h)
+    | None => ()
+    }
     WsHub.closeAll()
     AbortController.abort(controller)
   }
