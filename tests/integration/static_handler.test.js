@@ -230,6 +230,52 @@ test("GET /README.md → 200 + correct content-type + content-length", async () 
 });
 
 // ---------------------------------------------------------------------------
+// Test: GET /logo.svg → 200 + content-disposition attachment; filename="logo.svg"
+// Regression: replaceByRe args were swapped, causing basename to be the
+// replacement string instead of the source, resulting in filename="".
+// ---------------------------------------------------------------------------
+
+test("GET /logo.svg → 200 + content-disposition attachment; filename=\"logo.svg\"", async () => {
+  const port = PORT_BASE + 10;
+  const tmpDir = mkdtempSync(path.join("/tmp", "httpath-static-"));
+  const fileContent = "<svg></svg>";
+  writeFileSync(path.join(tmpDir, "logo.svg"), fileContent);
+
+  const { scriptPath } = makeChildScript(port, tmpDir, null);
+
+  const child = spawn(process.execPath, [scriptPath], {
+    stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(),
+  });
+
+  try {
+    await new Promise((r) => setTimeout(r, 200));
+    await waitForChildReady(child, port);
+
+    const res = await httpGet(port, "/logo.svg");
+
+    assert.strictEqual(res.statusCode, 200, `Expected 200, got ${res.statusCode}`);
+    const cd = res.headers["content-disposition"];
+    assert.ok(cd, `Expected content-disposition header, got ${JSON.stringify(res.headers)}`);
+    assert.ok(
+      cd.startsWith("attachment; filename=\""),
+      `Expected content-disposition to start with 'attachment; filename="', got '${cd}'`
+    );
+    assert.ok(
+      cd.includes("logo.svg"),
+      `Expected content-disposition to contain 'logo.svg', got '${cd}'`
+    );
+
+    child.kill("SIGTERM");
+    await new Promise((r) => child.on("exit", r));
+  } finally {
+    if (child.exitCode === null) child.kill("SIGTERM");
+    rmSync(scriptPath, { force: true });
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Test: GET /page.html with enableLiveReload=true → HTML with injected script
 // ---------------------------------------------------------------------------
 
