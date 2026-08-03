@@ -12,7 +12,6 @@ import * as Js_string from "@rescript/runtime/lib/es6/Js_string.js";
 import * as Node_Path from "../Node/Node_Path.res.js";
 import * as Templates from "../Ui/Templates.res.js";
 import * as Stdlib_Promise from "@rescript/runtime/lib/es6/Stdlib_Promise.js";
-import * as Stdlib_Nullable from "@rescript/runtime/lib/es6/Stdlib_Nullable.js";
 import * as Primitive_object from "@rescript/runtime/lib/es6/Primitive_object.js";
 
 function respond(status, headers, body, logLevel, logMsg) {
@@ -74,11 +73,22 @@ function getUpgradeHeader(headers) {
 }
 
 function classifyFsError(error) {
-  let msg = error.message;
-  if (!(msg == null) && Js_string.includes(msg, "ENOENT")) {
+  let inner = error._1;
+  let codeOpt = inner.code;
+  if (codeOpt === "ENOENT") {
     return 404;
   } else {
     return 500;
+  }
+}
+
+function errorMsg(error) {
+  let inner = error._1;
+  let msg = inner.message;
+  if (msg !== undefined) {
+    return msg;
+  } else {
+    return "Unknown error";
   }
 }
 
@@ -103,8 +113,7 @@ function serveFile(method, safePath, enableLiveReload, port) {
         body: "Empty"
       }
     });
-  }
-  if (enableLiveReload && mime.contentType === "text/html") {
+  } else if (enableLiveReload && mime.contentType === "text/html") {
     return Stdlib_Promise.$$catch(Fs.readTextFile(safePath).then(html => {
       let injected = Injector.injectLiveReloadScript(html, port);
       return Promise.resolve({
@@ -129,29 +138,47 @@ function serveFile(method, safePath, enableLiveReload, port) {
         body: "Empty"
       }
     }));
-  }
-  let finalHeaders;
-  if (mime.contentType === "image/svg+xml") {
-    let basename = Node_Path.basename(safePath);
-    let noQuotes = Js_string.replaceByRe(/\"/g, basename, "");
-    finalHeaders = baseHeaders.concat([[
-        "content-disposition",
-        "attachment; filename=\"" + noQuotes + "\""
-      ]]);
   } else {
-    finalHeaders = baseHeaders;
-  }
-  return Promise.resolve({
-    TAG: "Respond",
-    _0: {
-      status: 200,
-      headers: Headers.withSecurityHeaders(finalHeaders),
-      body: {
-        TAG: "File",
-        _0: safePath
+    return Stdlib_Promise.$$catch(Fs.stat(safePath).then(statInfo => {
+      let fileSize = Fs.statSize(statInfo);
+      let contentLengthHeader_1 = fileSize.toString();
+      let contentLengthHeader = [
+        "content-length",
+        contentLengthHeader_1
+      ];
+      let finalHeaders;
+      if (mime.contentType === "image/svg+xml") {
+        let basename = Node_Path.basename(safePath);
+        let noQuotes = Js_string.replaceByRe(/\"/g, basename, "");
+        finalHeaders = baseHeaders.concat([
+          contentLengthHeader,
+          [
+            "content-disposition",
+            "attachment; filename=\"" + noQuotes + "\""
+          ]
+        ]);
+      } else {
+        finalHeaders = baseHeaders.concat([contentLengthHeader]);
       }
-    }
-  });
+      return Promise.resolve({
+        TAG: "Respond",
+        _0: {
+          status: 200,
+          headers: Headers.withSecurityHeaders(finalHeaders),
+          body: {
+            TAG: "File",
+            _0: safePath
+          }
+        }
+      });
+    }), _error => {
+      let code = classifyFsError(_error);
+      return Promise.resolve(respond(code, [[
+          "content-type",
+          "text/plain; charset=utf-8"
+        ]], "Empty", "Error", code === 404 ? "404 Not Found: " + safePath : "500 Internal Server Error reading: " + safePath));
+    });
+  }
 }
 
 function handle(config, request) {
@@ -217,7 +244,7 @@ function handle(config, request) {
             ]], "Empty", "Error", "403 Forbidden (symlink): " + request.path));
         } else {
           return Stdlib_Promise.$$catch(Fs.lstat(safePath).then(lstatInfo => {
-            if (lstatInfo.isSymlink) {
+            if (Fs.statIsSymlink(lstatInfo)) {
               Logger.log("Error", "403 Forbidden: symlink target " + request.path);
               return Promise.resolve(respond(403, [[
                   "content-type",
@@ -225,10 +252,10 @@ function handle(config, request) {
                 ]], "Empty", "Error", "403 Forbidden (symlink target): " + request.path));
             } else {
               return Stdlib_Promise.$$catch(Fs.stat(safePath).then(statInfo => {
-                if (statInfo.isFile) {
+                if (Fs.statIsFile(statInfo)) {
                   return serveFile(upperMethod, safePath, config.enableLiveReload, config.port);
                 }
-                if (!statInfo.isDirectory) {
+                if (!Fs.statIsDirectory(statInfo)) {
                   return Promise.resolve(respond(404, [[
                       "content-type",
                       "text/plain; charset=utf-8"
@@ -253,15 +280,15 @@ function handle(config, request) {
                   } else {
                     return Stdlib_Promise.$$catch(Fs.readdir(safePath).then(entries => {
                       let filtered = entries.filter(entry => {
-                        let relPath = entry.name;
+                        let relPath = Fs.direntName(entry);
                         let normalized = relPath.replace(/\\/g, "/");
                         return !Path.matchesPattern(normalized, ignorePatterns);
                       });
                       let fileEntries = filtered.map(entry => {
-                        let entryUrl = decodedPath === "/" ? "/" + encodeURIComponent(entry.name) : decodedPath + "/" + encodeURIComponent(entry.name);
+                        let entryUrl = decodedPath === "/" ? "/" + encodeURIComponent(Fs.direntName(entry)) : decodedPath + "/" + encodeURIComponent(Fs.direntName(entry));
                         return {
-                          name: entry.name,
-                          isDirectory: entry.isDirectory,
+                          name: Fs.direntName(entry),
+                          isDirectory: Fs.direntIsDirectory(entry),
                           url: entryUrl
                         };
                       });
@@ -316,7 +343,7 @@ function handle(config, request) {
                 }
                 let indexPath = Node_Path.join(safePath, "index.html");
                 return Stdlib_Promise.$$catch(Fs.lstat(indexPath).then(indexInfo => {
-                  if (indexInfo.isSymlink) {
+                  if (Fs.statIsSymlink(indexInfo)) {
                     Logger.log("Error", "403 Forbidden: index.html is symlink " + request.path);
                     return Promise.resolve(respond(403, [[
                         "content-type",
@@ -343,7 +370,7 @@ function handle(config, request) {
                 if (code === 404) {
                   Logger.log("Error", "404 Not Found: " + request.path);
                 } else {
-                  Logger.log("Error", "500 Internal Server Error: " + Stdlib_Nullable.getWithDefault(fsError.message, "Unknown error"));
+                  Logger.log("Error", "500 Internal Server Error: " + errorMsg(fsError));
                 }
                 return Promise.resolve(respond(code, [[
                     "content-type",
@@ -356,7 +383,7 @@ function handle(config, request) {
             if (code === 404) {
               Logger.log("Error", "404 Not Found: " + request.path);
             } else {
-              Logger.log("Error", "500 Internal Server Error: " + Stdlib_Nullable.getWithDefault(fsError.message, "Unknown error"));
+              Logger.log("Error", "500 Internal Server Error: " + errorMsg(fsError));
             }
             return Promise.resolve(respond(code, [[
                 "content-type",

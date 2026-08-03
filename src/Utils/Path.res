@@ -11,7 +11,12 @@ module Path = Node_Path
 let resolveSafePath = (~base: string, ~requested: string): option<string> => {
   try {
     let resolvedBase = Path.resolve(base, "")
-    let fullPath = Path.join(resolvedBase, Path.normalize(requested))
+    // NOTE: We do NOT normalize `requested` before joining, because
+    // Node_Path.normalize treats paths starting with "/" as absolute and
+    // resolves them to the root (e.g. normalize("/../../../etc/passwd") -> "/etc/passwd").
+    // The requested path is URL-decoded and always relative to base; use Path.join
+    // which correctly resolves ".." segments relative to base.
+    let fullPath = Path.join(resolvedBase, requested)
     let resolvedPath = Path.resolve(fullPath, "")
     let rel = Path.relative(resolvedBase, resolvedPath)
     if (
@@ -98,7 +103,7 @@ let hasSymlinkPrefix = (~base: string, ~target: string): promise<bool> => {
         let next = Path.join(current, Array.get(segments, idx)->Option.getOr(""))
         Fs.lstat(next)->Promise.then(
           stat => {
-            if (stat.isSymlink) {
+            if (Fs.statIsSymlink(stat)) {
               Promise.resolve(true)
             } else {
               walk(next, idx + 1)

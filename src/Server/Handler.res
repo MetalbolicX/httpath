@@ -68,14 +68,30 @@ let getUpgradeHeader = (headers: array<(string, string)>): option<string> => {
 // ---------------------------------------------------------------------------
 // classify Fs error to 404 (ENOENT) or 500 (other)
 // ---------------------------------------------------------------------------
+// classifyFsError — maps Node.js fs errors to HTTP status codes.
+// Promise.$$catch wraps JS errors as {RE_EXN_ID, _1} where _1 is the original.
+// ---------------------------------------------------------------------------
 
-@get external errorMessage: exn => Nullable.t<string> = "message"
+type jsError = { code: option<string>, message: option<string> }
+@get external unwrapExn: exn => jsError = "_1"
+@get external innerErrorCode: jsError => option<string> = "code"
+@get external innerErrorMessage: jsError => option<string> = "message"
 
 let classifyFsError = (error: exn): int => {
-  switch Nullable.toOption(errorMessage(error)) {
-  | Some(msg) if Js.String.includes(msg, "ENOENT") => 404
+  let inner = unwrapExn(error)
+  let codeOpt = innerErrorCode(inner)
+  switch codeOpt {
+  | Some(code) if code == "ENOENT" => 404
   | Some(_) => 500
   | None => 500
+  }
+}
+
+let errorMsg = (error: exn): string => {
+  let inner = unwrapExn(error)
+  switch innerErrorMessage(inner) {
+  | Some(msg) => msg
+  | None => "Unknown error"
   }
 }
 
@@ -102,7 +118,6 @@ let serveFile = (
       body: Types.Empty,
     }))
   } else if enableLiveReload && mime.contentType == "text/html" {
-    // HTML + live reload: read file and inject script
     Fs.readTextFile(safePath)->Promise.then(html => {
       let injected = Injector.injectLiveReloadScript(~html, ~port)
       Promise.resolve(Types.Respond({
@@ -119,18 +134,31 @@ let serveFile = (
     })
   } else {
     // Non-HTML or live reload disabled: stream file
-    let finalHeaders = if mime.contentType == "image/svg+xml" {
-      let basename = NodePath.basename(safePath)
-      let noQuotes = Js.String.replaceByRe(%re("/\"/g"), basename, "")
-      Array.concat(baseHeaders, [("content-disposition", "attachment; filename=\"" ++ noQuotes ++ "\"")])
-    } else {
-      baseHeaders
-    }
-    Promise.resolve(Types.Respond({
-      status: 200,
-      headers: Headers.withSecurityHeaders(finalHeaders),
-      body: Types.File(safePath),
-    }))
+    Fs.stat(safePath)->Promise.then(statInfo => {
+      let fileSize = Fs.statSize(statInfo)
+      let contentLengthHeader = ("content-length", Js.Int.toString(fileSize))
+      let finalHeaders = if mime.contentType == "image/svg+xml" {
+        let basename = NodePath.basename(safePath)
+        let noQuotes = Js.String.replaceByRe(%re("/\"/g"), basename, "")
+        Array.concat(baseHeaders, [contentLengthHeader, ("content-disposition", "attachment; filename=\"" ++ noQuotes ++ "\"")])
+      } else {
+        Array.concat(baseHeaders, [contentLengthHeader])
+      }
+      Promise.resolve(Types.Respond({
+        status: 200,
+        headers: Headers.withSecurityHeaders(finalHeaders),
+        body: Types.File(safePath),
+      }))
+    })->Promise.catch(_error => {
+      let code = classifyFsError(_error)
+      Promise.resolve(respond(
+        ~status=code,
+        ~headers=[("content-type", "text/plain; charset=utf-8")],
+        ~body=Types.Empty,
+        ~logLevel=Logger.Error,
+        ~logMsg=(if code == 404 { "404 Not Found: " ++ safePath } else { "500 Internal Server Error reading: " ++ safePath }),
+      ))
+    })
   }
 }
 
@@ -157,20 +185,20 @@ let serveDirectory = (
     Fs.readdir(safePath)->Promise.then(entries => {
       // Filter ignored entries
       let filtered = Array.filter(entries, entry => {
-        let relPath = entry.name
+        let relPath = Fs.direntName(entry)
         let normalized = Js.String2.replaceByRe(relPath, %re("/\\/g"), "/")
         !Path.matchesPattern(~path=normalized, ~patterns=ignorePatterns)
       })
       // Map to fileEntry
       let fileEntries: array<Templates.fileEntry> = Array.map(filtered, entry => {
         let entryUrl = if urlPath == "/" {
-          "/" ++ Js.Global.encodeURIComponent(entry.name)
+          "/" ++ Js.Global.encodeURIComponent(Fs.direntName(entry))
         } else {
-          urlPath ++ "/" ++ Js.Global.encodeURIComponent(entry.name)
+          urlPath ++ "/" ++ Js.Global.encodeURIComponent(Fs.direntName(entry))
         }
         ({
-          name: entry.name,
-          isDirectory: entry.isDirectory,
+          name: Fs.direntName(entry),
+          isDirectory: Fs.direntIsDirectory(entry),
           url: entryUrl,
         }: Templates.fileEntry)
       })
@@ -315,7 +343,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
                     } else {
                       // lstat on the target
                       Fs.lstat(safePath)->Promise.then(lstatInfo => {
-                        if lstatInfo.isSymlink {
+                        if Fs.statIsSymlink(lstatInfo) {
                           Logger.log(Logger.Error, "403 Forbidden: symlink target " ++ request.path)
                           Promise.resolve(respond(
                             ~status=403,
@@ -327,7 +355,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
                         } else {
                           // REQ-HANDLER-9: stat
                           Fs.stat(safePath)->Promise.then(statInfo => {
-                            if statInfo.isFile {
+                            if Fs.statIsFile(statInfo) {
                               // serveFile
                               serveFile(
                                 ~method=upperMethod,
@@ -335,7 +363,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
                                 ~enableLiveReload=config.enableLiveReload,
                                 ~port=config.port,
                               )
-                            } else if statInfo.isDirectory {
+                            } else if Fs.statIsDirectory(statInfo) {
                               if config.enableDirectoryListing {
                                 serveDirectory(
                                   ~method=upperMethod,
@@ -349,7 +377,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
                                 // Try index.html fallback
                                 let indexPath = NodePath.join(safePath, "index.html")
                                 Fs.lstat(indexPath)->Promise.then(indexInfo => {
-                                  if indexInfo.isSymlink {
+                                  if Fs.statIsSymlink(indexInfo) {
                                     Logger.log(Logger.Error, "403 Forbidden: index.html is symlink " ++ request.path)
                                     Promise.resolve(respond(
                                       ~status=403,
@@ -398,12 +426,12 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
                                 ~logMsg="404 Not Found: " ++ request.path,
                               ))
                             }
-                           })->Promise.catch(fsError => {
-                             let code = classifyFsError(fsError)
+                            })->Promise.catch(fsError => {
+                              let code = classifyFsError(fsError)
                             if code == 404 {
                               Logger.log(Logger.Error, "404 Not Found: " ++ request.path)
                             } else {
-                              Logger.log(Logger.Error, "500 Internal Server Error: " ++ (errorMessage(fsError)->Nullable.getWithDefault("Unknown error")))
+                              Logger.log(Logger.Error, "500 Internal Server Error: " ++ errorMsg(fsError))
                             }
                             Promise.resolve(respond(
                               ~status=code,
@@ -419,7 +447,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
                         if code == 404 {
                           Logger.log(Logger.Error, "404 Not Found: " ++ request.path)
                         } else {
-                           Logger.log(Logger.Error, "500 Internal Server Error: " ++ (errorMessage(fsError)->Nullable.getWithDefault("Unknown error")))
+                           Logger.log(Logger.Error, "500 Internal Server Error: " ++ errorMsg(fsError))
                         }
                         Promise.resolve(respond(
                           ~status=code,
