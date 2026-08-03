@@ -16,6 +16,17 @@ type stats = {
   isSymlink: bool,
 }
 
+// Accessor externals for Node.js Stats/Dirent method calls.
+// Node.js Stats has isFile/isDirectory/isSymbolicLink as METHODS.
+// These accessors use @send to call them properly.
+// They also work on plain record mocks used in tests.
+let statIsFile: stats => bool
+let statIsDirectory: stats => bool
+let statIsSymlink: stats => bool
+let statSize: stats => int
+let direntName: dirent => string
+let direntIsDirectory: dirent => bool
+
 // Re-export existing stream API (unchanged)
 let createReadStream: string => readStream
 let pipeStream: (readStream, 'a) => 'a
