@@ -6,12 +6,10 @@ import * as Parser from "./Cfg/Parser.res.js";
 import * as Handler from "./Server/Handler.res.js";
 import * as Monitor from "./Watcher/Monitor.res.js";
 import * as Process from "./Node/Process.res.js";
+import * as Restart from "./Watcher/Restart.res.js";
 import * as ParseError from "./Cfg/ParseError.res.js";
 import * as AbortController from "./Node/AbortController.res.js";
-
-function warnRestart() {
-  console.warn("[Httpath] restart-on-change requested but Restart module is not yet implemented");
-}
+import * as Primitive_option from "@rescript/runtime/lib/es6/Primitive_option.js";
 
 function start(handler, config) {
   let controller = AbortController.make();
@@ -21,9 +19,26 @@ function start(handler, config) {
     return Promise.resolve();
   };
   let match = Http.startServer(config.port, config.hostname, handler, onWsUpgrade, sig);
-  let monitorHandle = Monitor.start(config.directory, config.ignorePatterns, config.enableLiveReload, config.restartOnChange, WsHub.notifyReload, warnRestart);
+  let server = match.server;
+  let monitorHandle = {
+    contents: undefined
+  };
+  let onRestart = () => {
+    Http.closeServer(server);
+    let h = monitorHandle.contents;
+    if (h !== undefined) {
+      Monitor.cancel(Primitive_option.valFromOption(h));
+    }
+    WsHub.closeAll();
+    Restart.reload(Process.execPath, "bin.mjs", Process.argv.slice(2, Process.argv.length));
+  };
+  let handle = Monitor.start(config.directory, config.ignorePatterns, config.enableLiveReload, config.restartOnChange, WsHub.notifyReload, onRestart);
+  monitorHandle.contents = Primitive_option.some(handle);
   let shutdown = () => {
-    Monitor.cancel(monitorHandle);
+    let h = monitorHandle.contents;
+    if (h !== undefined) {
+      Monitor.cancel(Primitive_option.valFromOption(h));
+    }
     WsHub.closeAll();
     AbortController.abort(controller);
   };
