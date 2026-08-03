@@ -22,14 +22,13 @@ function start(handler, config) {
   };
   let match = Http.startServer(config.port, config.hostname, handler, onWsUpgrade, sig);
   let monitorHandle = Monitor.start(config.directory, config.ignorePatterns, config.enableLiveReload, config.restartOnChange, WsHub.notifyReload, warnRestart);
-  let sigintHandler = () => {
+  let shutdown = () => {
     Monitor.cancel(monitorHandle);
+    WsHub.closeAll();
     AbortController.abort(controller);
   };
-  let sigtermHandler = () => {
-    Monitor.cancel(monitorHandle);
-    AbortController.abort(controller);
-  };
+  let sigintHandler = () => shutdown();
+  let sigtermHandler = () => shutdown();
   process.on("SIGINT", sigintHandler);
   process.on("SIGTERM", sigtermHandler);
   return match.closed.then(() => {

@@ -95,6 +95,21 @@ function _testResetHub() {
   clients.contents = [];
 }
 
+function closeAll() {
+  let snapshot = clients.contents;
+  if (snapshot.length === 0) {
+    return;
+  }
+  let i = 0;
+  while (i < snapshot.length) {
+    let entryOpt = snapshot[i];
+    if (entryOpt !== undefined) {
+      Http.socketDestroy(entryOpt.socket);
+    }
+    i = i + 1 | 0;
+  };
+}
+
 function notifyReload() {
   let snapshot = clients.contents;
   if (snapshot.length === 0) {
@@ -124,6 +139,7 @@ export {
   register,
   unregister,
   notifyReload,
+  closeAll,
   _testGetRegisteredCount,
   _testResetHub,
 }

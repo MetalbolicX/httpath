@@ -136,6 +136,31 @@ let _testResetHub = (): unit => {
   ()
 }
 
+// Close all registered WebSocket sockets explicitly.
+// Called during Httpath.shutdown to ensure graceful WebSocket close
+// before the process exits. Each socket will emit its 'close' event,
+// which triggers unregister via the already-attached onClose listener.
+let closeAll = (): unit => {
+  let snapshot = clients.contents
+  if Array.length(snapshot) == 0 {
+    ()
+  } else {
+    let i = ref(0)
+    while i.contents < Array.length(snapshot) {
+      let entryOpt = Array.get(snapshot, i.contents)
+      switch entryOpt {
+      | Some(client) => {
+          Http.socketDestroy(client.socket)
+          ()
+        }
+      | None => ()
+      }
+      i := i.contents + 1
+    }
+    ()
+  }
+}
+
 // Broadcast "reload" frame to all registered clients.
 // Snapshot the array to avoid iterator invalidation on prune.
 // Continues to remaining clients if a write fails.

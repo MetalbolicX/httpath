@@ -39,6 +39,7 @@ let start = (
 
   let shutdown = () => {
     Monitor.cancel(monitorHandle)
+    WsHub.closeAll()
     AbortController.abort(controller)
   }
 

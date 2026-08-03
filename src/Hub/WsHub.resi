@@ -5,6 +5,7 @@
 let register: (Http.serverSocket) => unit
 let unregister: (Http.serverSocket) => unit
 let notifyReload: unit => unit
+let closeAll: unit => unit
 
 // test-only accessor — exposes the internal registered-client count for unit testing.
 // NOT for production use — exists solely as a testing seam.

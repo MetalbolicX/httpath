@@ -11,6 +11,7 @@ type upgradeCb = (Types.request, serverSocket, Nullable.t<upgradeHead>) => promi
 
 let socketWrite: (serverSocket, string) => unit
 let socketWriteBuffer: (serverSocket, Buffer.t) => promise<result<unit, JsExn.t>>
+let socketDestroy: (serverSocket) => unit
 let closeServer: server => promise<unit>
 
 type serverHandle = {

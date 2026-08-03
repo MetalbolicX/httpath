@@ -174,9 +174,14 @@ function socketWrite(prim0, prim1) {
   prim0.write(prim1);
 }
 
+function socketDestroy(prim) {
+  prim.destroy();
+}
+
 export {
   socketWrite,
   socketWriteBuffer,
+  socketDestroy,
   closeServer,
   startServer,
 }
