@@ -97,7 +97,7 @@ test("Fs.readFileSync returns UTF-8 file contents", () => {
       ~name="greeting.txt",
       ~content="Hello, 世界!",
       ~f=_ => {
-        let content = Fs.readFileSync(join(tempDir, "greeting.txt"))
+        let content = Fs.readFileSync(join(tempDir, "greeting.txt"), "utf-8")
         assertion(
           ~message="readFileSync returns exact content",
           ~operator="=",
@@ -122,19 +122,19 @@ test("Fs.statSync on a file: isFile=true, isDirectory=false, isSymlink=false", (
       ~content="test data",
       ~f=filePath => {
         let stats = Fs.statSync(filePath)
-        assertion(~message="isFile is true", ~operator="=", (a, b) => a == b, stats.isFile, true)
+        assertion(~message="isFile is true", ~operator="=", (a, b) => a == b, Fs.statIsFile(stats), true)
         assertion(
           ~message="isDirectory is false",
           ~operator="=",
           (a, b) => a == b,
-          stats.isDirectory,
+          Fs.statIsDirectory(stats),
           false,
         )
         assertion(
           ~message="isSymlink is false",
           ~operator="=",
           (a, b) => a == b,
-          stats.isSymlink,
+          Fs.statIsSymlink(stats),
           false,
         )
       },
@@ -151,10 +151,10 @@ test("Fs.statSync on a directory: isDirectory=true, isFile=false", () => {
       ~message="isDirectory is true",
       ~operator="=",
       (a, b) => a == b,
-      stats.isDirectory,
+      Fs.statIsDirectory(stats),
       true,
     )
-    assertion(~message="isFile is false", ~operator="=", (a, b) => a == b, stats.isFile, false)
+    assertion(~message="isFile is false", ~operator="=", (a, b) => a == b, Fs.statIsFile(stats), false)
   })
 })
 
@@ -174,14 +174,14 @@ test("Fs.lstatSync on a symlink: isSymlink=true (while statSync follows)", () =>
       ~message="lstatSync: isSymlink is true",
       ~operator="=",
       (a, b) => a == b,
-      lstats.isSymlink,
+      Fs.statIsSymlink(lstats),
       true,
     )
     assertion(
       ~message="lstatSync: isFile is false (it's a symlink)",
       ~operator="=",
       (a, b) => a == b,
-      lstats.isFile,
+      Fs.statIsFile(lstats),
       false,
     )
     // statSync follows the symlink
@@ -190,14 +190,14 @@ test("Fs.lstatSync on a symlink: isSymlink=true (while statSync follows)", () =>
       ~message="statSync follows: isFile is true",
       ~operator="=",
       (a, b) => a == b,
-      stats.isFile,
+      Fs.statIsFile(stats),
       true,
     )
     assertion(
       ~message="statSync follows: isSymlink is false",
       ~operator="=",
       (a, b) => a == b,
-      stats.isSymlink,
+      Fs.statIsSymlink(stats),
       false,
     )
   })

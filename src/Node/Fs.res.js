@@ -45,8 +45,8 @@ function pipeStream(prim0, prim1) {
   return prim0.pipe(prim1);
 }
 
-function readFileSync(prim) {
-  return Nodefs.readFileSync(prim);
+function readFileSync(prim0, prim1) {
+  return Nodefs.readFileSync(prim0, prim1);
 }
 
 function lstatSync(prim) {

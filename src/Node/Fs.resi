@@ -32,7 +32,7 @@ let createReadStream: string => readStream
 let pipeStream: (readStream, 'a) => 'a
 
 // Synchronous bindings for unit testing
-let readFileSync: string => string
+let readFileSync: (string, string) => string
 let lstatSync: string => stats
 let statSync: string => stats
 let readdirSync: string => array<dirent>

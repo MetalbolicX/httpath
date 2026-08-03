@@ -52,7 +52,7 @@ external pipeStream: (readStream, 'a) => 'a = "pipe"
 // ---------------------------------------------------------------------------
 
 @module("node:fs")
-external readFileSync: string => string = "readFileSync"
+external readFileSync: (string, string) => string = "readFileSync"
 
 @module("node:fs")
 external lstatSync: string => stats = "lstatSync"
