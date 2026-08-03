@@ -46,39 +46,39 @@ function pipeStream(prim0, prim1) {
 }
 
 function readFileSync(prim) {
-  return globalThis.readFileSync(prim);
+  return Nodefs.readFileSync(prim);
 }
 
 function lstatSync(prim) {
-  return globalThis.lstatSync(prim);
+  return Nodefs.lstatSync(prim);
 }
 
 function statSync(prim) {
-  return globalThis.statSync(prim);
+  return Nodefs.statSync(prim);
 }
 
 function readdirSync(prim) {
-  return globalThis.readdirSync(prim);
+  return Nodefs.readdirSync(prim);
 }
 
 function mkdirSync(prim) {
-  globalThis.mkdirSync(prim);
+  Nodefs.mkdirSync(prim);
 }
 
 function rmdirSync(prim) {
-  globalThis.rmdirSync(prim);
+  Nodefs.rmdirSync(prim);
 }
 
 function symlinkSync(prim0, prim1) {
-  globalThis.symlinkSync(prim0, prim1);
+  Nodefs.symlinkSync(prim0, prim1);
 }
 
 function unlinkSync(prim) {
-  globalThis.unlinkSync(prim);
+  Nodefs.unlinkSync(prim);
 }
 
 function writeFileSync(prim0, prim1) {
-  globalThis.writeFileSync(prim0, prim1);
+  Nodefs.writeFileSync(prim0, prim1);
 }
 
 function lstat(prim) {

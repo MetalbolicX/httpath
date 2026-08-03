@@ -51,31 +51,31 @@ external pipeStream: (readStream, 'a) => 'a = "pipe"
 // Synchronous bindings for unit testing (fs without /promises)
 // ---------------------------------------------------------------------------
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external readFileSync: string => string = "readFileSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external lstatSync: string => stats = "lstatSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external statSync: string => stats = "statSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external readdirSync: string => array<dirent> = "readdirSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external mkdirSync: string => unit = "mkdirSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external rmdirSync: string => unit = "rmdirSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external symlinkSync: (string, string) => unit = "symlinkSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external unlinkSync: string => unit = "unlinkSync"
 
-@bs.scope("fs") @bs.val
+@module("node:fs")
 external writeFileSync: (string, string) => unit = "writeFileSync"
 
 // ---------------------------------------------------------------------------
