@@ -1,99 +1,155 @@
-// restart_test.mjs — API test for Restart module.
-// Runs standalone: node tests/unit/restart_test.mjs
+// restart_test.mjs — behavioral tests for Restart.reload.
+// Tests REQ-RESTART-1 through REQ-RESTART-4 using mocked spawn.
+// Run with: node --env-file=retest.env.js tests/unit/restart_test.mjs
+//
+// process_fake.mjs is loaded via retest.env.js BEFORE any module runs.
+// It stubs global process.exit so tests survive and can read exit codes
+// via getLastExitCode(). process_fake.mjs must be loaded first.
 
-// Load process_fake first to mock process.exit
-await import('./process_fake.mjs')
+import { getLastExitCode, resetExitCode } from "./process_fake.mjs";
+import {
+  installSpawnStubOk,
+  installSpawnStubErr,
+  restoreSpawn,
+  resetHelpers,
+  lastSpawnArgs,
+  lastSpawnOpts,
+  stubbedErrorLogs,
+  installErrorStub,
+  restoreError,
+} from "./_helpers.mjs";
 
-let passed = 0
-let failed = 0
+const Restart = await import("../../src/Watcher/Restart.res.js");
+
+let passed = 0;
+let failed = 0;
 
 function test(name, fn) {
   try {
-    fn()
-    console.log(`✔ ${name}`)
-    passed++
+    fn();
+    console.log(`✔ ${name}`);
+    passed++;
   } catch (e) {
-    console.log(`✖ ${name}`)
-    console.log(`  ${e.message}`)
-    failed++
+    console.log(`✖ ${name}`);
+    console.log(`  ${e.message}`);
+    failed++;
   }
 }
 
 function strictEqual(a, b, msg) {
-  if (a !== b) throw new Error(`${msg}: got ${a}`)
-}
-function notStrictEqual(a, b, msg) {
-  if (a === b) throw new Error(`${msg}: got ${a}`)
+  if (a !== b) throw new Error(`${msg}: got ${a}, expected ${b}`);
 }
 
-// Import Restart module (uses real node:child_process — spawn may fail in test env)
-const Restart = await import('../../src/Watcher/Restart.res.js')
+// ─── REQ-RESTART-1: argv preservation ────────────────────────────────────────
 
-// Import Process bindings
-const Process = await import('../../src/Node/Process.res.js')
+test("reload assembles [entrypoint, ...argv] and calls spawn (REQ-RESTART-1)", () => {
+  resetHelpers();
+  installSpawnStubOk();
+  resetExitCode();
 
-// Silence console.error for expected spawn failures
-const originalError = console.error
-let errorLogs = []
-console.error = (...args) => { errorLogs.push(args.join(' ')) }
+  Restart.reload("node", "bin.mjs", ["-p", "8080", "-d", "demo"]);
 
-// REQ-RESTART-1: reload has correct API signature
-test('Restart.reload exported function (REQ-RESTART-1)', () => {
-  notStrictEqual(typeof Restart.reload, 'undefined', 'reload is exported')
-  strictEqual(typeof Restart.reload, 'function', 'reload is a function')
-})
+  strictEqual(lastSpawnArgs.execPath, "node", "execPath is node");
+  strictEqual(
+    lastSpawnArgs.args[0],
+    "bin.mjs",
+    "first spawn arg is entrypoint"
+  );
+  strictEqual(lastSpawnArgs.args[1], "-p", "second spawn arg is -p");
+  strictEqual(lastSpawnArgs.args[2], "8080", "third spawn arg is 8080");
+  strictEqual(lastSpawnArgs.args[3], "-d", "fourth spawn arg is -d");
+  strictEqual(lastSpawnArgs.args[4], "demo", "fifth spawn arg is demo");
+});
 
-// REQ-RESTART-5: typed spawn external exists
-test('Process.spawn typed external exists (REQ-RESTART-5)', () => {
-  notStrictEqual(typeof Process.spawn, 'undefined', 'spawn is exported')
-  strictEqual(typeof Process.spawn, 'function', 'spawn is typed external')
-})
+// ─── REQ-RESTART-2: stdio inheritance ────────────────────────────────────────
 
-// REQ-RESTART-5: typed execPath exists
-test('Process.execPath typed external exists (REQ-RESTART-5)', () => {
-  notStrictEqual(typeof Process.execPath, 'undefined', 'execPath is exported')
-  strictEqual(typeof Process.execPath, 'string', 'execPath is string')
-})
+test("spawn uses stdio:inherit and shell:false (REQ-RESTART-2)", () => {
+  resetHelpers();
+  installSpawnStubOk();
+  resetExitCode();
 
-// REQ-RESTART-5: typed onChildExit exists
-test('Process.onChildExit typed external exists (REQ-RESTART-5)', () => {
-  notStrictEqual(typeof Process.onChildExit, 'undefined', 'onChildExit is exported')
-  strictEqual(typeof Process.onChildExit, 'function', 'onChildExit is function')
-})
+  Restart.reload("node", "bin.mjs", ["-p", "8080"]);
 
-// REQ-RESTART-5: typed onError exists
-test('Process.onError typed external exists (REQ-RESTART-5)', () => {
-  notStrictEqual(typeof Process.onError, 'undefined', 'onError is exported')
-  strictEqual(typeof Process.onError, 'function', 'onError is function')
-})
+  strictEqual(lastSpawnOpts.stdio, "inherit", "stdio is inherit");
+  strictEqual(lastSpawnOpts.shell, false, "shell is false");
+});
 
-// REQ-RESTART-4: reload accepts named parameters
-// This should NOT throw (API acceptance test)
-test('Restart.reload accepts execPath/entrypoint/argv params (REQ-RESTART-4)', () => {
-  errorLogs = []
-  try {
-    Restart.reload({
-      execPath: Process.execPath,
-      entrypoint: 'bin.mjs',
-      argv: ['-p', '8080'],
-    })
-  } catch (e) {
-    // Spawn may fail in test env but API accepted the call
-  }
-})
+// ─── REQ-RESTART-3: exit after spawn ─────────────────────────────────────────
 
-// REQ-RESTART-4: Restart module is stateless (no internal state exports)
-test('Restart module has no exported state (REQ-RESTART-4)', () => {
-  const keys = Object.keys(Restart)
-  const hasState = keys.some(k => k !== 'reload')
-  strictEqual(hasState, false, 'only reload is exported')
-})
+test("Successful spawn calls Process.exit(0) immediately (REQ-RESTART-3)", () => {
+  resetHelpers();
+  installSpawnStubOk();
+  resetExitCode();
 
-console.error = originalError
+  Restart.reload("node", "bin.mjs", []);
 
-console.log(`\nℹ ${passed + failed} tests`)
-console.log(`✔ ${passed} passed`)
+  strictEqual(getLastExitCode(), 0, "exit code is 0 on spawn success");
+});
+
+test("Synchronous spawn throw calls Process.exit(1) (REQ-RESTART-3)", () => {
+  resetHelpers();
+  installSpawnStubErr("spawn ENOENT");
+  resetExitCode();
+  const origError = installErrorStub();
+
+  Restart.reload("/nonexistent/node", "bin.mjs", []);
+
+  strictEqual(getLastExitCode(), 1, "exit code is 1 on spawn throw");
+  restoreError(origError);
+});
+
+test("Spawn throw logs an error message (REQ-RESTART-3)", () => {
+  resetHelpers();
+  installSpawnStubErr("spawn ENOENT");
+  resetExitCode();
+  const origError = installErrorStub();
+
+  Restart.reload("/nonexistent/node", "bin.mjs", []);
+
+  const hasError = stubbedErrorLogs.some((l) => l.includes("[Restart]"));
+  strictEqual(hasError, true, "console.error was called with [Restart] prefix");
+  restoreError(origError);
+});
+
+// ─── REQ-RESTART-4: no signals, no debounce ───────────────────────────────────
+
+test("reload does not register SIGINT handler (REQ-RESTART-4)", () => {
+  resetHelpers();
+  installSpawnStubOk();
+  resetExitCode();
+
+  const before = process.listeners("SIGINT").length;
+  Restart.reload("node", "bin.mjs", []);
+  const after = process.listeners("SIGINT").length;
+
+  strictEqual(after, before, "no SIGINT handler added");
+});
+
+test("reload does not register SIGTERM handler (REQ-RESTART-4)", () => {
+  resetHelpers();
+  installSpawnStubOk();
+  resetExitCode();
+
+  const before = process.listeners("SIGTERM").length;
+  Restart.reload("node", "bin.mjs", []);
+  const after = process.listeners("SIGTERM").length;
+
+  strictEqual(after, before, "no SIGTERM handler added");
+});
+
+test("Restart module exports only reload (REQ-RESTART-4)", () => {
+  const keys = Object.keys(Restart);
+  const hasExtra = keys.some((k) => k !== "reload");
+  strictEqual(hasExtra, false, "only reload is exported");
+});
+
+// ─── Cleanup ───────────────────────────────────────────────────────────────────
+
+restoreSpawn();
+
+console.log(`\nℹ ${passed + failed} tests`);
+console.log(`✔ ${passed} passed`);
 if (failed > 0) {
-  console.log(`✖ ${failed} failed`)
-  process.exit(1)
+  console.log(`✖ ${failed} failed`);
+  process.exit(1);
 }

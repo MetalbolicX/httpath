@@ -16,12 +16,19 @@
 let reload = (~execPath: string, ~entrypoint: string, ~argv: array<string>): unit => {
   let childArgs = Array.concat([entrypoint], argv)
 
-  // Attempt spawn via the swappable seam.
-  let spawnResult = Process_spawn.callSpawn(
-    ~execPath,
-    ~args=childArgs,
-    ~opts={stdio: "inherit", shell: false},
-  )
+  // Attempt spawn via the swappable seam. Try-catch handles synchronous throws
+  // (ENOENT, EACCES). Async errors from the child are not handled since the
+  // parent exits immediately on success (REQ-RESTART-3).
+  let spawnResult: result<Process.childProcess, string> = try {
+    Ok(Process_spawn.spawn.contents(execPath, childArgs, {stdio: "inherit", shell: false}))
+  } catch {
+  | e =>
+    let msg = switch JsExn.message(Obj.magic(e)) {
+    | Some(m) => m
+    | None => "unknown spawn error"
+    }
+    Error(msg)
+  }
 
   switch spawnResult {
   | Error(_msg) =>
