@@ -7,7 +7,7 @@ import * as Stdlib_Array from "@rescript/runtime/lib/es6/Stdlib_Array.js";
 import * as Stdlib_Option from "@rescript/runtime/lib/es6/Stdlib_Option.js";
 
 function socketWriteBuffer(socket, buf) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     let settled = {
       contents: false
     };
@@ -20,14 +20,23 @@ function socketWriteBuffer(socket, buf) {
     try {
       socket.write(buf, err => mark(() => {
         if (err == null) {
-          return resolve();
+          return resolve({
+            TAG: "Ok",
+            _0: undefined
+          });
         } else {
-          return reject();
+          return resolve({
+            TAG: "Error",
+            _0: err
+          });
         }
       }));
       return;
     } catch (exn) {
-      return mark(() => reject());
+      return mark(() => resolve({
+        TAG: "Ok",
+        _0: undefined
+      }));
     }
   });
 }

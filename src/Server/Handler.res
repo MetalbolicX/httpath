@@ -136,10 +136,10 @@ let serveFile = (
     // Non-HTML or live reload disabled: stream file
     Fs.stat(safePath)->Promise.then(statInfo => {
       let fileSize = Fs.statSize(statInfo)
-      let contentLengthHeader = ("content-length", Js.Int.toString(fileSize))
+      let contentLengthHeader = ("content-length", Int.toString(fileSize))
       let finalHeaders = if mime.contentType == "image/svg+xml" {
         let basename = NodePath.basename(safePath)
-        let noQuotes = Js.String.replaceByRe(%re("/\"/g"), "", basename)
+        let noQuotes = Js.String.replaceByRe(/"/g, "", basename)
         Array.concat(baseHeaders, [contentLengthHeader, ("content-disposition", "attachment; filename=\"" ++ noQuotes ++ "\"")])
       } else {
         Array.concat(baseHeaders, [contentLengthHeader])
@@ -186,15 +186,15 @@ let serveDirectory = (
       // Filter ignored entries
       let filtered = Array.filter(entries, entry => {
         let relPath = Fs.direntName(entry)
-        let normalized = Js.String2.replaceByRe(relPath, %re("/\\/g"), "/")
+        let normalized = Js.String2.replaceByRe(relPath, /\\/g, "/")
         !Path.matchesPattern(~path=normalized, ~patterns=ignorePatterns)
       })
       // Map to fileEntry
       let fileEntries: array<Templates.fileEntry> = Array.map(filtered, entry => {
         let entryUrl = if urlPath == "/" {
-          "/" ++ Js.Global.encodeURIComponent(Fs.direntName(entry))
+          "/" ++ encodeURIComponent(Fs.direntName(entry))
         } else {
-          urlPath ++ "/" ++ Js.Global.encodeURIComponent(Fs.direntName(entry))
+          urlPath ++ "/" ++ encodeURIComponent(Fs.direntName(entry))
         }
         ({
           name: Fs.direntName(entry),
@@ -224,7 +224,7 @@ let serveDirectory = (
       let html = Templates.renderDirectoryListing(~entries=capped, ~urlPath)
       // Add truncation notice if needed
       let finalHtml = if truncatedCount > 0 {
-        let notice = Js.String2.replace(html, "</main>", "<div class=\"empty-state\">Directory listing truncated after 100 entries (" ++ Belt.Int.toString(truncatedCount) ++ " more not shown)</div></main>")
+        let notice = String.replace(html, "</main>", "<div class=\"empty-state\">Directory listing truncated after 100 entries (" ++ Belt.Int.toString(truncatedCount) ++ " more not shown)</div></main>")
         notice
       } else {
         html
@@ -268,7 +268,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
     ))
   | None =>
     // REQ-HANDLER-3: method check (GET/HEAD only)
-    let upperMethod = Js.String2.toUpperCase(request.method)
+    let upperMethod = String.toUpperCase(request.method)
     if upperMethod != "GET" && upperMethod != "HEAD" {
       Promise.resolve(respond(
         ~status=405,
@@ -283,7 +283,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
     } else {
       // REQ-HANDLER-4: URI decode (400 on throw)
       let decodedOr400: result<string, Types.outcome> = try {
-        Ok(Js.Global.decodeURIComponent(request.path))
+        Ok(decodeURIComponent(request.path))
       } catch {
       | _ =>
         Error(respond(
@@ -318,7 +318,7 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
             | Some(safePath) => {
                 // REQ-HANDLER-7: ignore pattern
                 let relPath = NodePath.relative(config.directory, safePath)
-                let normalized = Js.String2.replaceByRe(relPath, %re("/\\/g"), "/")
+        let normalized = Js.String2.replaceByRe(relPath, /\\/g, "/")
                 if Path.matchesPattern(~path=normalized, ~patterns=config.ignorePatterns) {
                   Logger.log(Logger.Debug, "403 Forbidden: ignored path " ++ request.path)
                   Promise.resolve(respond(

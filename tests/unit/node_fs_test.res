@@ -66,7 +66,7 @@ test("Fs.readdirSync returns dirents with name and isDirectory", () => {
         false,
       )
     | None =>
-      Js.Exn.raiseError("Expected to find readme.txt in readdirSync entries")
+      JsError.throwWithMessage("Expected to find readme.txt in readdirSync entries")
     }
     let dirEntry = entries->Array.find(entry => entry.name == "subdir")
     switch dirEntry {
@@ -79,7 +79,7 @@ test("Fs.readdirSync returns dirents with name and isDirectory", () => {
         true,
       )
     | None =>
-      Js.Exn.raiseError("Expected to find subdir in readdirSync entries")
+      JsError.throwWithMessage("Expected to find subdir in readdirSync entries")
     }
   })
 })
@@ -210,7 +210,7 @@ test("Fs.lstatSync on a symlink: isSymlink=true (while statSync follows)", () =>
 test("Fs.createReadStream returns a readStream (existing API)", () => {
   withTempDir(tempDir => {
     withFile(~dir=tempDir, ~name="stream-test.txt", ~content="stream content", ~f=filePath => {
-      let rs: Fs.readStream = Fs.createReadStream(filePath)
+      let _rs: Fs.readStream = Fs.createReadStream(filePath)
       assertion(
         ~message="createReadStream produces a value",
         ~operator="=",

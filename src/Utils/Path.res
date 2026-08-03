@@ -20,7 +20,7 @@ let resolveSafePath = (~base: string, ~requested: string): option<string> => {
     let resolvedPath = Path.resolve(fullPath, "")
     let rel = Path.relative(resolvedBase, resolvedPath)
     if (
-      Js.String2.startsWith(rel, "..") ||
+      String.startsWith(rel, "..") ||
       (rel === "" && resolvedPath !== resolvedBase)
     ) {
       None
@@ -39,13 +39,13 @@ let resolveSafePath = (~base: string, ~requested: string): option<string> => {
 
 // Use global regex replace to replace ALL backslash occurrences
 let replaceBackslashes = (s: string): string => {
-  Js.String.replaceByRe(%re("/\\/g"), "/", s)
+  Js.String.replaceByRe(/\\/g, "/", s)
 }
 
 let matchesPattern = (~path: string, ~patterns: array<string>): bool => {
-  let pathSegments = Js.String2.split(replaceBackslashes(path), "/")->Array.filter(s => s !== "")
+  let pathSegments = String.split(replaceBackslashes(path), "/")->Array.filter(s => s !== "")
   patterns->Array.some(pattern => {
-    let patternSegments = Js.String2.split(replaceBackslashes(pattern), "/")->Array.filter(s => s !== "")
+    let patternSegments = String.split(replaceBackslashes(pattern), "/")->Array.filter(s => s !== "")
     let pLen = Array.length(patternSegments)
     let pathLen = Array.length(pathSegments)
     if (pLen === 0 || pLen > pathLen) {
@@ -92,10 +92,10 @@ let hasSymlinkPrefix = (~base: string, ~target: string): promise<bool> => {
   let resolvedBase = Path.resolve(base, "")
   let resolvedTarget = Path.resolve(target, "")
   let rel = Path.relative(resolvedBase, resolvedTarget)
-  if (Js.String2.startsWith(rel, "..")) {
+  if (String.startsWith(rel, "..")) {
     Promise.resolve(false)
   } else {
-    let segments = Js.String2.split(rel, "/")->Array.filter(s => s !== "")
+    let segments = String.split(rel, "/")->Array.filter(s => s !== "")
     let rec walk = (current: string, idx: int): promise<bool> => {
       if (idx >= Array.length(segments)) {
         Promise.resolve(false)

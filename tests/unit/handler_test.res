@@ -112,7 +112,7 @@ test("Handler: POST returns 405 Method Not Allowed with allow: GET, HEAD", () =>
   }
   // Method check: only GET and HEAD are allowed
   let isAllowedMethod = (method: string): bool => {
-    let upper = Js.String2.toUpperCase(method)
+    let upper = String.toUpperCase(method)
     upper == "GET" || upper == "HEAD"
   }
   let allowed = isAllowedMethod(req.method)
@@ -127,7 +127,7 @@ test("Handler: GET returns true from method check", () => {
     clientIp: "127.0.0.1",
   }
   let isAllowedMethod = (method: string): bool => {
-    let upper = Js.String2.toUpperCase(method)
+    let upper = String.toUpperCase(method)
     upper == "GET" || upper == "HEAD"
   }
   let allowed = isAllowedMethod(req.method)
@@ -136,7 +136,7 @@ test("Handler: GET returns true from method check", () => {
 
 test("Handler: HEAD returns true from method check", () => {
   let isAllowedMethod = (method: string): bool => {
-    let upper = Js.String2.toUpperCase(method)
+    let upper = String.toUpperCase(method)
     upper == "GET" || upper == "HEAD"
   }
   let allowed = isAllowedMethod("HEAD")
@@ -149,24 +149,24 @@ test("Handler: HEAD returns true from method check", () => {
 
 test("Handler: valid path decodes without error", () => {
   let decoded = try {
-    Some(Js.Global.decodeURIComponent("/file%20name.txt"))
+    Some(decodeURIComponent("/file%20name.txt"))
   } catch {
   | _ => None
   }
   switch decoded {
   | Some(d) => assertion(~message="decoded correctly", ~operator="=", (a, b) => a == b, d, "/file name.txt")
-  | None => Js.Exn.raiseError("decodeURIComponent should not throw for valid input")
+  | None => JsError.throwWithMessage("decodeURIComponent should not throw for valid input")
   }
 })
 
 test("Handler: malformed percent encoding throws and returns 400", () => {
   let decoded = try {
-    Some(Js.Global.decodeURIComponent("/bad%encoding"))
+    Some(decodeURIComponent("/bad%encoding"))
   } catch {
   | _ => None
   }
   switch decoded {
-  | Some(_) => Js.Exn.raiseError("decodeURIComponent should throw for malformed input")
+  | Some(_) => JsError.throwWithMessage("decodeURIComponent should throw for malformed input")
   | None => assertion(~message="malformed encoding returns None", ~operator="=", (a, b) => a == b, true, true)
   }
 })
@@ -241,17 +241,17 @@ test("Handler: safe path resolves within base directory", () => {
   switch safePath {
   | Some(p) => {
       let rel = Node_Path.relative("/test/serve", p)
-      let startsWithDotDot = Js.String2.startsWith(rel, "..")
+      let startsWithDotDot = String.startsWith(rel, "..")
       assertion(~message="resolved path should not escape base", ~operator="=", (a, b) => a == b, startsWithDotDot, false)
     }
-  | None => Js.Exn.raiseError("Expected Some for safe path")
+  | None => JsError.throwWithMessage("Expected Some for safe path")
   }
 })
 
 test("Handler: path traversal returns None from resolveSafePath", () => {
   let safePath = Path.resolveSafePath(~base="/test/serve", ~requested="/../../etc/passwd")
   switch safePath {
-  | Some(_) => Js.Exn.raiseError("Expected None for path traversal")
+  | Some(_) => JsError.throwWithMessage("Expected None for path traversal")
   | None => assertion(~message="path traversal blocked", ~operator="=", (a, b) => a == b, true, true)
   }
 })
@@ -283,7 +283,7 @@ test("Handler: hasSymlinkPrefix returns false when no symlink in path", () => {
   // Path traversal is already blocked by resolveSafePath — hasSymlinkPrefix only runs
   // after safe-path is confirmed, so a non-traversal path with no symlinks returns false.
   let rel = Node_Path.relative("/test/serve", "/test/serve/file.txt")
-  let startsWithDotDot = Js.String2.startsWith(rel, "..")
+  let startsWithDotDot = String.startsWith(rel, "..")
   assertion(~message="relative path should not start with ..", ~operator="=", (a, b) => a == b, startsWithDotDot, false)
 })
 
@@ -405,10 +405,10 @@ test("Handler: HEAD request returns Empty body", () => {
 test("Handler: injectLiveReloadScript inserts before </body>", () => {
   let html = "<html><body><p>Hello</p></body></html>"
   let injected = Injector.injectLiveReloadScript(~html, ~port=8080)
-  let hasScript = Js.String2.includes(injected, "<script>")
+  let hasScript = String.includes(injected, "<script>")
   let beforeBody = {
-    let bodyIdx = Js.String2.indexOf(injected, "</body>")
-    let scriptIdx = Js.String2.indexOf(injected, "<script>")
+    let bodyIdx = String.indexOf(injected, "</body>")
+    let scriptIdx = String.indexOf(injected, "<script>")
     scriptIdx >= 0 && bodyIdx >= 0 && scriptIdx < bodyIdx
   }
   assertion(~message="script inserted in HTML", ~operator="=", (a, b) => a == b, hasScript, true)
@@ -425,9 +425,9 @@ test("Handler: renderDirectoryListing produces HTML with title", () => {
     { name: "subdir", isDirectory: true, url: "/subdir" },
   ]
   let html = Templates.renderDirectoryListing(~entries, ~urlPath="/")
-  let hasTitle = Js.String2.includes(html, "<title>Index of /</title>")
-  let hasFileLink = Js.String2.includes(html, "/file.txt")
-  let hasDirLink = Js.String2.includes(html, "/subdir")
+  let hasTitle = String.includes(html, "<title>Index of /</title>")
+  let hasFileLink = String.includes(html, "/file.txt")
+  let hasDirLink = String.includes(html, "/subdir")
   assertion(~message="has title", ~operator="=", (a, b) => a == b, hasTitle, true)
   assertion(~message="has file link", ~operator="=", (a, b) => a == b, hasFileLink, true)
   assertion(~message="has dir link", ~operator="=", (a, b) => a == b, hasDirLink, true)

@@ -16,11 +16,11 @@ test("resolveSafePath: safe relative path returns resolved absolute", () => {
       ~message="resolved path starts with base",
       ~operator="=",
       (a, b) => a == b,
-      Js.String2.startsWith(p, "/srv"),
+      String.startsWith(p, "/srv"),
       true,
     )
   | None =>
-    Js.Exn.raiseError("Expected Some but got None for safe path")
+    JsError.throwWithMessage("Expected Some but got None for safe path")
   }
 })
 
@@ -48,7 +48,7 @@ test("resolveSafePath: absolute path /etc alongside /srv returns Some (not trave
       "/srv/etc/passwd",
     )
   | None =>
-    Js.Exn.raiseError("Expected Some for /etc/passwd alongside /srv")
+    JsError.throwWithMessage("Expected Some for /etc/passwd alongside /srv")
   }
 })
 
@@ -64,7 +64,7 @@ test("resolveSafePath: exact base match returns Some(base)", () => {
       "/srv",
     )
   | None =>
-    Js.Exn.raiseError("Expected Some for exact base match")
+    JsError.throwWithMessage("Expected Some for exact base match")
   }
 })
 

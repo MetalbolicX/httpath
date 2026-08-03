@@ -103,4 +103,4 @@ export {
   cancel,
   _testEmit,
 }
-/* No side effect */
+/* FsWatch Not a pure module */

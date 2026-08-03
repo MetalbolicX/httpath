@@ -149,7 +149,7 @@ function serveFile(method, safePath, enableLiveReload, port) {
       let finalHeaders;
       if (mime.contentType === "image/svg+xml") {
         let basename = Node_Path.basename(safePath);
-        let noQuotes = Js_string.replaceByRe(/\"/g, basename, "");
+        let noQuotes = Js_string.replaceByRe(/"/g, "", basename);
         finalHeaders = baseHeaders.concat([
           contentLengthHeader,
           [
