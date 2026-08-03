@@ -16,7 +16,7 @@ test("Events.on attaches listener — callListeners verifies it fires", () => {
   let counter = getCounter()
   counter["count"] = 0
 
-  let listener = () => { counter["count"] = counter["count"] + 1 }
+  let listener = () => {counter["count"] = counter["count"] + 1}
   let sock = asServerSocket(fake)
 
   // Attach
@@ -39,7 +39,7 @@ test("Events.remove detaches listener — callListeners after remove shows no fi
   let counter = getCounter()
   counter["count"] = 0
 
-  let listener = () => { counter["count"] = counter["count"] + 1 }
+  let listener = () => {counter["count"] = counter["count"] + 1}
   let sock = asServerSocket(fake)
 
   // Attach and verify it fires
@@ -77,7 +77,7 @@ test("Events.on is fluent — returns socket for chaining", () => {
 
   // chained should still be a socket — attach another event to prove it
   let called = ref(false)
-  let listener = () => { called := true }
+  let listener = () => {called := true}
   let _ = Events.on(chained, "error", listener)
 
   // If chaining works, the above should compile and the listener should be attachable

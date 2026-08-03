@@ -40,7 +40,7 @@ test("Buffer.fromString round-trip via readUInt8 recovers correct bytes", () => 
   let i = ref(0)
   let pass = ref(true)
   while i.contents < 6 {
-    let exp = switch Array.get(expected, i.contents) {
+    let exp = switch expected[i.contents] {
     | Some(v) => v
     | None => -1
     }

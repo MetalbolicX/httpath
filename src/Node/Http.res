@@ -27,10 +27,11 @@ type serverHandle = {
 
 // ServerSocket (Duplex stream) methods for WS upgrade
 @send external socketWrite: (serverSocket, string) => unit = "write"
-@send external socketDestroy: (serverSocket) => unit = "destroy"
+@send external socketDestroy: serverSocket => unit = "destroy"
 
 // socket.write(Buffer, callback) — callback receives error or null
-@send external _writeBufferRaw: (serverSocket, Buffer.t, Nullable.t<JsExn.t> => unit) => bool = "write"
+@send
+external _writeBufferRaw: (serverSocket, Buffer.t, Nullable.t<JsExn.t> => unit) => bool = "write"
 
 // socketWriteBuffer wraps the callback-based socket.write(Buffer) with a Promise.
 // The callback resolves on null error (buffer flushed) and resolves with Error on error.
@@ -42,7 +43,7 @@ type serverHandle = {
 let socketWriteBuffer = (socket: serverSocket, buf: Buffer.t): promise<result<unit, JsExn.t>> => {
   Promise.make((resolve, _reject) => {
     let settled = ref(false)
-    let mark = (fn) => {
+    let mark = fn => {
       if !settled.contents {
         settled := true
         fn()
@@ -50,12 +51,14 @@ let socketWriteBuffer = (socket: serverSocket, buf: Buffer.t): promise<result<un
     }
     try {
       let _ = _writeBufferRaw(socket, buf, err => {
-        mark(() => {
-          switch Nullable.toOption(err) {
-          | Some(e) => resolve(Error(e))
-          | None => resolve(Ok())
-          }
-        })
+        mark(
+          () => {
+            switch Nullable.toOption(err) {
+            | Some(e) => resolve(Error(e))
+            | None => resolve(Ok())
+            }
+          },
+        )
       })
     } catch {
     | _ => mark(() => resolve(Ok()))
@@ -68,13 +71,15 @@ let socketWriteBuffer = (socket: serverSocket, buf: Buffer.t): promise<result<un
 
 // createServer / listen / close
 @module("node:http")
-external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => server = "createServer"
+external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => server =
+  "createServer"
 @send external _listen: (server, int, string, unit => unit) => unit = "listen"
-@send external _close: (server, (Nullable.t<JsExn.t>) => unit) => unit = "close"
+@send external _close: (server, Nullable.t<JsExn.t> => unit) => unit = "close"
 
 // EventEmitter .on — used to register the 'upgrade' listener (the 'request'
 // listener is registered via createServer's callback).
-@send external _onUpgrade: (
+@send
+external _onUpgrade: (
   server,
   string,
   (incomingMessage, serverSocket, Nullable.t<upgradeHead>) => promise<unit>,
@@ -84,7 +89,7 @@ external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => 
 @set external setOnAbort: (Signals.abortSignal, unit => unit) => unit = "onabort"
 
 // Public callback types (used by Httpath)
-type handlerCb = (Types.request) => promise<Types.outcome>
+type handlerCb = Types.request => promise<Types.outcome>
 type upgradeCb = (Types.request, serverSocket, Nullable.t<upgradeHead>) => promise<unit>
 
 // Build Types.request from an IncomingMessage (path strips query string).
@@ -96,9 +101,9 @@ let buildRequest = (req: incomingMessage): Types.request => {
   let headers: array<(string, string)> = Array.make(~length=Array.length(keys), ("", ""))
   let i = ref(0)
   while i.contents < Array.length(keys) {
-    let k = Array.get(keys, i.contents)->Option.getOr("")->String.toLowerCase
+    let k = keys[i.contents]->Option.getOr("")->String.toLowerCase
     let v = Dict.get(rawHeaders, k)->Option.getOr("")
-    Array.set(headers, i.contents, (k, v))
+    headers[i.contents] = (k, v)
     i.contents = i.contents + 1
   }
   let path = Js.String.split("?", url)->Array.get(0)->Option.getOr(url)
@@ -110,10 +115,9 @@ let writeResponse = (response: Types.response, res: serverResponse): promise<uni
   Promise.make((resolve, _reject) => {
     let i = ref(0)
     while i.contents < Array.length(response.headers) {
-      switch Array.get(response.headers, i.contents) {
+      switch response.headers[i.contents] {
       | Some((name, value)) => {
           let _ = responseSetHeader(res, name, value)
-          ()
         }
       | None => ()
       }
@@ -123,15 +127,12 @@ let writeResponse = (response: Types.response, res: serverResponse): promise<uni
     switch response.body {
     | Types.File(path) => {
         let _ = Fs.createReadStream(path)->pipeStream(res)
-        ()
       }
     | Types.Html(html) => {
         let _ = responseEnd(res, Nullable.make(html))
-        ()
       }
     | Types.Empty => {
         let _ = responseEnd(res, Nullable.null)
-        ()
       }
     }
     resolve()
@@ -141,7 +142,6 @@ let writeResponse = (response: Types.response, res: serverResponse): promise<uni
 let closeServer = (s: server): promise<unit> => {
   Promise.make((resolve, _reject) => {
     let _ = _close(s, _err => resolve())
-    ()
   })
 }
 
@@ -168,7 +168,6 @@ let startServer = (
     switch outcome {
     | Types.Respond(r) => {
         let _ = await writeResponse(r, res)
-        ()
       }
     | Types.WsUpgrade => ()
     }
@@ -190,18 +189,16 @@ let startServer = (
     switch outcome {
     | Types.WsUpgrade => {
         let _ = await onWsUpgrade(request, socket, head)
-        ()
       }
     | Types.Respond(_) => {
         let _ = socketDestroy(socket)
-        ()
       }
     }
   })
 
   // closed — resolved by the abort handler after the server is closed.
   // This is the promise Httpath.await)s before calling Process.exit.
-  let closedResolve = ref(None: option<unit => unit>)
+  let closedResolve = ref((None: option<unit => unit>))
   let closed: promise<unit> = Promise.make((resolve, _reject) => {
     closedResolve := Some(resolve)
   })
@@ -215,7 +212,6 @@ let startServer = (
       }
       Promise.resolve()
     })
-    ()
   })
 
   // Listen and return the server handle.
@@ -225,5 +221,5 @@ let startServer = (
     let _ = _listen(server, port, hostname, () => resolve())
   })
 
-  { server, closed }
+  {server, closed}
 }

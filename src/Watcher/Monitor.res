@@ -38,7 +38,7 @@ let start = (
     cancelled: false,
     processing: false,
     pendingTimeoutId: None,
-    _emit: (_) => (),
+    _emit: _ => (),
   }
 
   let checkCooldown = (): bool => {
@@ -68,39 +68,35 @@ let start = (
           | Some(id) => Timers.clearTimeout(id)
           | None => ()
           }
-          let timeoutId = Timers.setTimeout(
-            () => {
-              if h.cancelled {
-                h.pendingTimeoutId = None
-                h.processing = false
-                ()
+          let timeoutId = Timers.setTimeout(() => {
+            if h.cancelled {
+              h.pendingTimeoutId = None
+              h.processing = false
+              ()
+            } else {
+              let action = if restartOnChange {
+                Rules.Restart
               } else {
-                let action =
-                  if restartOnChange {
-                    Rules.Restart
-                  } else {
-                    Rules.decide(filename)
-                  }
-                switch action {
-                | Rules.Ignore => ()
-                | Rules.BrowserReload =>
+                Rules.decide(filename)
+              }
+              switch action {
+              | Rules.Ignore => ()
+              | Rules.BrowserReload =>
+                if enableLiveReload {
+                  onReload()
+                }
+              | Rules.Restart =>
+                if checkCooldown() {
                   if enableLiveReload {
                     onReload()
                   }
-                | Rules.Restart =>
-                  if checkCooldown() {
-                    if enableLiveReload {
-                      onReload()
-                    }
-                    onRestart()
-                  }
+                  onRestart()
                 }
-                h.pendingTimeoutId = None
-                h.processing = false
               }
-            },
-            500,
-          )
+              h.pendingTimeoutId = None
+              h.processing = false
+            }
+          }, 500)
           h.pendingTimeoutId = Some(timeoutId)
         }
       }
@@ -111,11 +107,7 @@ let start = (
   // Now set the test seam before starting the watcher.
   h._emit = onEvent
 
-  let watcher = FsWatch.startWatcher(
-    ~path=dir,
-    ~options={recursive: true},
-    ~onEvent,
-  )
+  let watcher = FsWatch.startWatcher(~path=dir, ~options={recursive: true}, ~onEvent)
   h.watcher = watcher
 
   h

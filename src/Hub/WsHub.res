@@ -34,7 +34,7 @@ let clientExists = (socket: Http.serverSocket): bool => {
   let i = ref(0)
   let found = ref(false)
   while i.contents < Array.length(clients.contents) {
-    let c = Array.get(clients.contents, i.contents)
+    let c = clients.contents[i.contents]
     switch c {
     | Some(client) =>
       if client.socket === socket {
@@ -57,7 +57,7 @@ let removeFromClients = (socket: Http.serverSocket): option<client> => {
   let i = ref(0)
   let found: ref<option<client>> = ref(None)
   while i.contents < len {
-    let c = Array.get(cs, i.contents)
+    let c = cs[i.contents]
     switch c {
     | Some(client) =>
       if client.socket === socket {
@@ -120,7 +120,6 @@ and unregister = (socket: Http.serverSocket): unit => {
   | Some(entry) => {
       let _ = Events.remove(socket, "close", entry.onClose)
       let _ = Events.remove(socket, "error", entry.onError)
-      ()
     }
   | None => ()
   }
@@ -147,7 +146,7 @@ let closeAll = (): unit => {
   } else {
     let i = ref(0)
     while i.contents < Array.length(snapshot) {
-      let entryOpt = Array.get(snapshot, i.contents)
+      let entryOpt = snapshot[i.contents]
       switch entryOpt {
       | Some(client) => {
           Http.socketDestroy(client.socket)
@@ -172,7 +171,7 @@ and notifyReload = (): unit => {
     let frame = makeReloadFrame()
     let i = ref(0)
     while i.contents < Array.length(snapshot) {
-      let entryOpt = Array.get(snapshot, i.contents)
+      let entryOpt = snapshot[i.contents]
       switch entryOpt {
       | Some(client) => {
           // Listen for async error before attempting write.
@@ -182,7 +181,6 @@ and notifyReload = (): unit => {
             // Attempt one non-blocking write. The error listener handles async
             // failure (socket closed after write() returned but before flush).
             let _ = Http.socketWriteBuffer(client.socket, frame)
-            ()
           } catch {
           | _ => {
               // Sync throw — socket not writable. Prune immediately.

@@ -19,20 +19,13 @@ test("resolveSafePath: safe relative path returns resolved absolute", () => {
       String.startsWith(p, "/srv"),
       true,
     )
-  | None =>
-    JsError.throwWithMessage("Expected Some but got None for safe path")
+  | None => JsError.throwWithMessage("Expected Some but got None for safe path")
   }
 })
 
 test("resolveSafePath: traversal attempt returns None", () => {
   let result = Path.resolveSafePath(~base="/srv", ~requested="../../../etc/passwd")
-  assertion(
-    ~message="traversal returns None",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  assertion(~message="traversal returns None", ~operator="=", (a, b) => a == b, result, None)
 })
 
 test("resolveSafePath: absolute path /etc alongside /srv returns Some (not traversal)", () => {
@@ -47,8 +40,7 @@ test("resolveSafePath: absolute path /etc alongside /srv returns Some (not trave
       p,
       "/srv/etc/passwd",
     )
-  | None =>
-    JsError.throwWithMessage("Expected Some for /etc/passwd alongside /srv")
+  | None => JsError.throwWithMessage("Expected Some for /etc/passwd alongside /srv")
   }
 })
 
@@ -56,15 +48,8 @@ test("resolveSafePath: exact base match returns Some(base)", () => {
   let result = Path.resolveSafePath(~base="/srv", ~requested=".")
   switch result {
   | Some(p) =>
-    assertion(
-      ~message="requested '.' resolves to base",
-      ~operator="=",
-      (a, b) => a == b,
-      p,
-      "/srv",
-    )
-  | None =>
-    JsError.throwWithMessage("Expected Some for exact base match")
+    assertion(~message="requested '.' resolves to base", ~operator="=", (a, b) => a == b, p, "/srv")
+  | None => JsError.throwWithMessage("Expected Some for exact base match")
   }
 })
 
@@ -73,10 +58,7 @@ test("resolveSafePath: exact base match returns Some(base)", () => {
 // ---------------------------------------------------------------------------
 
 test("matchesPattern: path containing node_modules matches 'node_modules'", () => {
-  let result = Path.matchesPattern(
-    ~path="src/node_modules/foo/bar.js",
-    ~patterns=["node_modules"],
-  )
+  let result = Path.matchesPattern(~path="src/node_modules/foo/bar.js", ~patterns=["node_modules"])
   assertion(
     ~message="node_modules pattern matches in path",
     ~operator="=",
@@ -87,10 +69,7 @@ test("matchesPattern: path containing node_modules matches 'node_modules'", () =
 })
 
 test("matchesPattern: path without node_modules does not match", () => {
-  let result = Path.matchesPattern(
-    ~path="src/app/main.js",
-    ~patterns=["node_modules"],
-  )
+  let result = Path.matchesPattern(~path="src/app/main.js", ~patterns=["node_modules"])
   assertion(
     ~message="app/main.js does not match node_modules",
     ~operator="=",
@@ -101,10 +80,7 @@ test("matchesPattern: path without node_modules does not match", () => {
 })
 
 test("matchesPattern: pattern longer than path does not match", () => {
-  let result = Path.matchesPattern(
-    ~path="a/b",
-    ~patterns=["a/b/c"],
-  )
+  let result = Path.matchesPattern(~path="a/b", ~patterns=["a/b/c"])
   assertion(
     ~message="pattern longer than path returns false",
     ~operator="=",
@@ -115,10 +91,7 @@ test("matchesPattern: pattern longer than path does not match", () => {
 })
 
 test("matchesPattern: exact segment match works", () => {
-  let result = Path.matchesPattern(
-    ~path="src/config/settings.json",
-    ~patterns=["config"],
-  )
+  let result = Path.matchesPattern(~path="src/config/settings.json", ~patterns=["config"])
   assertion(
     ~message="config pattern matches src/config/settings.json",
     ~operator="=",
@@ -129,24 +102,12 @@ test("matchesPattern: exact segment match works", () => {
 })
 
 test("matchesPattern: empty pattern returns false", () => {
-  let result = Path.matchesPattern(
-    ~path="src/app/main.js",
-    ~patterns=[""],
-  )
-  assertion(
-    ~message="empty pattern returns false",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    false,
-  )
+  let result = Path.matchesPattern(~path="src/app/main.js", ~patterns=[""])
+  assertion(~message="empty pattern returns false", ~operator="=", (a, b) => a == b, result, false)
 })
 
 test("matchesPattern: backslash separator is normalized to forward slash", () => {
-  let result = Path.matchesPattern(
-    ~path="src\\node_modules\\foo.js",
-    ~patterns=["node_modules"],
-  )
+  let result = Path.matchesPattern(~path="src\\node_modules\\foo.js", ~patterns=["node_modules"])
   assertion(
     ~message="backslash path normalized to forward slash for matching",
     ~operator="=",

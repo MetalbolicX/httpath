@@ -7,4 +7,4 @@
 @module("node:path") external normalize: string => string = "normalize"
 @module("node:path") external relative: (string, string) => string = "relative"
 @module("node:path") external extname: string => string = "extname"
-@module("node:path") external basename: (string) => string = "basename"
+@module("node:path") external basename: string => string = "basename"

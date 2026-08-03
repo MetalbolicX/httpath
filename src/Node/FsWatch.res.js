@@ -21,12 +21,7 @@ function startWatcher(path, options, onEvent) {
   return Nodefs.watch(path, options, wrappedCallback);
 }
 
-function close(prim) {
-  prim.close();
-}
-
 export {
   startWatcher,
-  close,
 }
 /* node:fs Not a pure module */

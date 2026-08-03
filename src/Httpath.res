@@ -8,19 +8,20 @@ let warnRestart = () => {
 }
 
 /// Start the HTTP server + Monitor with the given handler and config.
-let start = (
-  ~handler: Http.handlerCb,
-  ~config: Config.t,
-): promise<unit> => {
+let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
   let controller = AbortController.make()
   let sig = AbortController.signal(controller)
 
-  let onWsUpgrade = (_req: Types.request, socket: Http.serverSocket, _head: Nullable.t<Http.upgradeHead>): promise<unit> => {
+  let onWsUpgrade = (
+    _req: Types.request,
+    socket: Http.serverSocket,
+    _head: Nullable.t<Http.upgradeHead>,
+  ): promise<unit> => {
     WsHub.register(socket)
     Promise.resolve()
   }
 
-  let { server: _server, closed } = Http.startServer(
+  let {server: _server, closed} = Http.startServer(
     ~port=config.port,
     ~hostname=config.hostname,
     ~handler,
@@ -43,8 +44,8 @@ let start = (
     AbortController.abort(controller)
   }
 
-  let sigintHandler = () => { shutdown() }
-  let sigtermHandler = () => { shutdown() }
+  let sigintHandler = () => {shutdown()}
+  let sigtermHandler = () => {shutdown()}
 
   Signals.onSignal("SIGINT", sigintHandler)
   Signals.onSignal("SIGTERM", sigtermHandler)
@@ -69,7 +70,9 @@ let main = (): promise<unit> => {
     let handler = Handler.make(config)
     start(~handler, ~config)
   | Error(ParseError.HelpRequested) =>
-    Console.log("Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]")
+    Console.log(
+      "Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]",
+    )
     let _ = Process.exit(0)
     Promise.resolve()
   | Error(e) =>

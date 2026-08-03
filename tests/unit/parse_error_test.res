@@ -115,11 +115,26 @@ test("each variant produces a distinct string", () => {
   let s6 = ParseError.toString(ParseError.InvalidPath("x"))
   let s7 = ParseError.toString(ParseError.HelpRequested)
   let allDistinct =
-    s1 != s2 && s1 != s3 && s1 != s4 && s1 != s5 && s1 != s6 && s1 != s7 &&
-    s2 != s3 && s2 != s4 && s2 != s5 && s2 != s6 && s2 != s7 &&
-    s3 != s4 && s3 != s5 && s3 != s6 && s3 != s7 &&
-    s4 != s5 && s4 != s6 && s4 != s7 &&
-    s5 != s6 && s5 != s7 &&
+    s1 != s2 &&
+    s1 != s3 &&
+    s1 != s4 &&
+    s1 != s5 &&
+    s1 != s6 &&
+    s1 != s7 &&
+    s2 != s3 &&
+    s2 != s4 &&
+    s2 != s5 &&
+    s2 != s6 &&
+    s2 != s7 &&
+    s3 != s4 &&
+    s3 != s5 &&
+    s3 != s6 &&
+    s3 != s7 &&
+    s4 != s5 &&
+    s4 != s6 &&
+    s4 != s7 &&
+    s5 != s6 &&
+    s5 != s7 &&
     s6 != s7
   assertion(
     ~message="all 7 variants produce distinct strings",

@@ -8,7 +8,7 @@ open Test
 
 let makeAbortCallback = () => {
   let count = ref(0)
-  let fn = () => { count.contents = count.contents + 1 }
+  let fn = () => {count.contents = count.contents + 1}
   (fn, count)
 }
 
@@ -19,14 +19,16 @@ let makeAbortCallback = () => {
 test("AbortController.make creates a controller with a valid signal", () => {
   let controller = AbortController.make()
   let sig = AbortController.signal(controller)
-  // Verify the binding returns a truthy JS object (typeof !== "undefined").
-  let isObject = Js.typeof(sig) != "undefined"
+  // Verify the signal is usable: onAbort should not throw with a valid signal.
+  let (cb, count) = makeAbortCallback()
+  AbortController.onAbort(sig, cb)
+  AbortController.abort(controller)
   assertion(
-    ~message="make returns a controller with a valid signal (typeof !== undefined)",
-    ~operator="==",
+    ~message="onabort fires after abort() — signal is valid",
+    ~operator="=",
     (a, b) => a == b,
-    isObject,
-    true,
+    count.contents,
+    1,
   )
 })
 
@@ -98,14 +100,8 @@ test("onAbort callback is called with unit", () => {
   let controller = AbortController.make()
   let sig = AbortController.signal(controller)
   let called = ref(false)
-  let cb = () => { called.contents = true }
+  let cb = () => {called.contents = true}
   AbortController.onAbort(sig, cb)
   AbortController.abort(controller)
-  assertion(
-    ~message="callback was called",
-    ~operator="=",
-    (a, b) => a == b,
-    called.contents,
-    true,
-  )
+  assertion(~message="callback was called", ~operator="=", (a, b) => a == b, called.contents, true)
 })

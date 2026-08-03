@@ -19,10 +19,7 @@ let resolveSafePath = (~base: string, ~requested: string): option<string> => {
     let fullPath = Path.join(resolvedBase, requested)
     let resolvedPath = Path.resolve(fullPath, "")
     let rel = Path.relative(resolvedBase, resolvedPath)
-    if (
-      String.startsWith(rel, "..") ||
-      (rel === "" && resolvedPath !== resolvedBase)
-    ) {
+    if String.startsWith(rel, "..") || (rel === "" && resolvedPath !== resolvedBase) {
       None
     } else {
       Some(resolvedPath)
@@ -45,35 +42,36 @@ let replaceBackslashes = (s: string): string => {
 let matchesPattern = (~path: string, ~patterns: array<string>): bool => {
   let pathSegments = String.split(replaceBackslashes(path), "/")->Array.filter(s => s !== "")
   patterns->Array.some(pattern => {
-    let patternSegments = String.split(replaceBackslashes(pattern), "/")->Array.filter(s => s !== "")
+    let patternSegments =
+      String.split(replaceBackslashes(pattern), "/")->Array.filter(s => s !== "")
     let pLen = Array.length(patternSegments)
     let pathLen = Array.length(pathSegments)
-    if (pLen === 0 || pLen > pathLen) {
+    if pLen === 0 || pLen > pathLen {
       false
     } else {
       // Check every possible starting index in path
       let rec checkIndex = (i: int): bool => {
-        if (i + pLen > pathLen) {
+        if i + pLen > pathLen {
           false
         } else {
           // Check if all pattern segments match consecutive path segments starting at i
           let rec checkSeg = (j: int): bool => {
-            if (j >= pLen) {
-              true  // All pattern segments matched
+            if j >= pLen {
+              true // All pattern segments matched
             } else {
-              let pathSeg = Array.get(pathSegments, i + j)->Option.getOr("")
-              let patSeg = Array.get(patternSegments, j)->Option.getOr("")
-              if (pathSeg === patSeg) {
+              let pathSeg = pathSegments[i + j]->Option.getOr("")
+              let patSeg = patternSegments[j]->Option.getOr("")
+              if pathSeg === patSeg {
                 checkSeg(j + 1)
               } else {
                 false
               }
             }
           }
-          if (checkSeg(0)) {
+          if checkSeg(0) {
             true
           } else {
-            checkIndex(i + 1)  // Try next starting index
+            checkIndex(i + 1) // Try next starting index
           }
         }
       }
@@ -92,24 +90,24 @@ let hasSymlinkPrefix = (~base: string, ~target: string): promise<bool> => {
   let resolvedBase = Path.resolve(base, "")
   let resolvedTarget = Path.resolve(target, "")
   let rel = Path.relative(resolvedBase, resolvedTarget)
-  if (String.startsWith(rel, "..")) {
+  if String.startsWith(rel, "..") {
     Promise.resolve(false)
   } else {
     let segments = String.split(rel, "/")->Array.filter(s => s !== "")
     let rec walk = (current: string, idx: int): promise<bool> => {
-      if (idx >= Array.length(segments)) {
+      if idx >= Array.length(segments) {
         Promise.resolve(false)
       } else {
-        let next = Path.join(current, Array.get(segments, idx)->Option.getOr(""))
-        Fs.lstat(next)->Promise.then(
-          stat => {
-            if (Fs.statIsSymlink(stat)) {
-              Promise.resolve(true)
-            } else {
-              walk(next, idx + 1)
-            }
-          },
-        )->Promise.catch(_error => {
+        let next = Path.join(current, segments[idx]->Option.getOr(""))
+        Fs.lstat(next)
+        ->Promise.then(stat => {
+          if Fs.statIsSymlink(stat) {
+            Promise.resolve(true)
+          } else {
+            walk(next, idx + 1)
+          }
+        })
+        ->Promise.catch(_error => {
           // NotFound means no symlink at this prefix
           Promise.resolve(false)
         })

@@ -3,4 +3,5 @@
 
 @send external on: (Http.serverSocket, string, unit => unit) => Http.serverSocket = "on"
 
-@send external remove: (Http.serverSocket, string, unit => unit) => Http.serverSocket = "removeListener"
+@send
+external remove: (Http.serverSocket, string, unit => unit) => Http.serverSocket = "removeListener"

@@ -19,8 +19,10 @@ function makeAbortCallback() {
 Test.test("AbortController.make creates a controller with a valid signal", () => {
   let controller = AbortController.make();
   let sig = AbortController.signal(controller);
-  let isObject = typeof sig !== "undefined";
-  Test.assertion("make returns a controller with a valid signal (typeof !== undefined)", "==", (a, b) => a === b, isObject, true);
+  let match = makeAbortCallback();
+  AbortController.onAbort(sig, match[0]);
+  AbortController.abort(controller);
+  Test.assertion("onabort fires after abort() — signal is valid", "=", (a, b) => a === b, match[1].contents, 1);
 });
 
 Test.test("signal is not aborted immediately after make", () => {

@@ -11,26 +11,26 @@
 
 let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   // Mutable parsing state.
-  let directory = ref(None: option<string>)
-  let hostname = ref(None: option<string>)
-  let port = ref(None: option<int>)
-  let ignorePatterns = ref(None: option<array<string>>)
+  let directory = ref((None: option<string>))
+  let hostname = ref((None: option<string>))
+  let port = ref((None: option<int>))
+  let ignorePatterns = ref((None: option<array<string>>))
   let listing = ref(false)
   let noListing = ref(false)
   let noLiveReload = ref(false)
   let restartOnChange = ref(false)
-  let logLevel = ref(None: option<Logger.logLevel>)
+  let logLevel = ref((None: option<Logger.logLevel>))
   let lan = ref(false)
   let allowProtectedDir = ref(false)
   let helpRequested = ref(false)
-  let parseError = ref(None: option<ParseError.t>)
+  let parseError = ref((None: option<ParseError.t>))
 
   let i = ref(0)
   let argsLen = Array.length(args)
 
   // Iterative flag parser — stops if an error is encountered.
   while i.contents < argsLen && parseError.contents == None {
-    let arg = Array.get(args, i.contents)->Option.getOr("")
+    let arg = args[i.contents]->Option.getOr("")
 
     if arg == "--help" || arg == "-h" {
       helpRequested := true
@@ -39,21 +39,21 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       if i.contents + 1 >= argsLen {
         parseError := Some(ParseError.MissingValue(arg))
       } else {
-        directory := Some(Array.get(args, i.contents + 1)->Option.getOr(""))
+        directory := Some(args[i.contents + 1]->Option.getOr(""))
         i := i.contents + 2
       }
     } else if arg == "--host" {
       if i.contents + 1 >= argsLen {
         parseError := Some(ParseError.MissingValue(arg))
       } else {
-        hostname := Some(Array.get(args, i.contents + 1)->Option.getOr(""))
+        hostname := Some(args[i.contents + 1]->Option.getOr(""))
         i := i.contents + 2
       }
     } else if arg == "--port" || arg == "-p" {
       if i.contents + 1 >= argsLen {
         parseError := Some(ParseError.MissingValue(arg))
       } else {
-        let portStr = Array.get(args, i.contents + 1)->Option.getOr("")
+        let portStr = args[i.contents + 1]->Option.getOr("")
         let portNum = Belt.Int.fromString(portStr)
         switch portNum {
         | None => parseError := Some(ParseError.InvalidPort(0))
@@ -65,8 +65,8 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       if i.contents + 1 >= argsLen {
         parseError := Some(ParseError.MissingValue(arg))
       } else {
-        let patternStr = Array.get(args, i.contents + 1)->Option.getOr("")
-        let patterns = Js.String.split(",", patternStr)->Array.map(Js.String.trim)
+        let patternStr = args[i.contents + 1]->Option.getOr("")
+        let patterns = Js.String.split(",", patternStr)->Array.map(String.trim)
         ignorePatterns := Some(patterns)
         i := i.contents + 2
       }
@@ -86,7 +86,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       if i.contents + 1 >= argsLen {
         parseError := Some(ParseError.MissingValue(arg))
       } else {
-        let levelStr = Array.get(args, i.contents + 1)->Option.getOr("")
+        let levelStr = args[i.contents + 1]->Option.getOr("")
         switch levelStr {
         | "info" => logLevel := Some(Logger.Info)
         | "debug" => logLevel := Some(Logger.Debug)
@@ -107,7 +107,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       parseError := Some(ParseError.RemovedFlag("--rate-limit-window-ms"))
     } else if arg == "--trust-proxy" {
       parseError := Some(ParseError.RemovedFlag("--trust-proxy"))
-    } else if String.length(arg) > 0 && Js.String2.get(arg, 0) == "-" {
+    } else if String.length(arg) > 0 && String.getUnsafe(arg, 0) == "-" {
       parseError := Some(ParseError.UnknownFlag(arg))
     } else {
       i := i.contents + 1

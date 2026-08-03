@@ -34,13 +34,15 @@ let mimeTable: array<entry> = [
 ]
 
 let lookupExt = (ext: string): option<t> => {
-  let lower = Js.String2.toLowerCase(ext)
-  mimeTable->Array.find(entry => {
+  let lower = String.toLowerCase(ext)
+  mimeTable
+  ->Array.find(entry => {
     let (e, _, _) = entry
     e == lower
-  })->Option.map(entry => {
+  })
+  ->Option.map(entry => {
     let (_, ct, isTxt) = entry
-    { contentType: ct, isText: isTxt }
+    {contentType: ct, isText: isTxt}
   })
 }
 
@@ -51,7 +53,7 @@ let lookupExt = (ext: string): option<t> => {
 let mimeFor = (~ext: string): t => {
   switch lookupExt(ext) {
   | Some(m) => m
-  | None => { contentType: "application/octet-stream", isText: false }
+  | None => {contentType: "application/octet-stream", isText: false}
   }
 }
 
@@ -65,8 +67,8 @@ let fromPath = (~path: string): t => {
   // Strip leading dot if present using String.get which returns option<char>
   let ext = switch String.get(raw, 0) {
   | Some(c) =>
-    if (c == ".") {
-      Js.String2.slice(raw, ~from=1, ~to_=Js.String2.length(raw))
+    if c == "." {
+      String.slice(raw, ~start=1, ~end=String.length(raw))
     } else {
       raw
     }

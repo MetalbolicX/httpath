@@ -25,9 +25,13 @@ let withTempDir = (f: string => unit): unit => {
   } catch {
   | _e =>
     // Best-effort cleanup on failure; ignore errors
-    try { rmdirSync(tempDir) } catch { | _ => () }
+    try {rmdirSync(tempDir)} catch {
+    | _ => ()
+    }
   }
-  try { rmdirSync(tempDir) } catch { | _ => () }
+  try {rmdirSync(tempDir)} catch {
+  | _ => ()
+  }
 }
 
 let withFile = (~dir: string, ~name: string, ~content: string, ~f: string => unit): unit => {
@@ -65,8 +69,7 @@ test("Fs.readdirSync returns dirents with name and isDirectory", () => {
         e.isDirectory,
         false,
       )
-    | None =>
-      JsError.throwWithMessage("Expected to find readme.txt in readdirSync entries")
+    | None => JsError.throwWithMessage("Expected to find readme.txt in readdirSync entries")
     }
     let dirEntry = entries->Array.find(entry => entry.name == "subdir")
     switch dirEntry {
@@ -78,8 +81,7 @@ test("Fs.readdirSync returns dirents with name and isDirectory", () => {
         e.isDirectory,
         true,
       )
-    | None =>
-      JsError.throwWithMessage("Expected to find subdir in readdirSync entries")
+    | None => JsError.throwWithMessage("Expected to find subdir in readdirSync entries")
     }
   })
 })
@@ -90,16 +92,21 @@ test("Fs.readdirSync returns dirents with name and isDirectory", () => {
 
 test("Fs.readFileSync returns UTF-8 file contents", () => {
   withTempDir(tempDir => {
-    withFile(~dir=tempDir, ~name="greeting.txt", ~content="Hello, 世界!", ~f=_ => {
-      let content = Fs.readFileSync(join(tempDir, "greeting.txt"))
-      assertion(
-        ~message="readFileSync returns exact content",
-        ~operator="=",
-        (a, b) => a == b,
-        content,
-        "Hello, 世界!",
-      )
-    })
+    withFile(
+      ~dir=tempDir,
+      ~name="greeting.txt",
+      ~content="Hello, 世界!",
+      ~f=_ => {
+        let content = Fs.readFileSync(join(tempDir, "greeting.txt"))
+        assertion(
+          ~message="readFileSync returns exact content",
+          ~operator="=",
+          (a, b) => a == b,
+          content,
+          "Hello, 世界!",
+        )
+      },
+    )
   })
 })
 
@@ -109,30 +116,29 @@ test("Fs.readFileSync returns UTF-8 file contents", () => {
 
 test("Fs.statSync on a file: isFile=true, isDirectory=false, isSymlink=false", () => {
   withTempDir(tempDir => {
-    withFile(~dir=tempDir, ~name="notes.txt", ~content="test data", ~f=filePath => {
-      let stats = Fs.statSync(filePath)
-      assertion(
-        ~message="isFile is true",
-        ~operator="=",
-        (a, b) => a == b,
-        stats.isFile,
-        true,
-      )
-      assertion(
-        ~message="isDirectory is false",
-        ~operator="=",
-        (a, b) => a == b,
-        stats.isDirectory,
-        false,
-      )
-      assertion(
-        ~message="isSymlink is false",
-        ~operator="=",
-        (a, b) => a == b,
-        stats.isSymlink,
-        false,
-      )
-    })
+    withFile(
+      ~dir=tempDir,
+      ~name="notes.txt",
+      ~content="test data",
+      ~f=filePath => {
+        let stats = Fs.statSync(filePath)
+        assertion(~message="isFile is true", ~operator="=", (a, b) => a == b, stats.isFile, true)
+        assertion(
+          ~message="isDirectory is false",
+          ~operator="=",
+          (a, b) => a == b,
+          stats.isDirectory,
+          false,
+        )
+        assertion(
+          ~message="isSymlink is false",
+          ~operator="=",
+          (a, b) => a == b,
+          stats.isSymlink,
+          false,
+        )
+      },
+    )
   })
 })
 
@@ -148,13 +154,7 @@ test("Fs.statSync on a directory: isDirectory=true, isFile=false", () => {
       stats.isDirectory,
       true,
     )
-    assertion(
-      ~message="isFile is false",
-      ~operator="=",
-      (a, b) => a == b,
-      stats.isFile,
-      false,
-    )
+    assertion(~message="isFile is false", ~operator="=", (a, b) => a == b, stats.isFile, false)
   })
 })
 
@@ -209,15 +209,20 @@ test("Fs.lstatSync on a symlink: isSymlink=true (while statSync follows)", () =>
 
 test("Fs.createReadStream returns a readStream (existing API)", () => {
   withTempDir(tempDir => {
-    withFile(~dir=tempDir, ~name="stream-test.txt", ~content="stream content", ~f=filePath => {
-      let _rs: Fs.readStream = Fs.createReadStream(filePath)
-      assertion(
-        ~message="createReadStream produces a value",
-        ~operator="=",
-        (a, b) => a == b,
-        true,
-        true,
-      )
-    })
+    withFile(
+      ~dir=tempDir,
+      ~name="stream-test.txt",
+      ~content="stream content",
+      ~f=filePath => {
+        let _rs: Fs.readStream = Fs.createReadStream(filePath)
+        assertion(
+          ~message="createReadStream produces a value",
+          ~operator="=",
+          (a, b) => a == b,
+          true,
+          true,
+        )
+      },
+    )
   })
 })

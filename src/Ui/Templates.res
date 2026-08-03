@@ -16,7 +16,7 @@ type fileEntry = {
 // ---------------------------------------------------------------------------
 
 let escapeHtml = (input: string): string => {
-  let len = Js.String.length(input)
+  let len = String.length(input)
   let rec build = (i: int, acc: string): string => {
     if i >= len {
       acc
@@ -67,7 +67,13 @@ let renderDirectoryListing = (~entries: array<fileEntry>, ~urlPath: string): str
       } else {
         // String.localeCompare returns float — use float comparison
         let cmp = String.localeCompare(a.name, b.name)
-        if cmp < 0.0 { -1.0 } else if cmp > 0.0 { 1.0 } else { 0.0 }
+        if cmp < 0.0 {
+          -1.0
+        } else if cmp > 0.0 {
+          1.0
+        } else {
+          0.0
+        }
       }
     })
     arr
@@ -78,16 +84,35 @@ let renderDirectoryListing = (~entries: array<fileEntry>, ~urlPath: string): str
     "<div class=\"empty-state\">This directory is empty</div>"
   } else {
     Array.map(sorted, entry => {
-      let icon = if entry.isDirectory { "📁" } else { "📄" }
+      let icon = if entry.isDirectory {
+        "📁"
+      } else {
+        "📄"
+      }
       let href = entry.url
-      "<a href=\"" ++ href ++ "\" class=\"file-item\"><span class=\"icon\">" ++ icon ++ "</span><span class=\"file-name\">" ++ escapeHtml(entry.name) ++ "</span></a>"
-    })
-    ->Array.join("")
+      "<a href=\"" ++
+      href ++
+      "\" class=\"file-item\"><span class=\"icon\">" ++
+      icon ++
+      "</span><span class=\"file-name\">" ++
+      escapeHtml(entry.name) ++ "</span></a>"
+    })->Array.join("")
   }
 
   // Dark mode toggle
   let themeToggle = "<label class=\"toggle\" for=\"dark\" title=\"Toggle Dark Mode\"><input type=\"checkbox\" name=\"toggle\" id=\"dark\" class=\"toggle__input\" checked><span class=\"toggle__fill\"></span></label>"
 
   // Assemble full HTML document
-  "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Index of " ++ escapeHtml(urlPath) ++ "</title>\n  <style>\n" ++ cssStyles ++ "\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <header class=\"header\">\n      <h1>Index of <span class=\"header-path\">" ++ escapeHtml(urlPath) ++ "</span></h1>\n      " ++ themeToggle ++ "\n    </header>\n    <main class=\"file-list\">\n      " ++ parentDir ++ "\n      " ++ entryLinks ++ "\n    </main>\n  </div>\n</body>\n</html>"
+  "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Index of " ++
+  escapeHtml(urlPath) ++
+  "</title>\n  <style>\n" ++
+  cssStyles ++
+  "\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <header class=\"header\">\n      <h1>Index of <span class=\"header-path\">" ++
+  escapeHtml(urlPath) ++
+  "</span></h1>\n      " ++
+  themeToggle ++
+  "\n    </header>\n    <main class=\"file-list\">\n      " ++
+  parentDir ++
+  "\n      " ++
+  entryLinks ++ "\n    </main>\n  </div>\n</body>\n</html>"
 }

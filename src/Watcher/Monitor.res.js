@@ -85,7 +85,7 @@ function start(dir, ignorePatterns, enableLiveReload, restartOnChange, onReload,
 
 function cancel(h) {
   h.cancelled = true;
-  FsWatch.close(h.watcher);
+  h.watcher.close();
   let id = h.pendingTimeoutId;
   if (id !== undefined) {
     Timers.clearTimeout(Primitive_option.valFromOption(id));

@@ -43,13 +43,7 @@ test("Config.default ignorePatterns has .git, node_modules, .DS_Store", () => {
   let hasGit = Array.some(patterns, p => p == ".git")
   let hasNodeModules = Array.some(patterns, p => p == "node_modules")
   let hasDSStore = Array.some(patterns, p => p == ".DS_Store")
-  assertion(
-    ~message="ignorePatterns contains .git",
-    ~operator="=",
-    (a, b) => a == b,
-    hasGit,
-    true,
-  )
+  assertion(~message="ignorePatterns contains .git", ~operator="=", (a, b) => a == b, hasGit, true)
   assertion(
     ~message="ignorePatterns contains node_modules",
     ~operator="=",
@@ -138,15 +132,21 @@ test("Config.t is a record with 10 fields", () => {
   let p = c.port
   let ip = c.ignorePatterns
   let edl = c.enableDirectoryListing
-  let ll = c.logLevel
+  let _ll = c.logLevel
   let elr = c.enableLiveReload
   let roc = c.restartOnChange
   let lan = c.lan
   let apd = c.allowProtectedDir
-  let allAccessible = d != "" && h != "" && p >= 0 &&
+  let allAccessible =
+    d != "" &&
+    h != "" &&
+    p >= 0 &&
     Array.length(ip) > 0 &&
-    edl == false && elr == true && roc == false &&
-    lan == false && apd == false
+    edl == false &&
+    elr == true &&
+    roc == false &&
+    lan == false &&
+    apd == false
   assertion(
     ~message="all 10 Config fields are accessible",
     ~operator="=",

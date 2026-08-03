@@ -3,15 +3,15 @@
 import * as Test from "rescript-test/src/Test.res.js";
 import * as Parser from "../../src/Cfg/Parser.res.js";
 import * as ParseError from "../../src/Cfg/ParseError.res.js";
-import * as Stdlib_Exn from "@rescript/runtime/lib/es6/Stdlib_Exn.js";
 import * as Stdlib_Option from "@rescript/runtime/lib/es6/Stdlib_Option.js";
+import * as Stdlib_JsError from "@rescript/runtime/lib/es6/Stdlib_JsError.js";
 
 function unwrapConfig(r) {
   if (r.TAG === "Ok") {
     return r._0;
   }
   let msg = ParseError.toString(r._0);
-  return Stdlib_Exn.raiseError("unwrapConfig called on Error: " + msg);
+  return Stdlib_JsError.throwWithMessage("unwrapConfig called on Error: " + msg);
 }
 
 Test.test("parse([]) returns all defaults", () => {
@@ -29,7 +29,7 @@ Test.test("parse([]) returns all defaults", () => {
     return Test.assertion("ignorePatterns has 3 entries", "=", (a, b) => a === b, c.ignorePatterns.length, 3);
   }
   let msg = ParseError.toString(result._0);
-  Stdlib_Exn.raiseError("Expected Ok, got Error: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected Ok, got Error: " + msg);
 });
 
 Test.test("parse([\"-d\", \"/tmp\", \"-p\", \"3000\"]) sets dir and port", () => {
@@ -142,7 +142,7 @@ Test.test("port 65536 is invalid", () => {
     return Test.assertion("InvalidPort error returned", "=", (a, b) => a === b, p._0, 65536);
   }
   let msg = ParseError.toString(p);
-  Stdlib_Exn.raiseError("Expected InvalidPort, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected InvalidPort, got: " + msg);
 });
 
 Test.test("negative port is invalid", () => {
@@ -158,7 +158,7 @@ Test.test("negative port is invalid", () => {
     return Test.assertion("InvalidPort error returned for -1", "=", (a, b) => a === b, true, true);
   }
   let msg = ParseError.toString(e);
-  Stdlib_Exn.raiseError("Expected InvalidPort, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected InvalidPort, got: " + msg);
 });
 
 Test.test("non-numeric port is invalid", () => {
@@ -174,7 +174,7 @@ Test.test("non-numeric port is invalid", () => {
     return Test.assertion("InvalidPort(0) returned for non-numeric", "=", (a, b) => a === b, true, true);
   }
   let msg = ParseError.toString(e);
-  Stdlib_Exn.raiseError("Expected InvalidPort, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected InvalidPort, got: " + msg);
 });
 
 Test.test("--log info returns Info", () => {
@@ -214,7 +214,7 @@ Test.test("--log trace returns InvalidLogLevel error", () => {
     return Test.assertion("InvalidLogLevel(\"trace\")", "=", (a, b) => a === b, s._0, "trace");
   }
   let msg = ParseError.toString(s);
-  Stdlib_Exn.raiseError("Expected InvalidLogLevel, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected InvalidLogLevel, got: " + msg);
 });
 
 Test.test("--dir with no value returns MissingValue", () => {
@@ -227,7 +227,7 @@ Test.test("--dir with no value returns MissingValue", () => {
     return Test.assertion("MissingValue for --dir", "=", (a, b) => a === b, flag._0, "--dir");
   }
   let msg = ParseError.toString(flag);
-  Stdlib_Exn.raiseError("Expected MissingValue, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected MissingValue, got: " + msg);
 });
 
 Test.test("--port with no value returns MissingValue", () => {
@@ -240,7 +240,7 @@ Test.test("--port with no value returns MissingValue", () => {
     return Test.assertion("MissingValue for --port", "=", (a, b) => a === b, flag._0, "--port");
   }
   let msg = ParseError.toString(flag);
-  Stdlib_Exn.raiseError("Expected MissingValue, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected MissingValue, got: " + msg);
 });
 
 Test.test("unknown flag returns UnknownFlag", () => {
@@ -253,7 +253,7 @@ Test.test("unknown flag returns UnknownFlag", () => {
     return Test.assertion("UnknownFlag for --unknown-flag", "=", (a, b) => a === b, flag._0, "--unknown-flag");
   }
   let msg = ParseError.toString(flag);
-  Stdlib_Exn.raiseError("Expected UnknownFlag, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected UnknownFlag, got: " + msg);
 });
 
 Test.test("unknown short flag -z returns UnknownFlag", () => {
@@ -266,7 +266,7 @@ Test.test("unknown short flag -z returns UnknownFlag", () => {
     return Test.assertion("UnknownFlag for -z", "=", (a, b) => a === b, flag._0, "-z");
   }
   let msg = ParseError.toString(flag);
-  Stdlib_Exn.raiseError("Expected UnknownFlag, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected UnknownFlag, got: " + msg);
 });
 
 Test.test("--trust-proxy returns RemovedFlag error", () => {
@@ -279,7 +279,7 @@ Test.test("--trust-proxy returns RemovedFlag error", () => {
     return Test.assertion("RemovedFlag for --trust-proxy", "=", (a, b) => a === b, flag._0, "--trust-proxy");
   }
   let msg = ParseError.toString(flag);
-  Stdlib_Exn.raiseError("Expected RemovedFlag, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected RemovedFlag, got: " + msg);
 });
 
 Test.test("--rate-limit-max-requests returns RemovedFlag error", () => {
@@ -295,7 +295,7 @@ Test.test("--rate-limit-max-requests returns RemovedFlag error", () => {
     return Test.assertion("RemovedFlag for --rate-limit-max-requests", "=", (a, b) => a === b, flag._0, "--rate-limit-max-requests");
   }
   let msg = ParseError.toString(flag);
-  Stdlib_Exn.raiseError("Expected RemovedFlag, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected RemovedFlag, got: " + msg);
 });
 
 Test.test("--rate-limit-window-ms returns RemovedFlag error", () => {
@@ -311,7 +311,7 @@ Test.test("--rate-limit-window-ms returns RemovedFlag error", () => {
     return Test.assertion("RemovedFlag for --rate-limit-window-ms", "=", (a, b) => a === b, flag._0, "--rate-limit-window-ms");
   }
   let msg = ParseError.toString(flag);
-  Stdlib_Exn.raiseError("Expected RemovedFlag, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected RemovedFlag, got: " + msg);
 });
 
 Test.test("--help returns HelpRequested error", () => {
@@ -324,7 +324,7 @@ Test.test("--help returns HelpRequested error", () => {
     return Test.assertion("HelpRequested returned for --help", "=", (a, b) => a === b, true, true);
   }
   let msg = ParseError.toString(e);
-  Stdlib_Exn.raiseError("Expected HelpRequested, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected HelpRequested, got: " + msg);
 });
 
 Test.test("-h returns HelpRequested error", () => {
@@ -337,7 +337,7 @@ Test.test("-h returns HelpRequested error", () => {
     return Test.assertion("HelpRequested returned for -h", "=", (a, b) => a === b, true, true);
   }
   let msg = ParseError.toString(e);
-  Stdlib_Exn.raiseError("Expected HelpRequested, got: " + msg);
+  Stdlib_JsError.throwWithMessage("Expected HelpRequested, got: " + msg);
 });
 
 Test.test("--ignore with single pattern", () => {
@@ -376,11 +376,11 @@ Test.test("parse is deterministic (same args => same config)", () => {
   let r1 = Parser.parse(args);
   let r2 = Parser.parse(args);
   if (r1.TAG !== "Ok") {
-    return Stdlib_Exn.raiseError("Both results should be Ok for deterministic test");
+    return Stdlib_JsError.throwWithMessage("Both results should be Ok for deterministic test");
   }
   let c1 = r1._0;
   if (r2.TAG !== "Ok") {
-    return Stdlib_Exn.raiseError("Both results should be Ok for deterministic test");
+    return Stdlib_JsError.throwWithMessage("Both results should be Ok for deterministic test");
   }
   let c2 = r2._0;
   Test.assertion("same args produce same port", "=", (a, b) => a === b, c1.port, c2.port);

@@ -10,4 +10,4 @@ let main: unit => promise<unit>
 /// Returns only after shutdown (signal received or abort triggered).
 /// The handler is typically a static-file handler; until that lands,
 /// a 501 fallback is used internally.
-  let start: (~handler: Http.handlerCb, ~config: Config.t) => promise<unit>
+let start: (~handler: Http.handlerCb, ~config: Config.t) => promise<unit>

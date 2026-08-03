@@ -2,7 +2,7 @@
 
 import * as Test from "rescript-test/src/Test.res.js";
 import * as Headers from "../../src/Security/Headers.res.js";
-import * as Stdlib_Exn from "@rescript/runtime/lib/es6/Stdlib_Exn.js";
+import * as Stdlib_JsError from "@rescript/runtime/lib/es6/Stdlib_JsError.js";
 
 Test.test("Headers.securityHeaders has exactly 8 entries", () => {
   let count = Headers.securityHeaders.length;
@@ -11,56 +11,56 @@ Test.test("Headers.securityHeaders has exactly 8 entries", () => {
 
 Test.test("Headers.securityHeaders[0] is x-content-type-options: nosniff", () => {
   let v = Headers.securityHeaders[0];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 0 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 0 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "x-content-type-options");
   Test.assertion("value", "=", (a, b) => a === b, match[1], "nosniff");
 });
 
 Test.test("Headers.securityHeaders[1] is x-frame-options: DENY", () => {
   let v = Headers.securityHeaders[1];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 1 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 1 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "x-frame-options");
   Test.assertion("value", "=", (a, b) => a === b, match[1], "DENY");
 });
 
 Test.test("Headers.securityHeaders[2] is referrer-policy: no-referrer", () => {
   let v = Headers.securityHeaders[2];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 2 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 2 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "referrer-policy");
   Test.assertion("value", "=", (a, b) => a === b, match[1], "no-referrer");
 });
 
 Test.test("Headers.securityHeaders[3] is permissions-policy: camera=(), microphone=(), geolocation=()", () => {
   let v = Headers.securityHeaders[3];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 3 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 3 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "permissions-policy");
   Test.assertion("value", "=", (a, b) => a === b, match[1], "camera=(), microphone=(), geolocation=()");
 });
 
 Test.test("Headers.securityHeaders[4] is cross-origin-opener-policy: same-origin", () => {
   let v = Headers.securityHeaders[4];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 4 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 4 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "cross-origin-opener-policy");
   Test.assertion("value", "=", (a, b) => a === b, match[1], "same-origin");
 });
 
 Test.test("Headers.securityHeaders[5] is cross-origin-resource-policy: same-origin", () => {
   let v = Headers.securityHeaders[5];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 5 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 5 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "cross-origin-resource-policy");
   Test.assertion("value", "=", (a, b) => a === b, match[1], "same-origin");
 });
 
 Test.test("Headers.securityHeaders[6] is x-permitted-cross-domain-policies: none", () => {
   let v = Headers.securityHeaders[6];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 6 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 6 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "x-permitted-cross-domain-policies");
   Test.assertion("value", "=", (a, b) => a === b, match[1], "none");
 });
 
 Test.test("Headers.securityHeaders[7] is content-security-policy with unsafe-inline", () => {
   let v = Headers.securityHeaders[7];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 7 in Headers.securityHeaders");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 7 in Headers.securityHeaders");
   Test.assertion("name", "=", (a, b) => a === b, match[0], "content-security-policy");
   Test.assertion("contains unsafe-inline", "=", (a, b) => a === b, match[1].includes("unsafe-inline"), true);
 });
@@ -77,7 +77,7 @@ Test.test("withSecurityHeaders: pre-existing headers are preserved first", () =>
     ]];
   let result = Headers.withSecurityHeaders(preExisting);
   let v = result[0];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 0 in result");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 0 in result");
   Test.assertion("first header name is cache-control", "=", (a, b) => a === b, match[0], "cache-control");
   Test.assertion("first header value is no-cache", "=", (a, b) => a === b, match[1], "no-cache");
   Test.assertion("result has 9 total", "=", (a, b) => a === b, result.length, 9);
@@ -90,7 +90,7 @@ Test.test("withSecurityHeaders: all 8 security headers appear after any pre-exis
     ]];
   let result = Headers.withSecurityHeaders(preExisting);
   let v = result[1];
-  let match = v !== undefined ? v : Stdlib_Exn.raiseError("Expected index 1 in result");
+  let match = v !== undefined ? v : Stdlib_JsError.throwWithMessage("Expected index 1 in result");
   Test.assertion("first security header is x-content-type-options", "=", (a, b) => a === b, match[0], "x-content-type-options");
 });
 

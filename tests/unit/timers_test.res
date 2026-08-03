@@ -17,10 +17,9 @@ test("Timers.setTimeout returns a timeoutId (opaque type)", () => {
 test("Timers.clearTimeout does not throw on valid timeoutId", () => {
   let fn = () => ()
   let id = Timers.setTimeout(fn, 1000)
-  doesNotThrow(
-    ~message="clearTimeout on a valid timeoutId does not throw",
-    () => { Timers.clearTimeout(id) },
-  )
+  doesNotThrow(~message="clearTimeout on a valid timeoutId does not throw", () => {
+    Timers.clearTimeout(id)
+  })
 })
 
 test("Timers.setTimeout accepts callback and delay", () => {
@@ -45,8 +44,7 @@ test("Timers.clearTimeout on already-fired id does not throw", () => {
   // Wait a bit for it to potentially fire
   let _w = Timers.setTimeout(() => (), 10)
   // Clear should not throw even if the timer already fired
-  doesNotThrow(
-    ~message="clearTimeout on an already-fired timeoutId does not throw",
-    () => { Timers.clearTimeout(id) },
-  )
+  doesNotThrow(~message="clearTimeout on an already-fired timeoutId does not throw", () => {
+    Timers.clearTimeout(id)
+  })
 })

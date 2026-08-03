@@ -9,10 +9,8 @@ external _fsWatch: (string, watchOptions, (string, string) => unit) => watcher =
 let startWatcher: (
   ~path: string,
   ~options: watchOptions,
-  ~onEvent: (Types.fsEvent) => unit,
+  ~onEvent: Types.fsEvent => unit,
 ) => watcher
 
 @send
 external close: watcher => unit = "close"
-
-let close: watcher => unit

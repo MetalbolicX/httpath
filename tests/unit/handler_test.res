@@ -30,19 +30,19 @@ type fsOps = {
 
 // Production FsOps using real Node/Fs
 let productionFsOps: fsOps = {
-  readdir: (path) => {
+  readdir: path => {
     Fs.readdir(path)->Promise.then(arr => {
-      Promise.resolve(Array.map(arr, d => { name: d.name, isDirectory: d.isDirectory }))
+      Promise.resolve(Array.map(arr, d => {name: d.name, isDirectory: d.isDirectory}))
     })
   },
-  lstat: (path) => {
+  lstat: path => {
     Fs.lstat(path)->Promise.then(s => {
-      Promise.resolve({ isFile: s.isFile, isDirectory: s.isDirectory, isSymlink: s.isSymlink })
+      Promise.resolve({isFile: s.isFile, isDirectory: s.isDirectory, isSymlink: s.isSymlink})
     })
   },
-  stat: (path) => {
+  stat: path => {
     Fs.stat(path)->Promise.then(s => {
-      Promise.resolve({ isFile: s.isFile, isDirectory: s.isDirectory, isSymlink: s.isSymlink })
+      Promise.resolve({isFile: s.isFile, isDirectory: s.isDirectory, isSymlink: s.isSymlink})
     })
   },
   readTextFile: Fs.readTextFile,
@@ -77,11 +77,16 @@ test("Handler: content-length > 0 returns 413 Payload Too Large", () => {
       if i >= Array.length(headers) {
         None
       } else {
-        switch Array.get(headers, i) {
+        switch headers[i] {
         | Some(("content-length", v)) => {
             let parsed = Belt.Int.fromString(v)
             switch parsed {
-            | Some(n) => if n > 0 { Some(n) } else { None }
+            | Some(n) =>
+              if n > 0 {
+                Some(n)
+              } else {
+                None
+              }
             | None => None
             }
           }
@@ -94,9 +99,27 @@ test("Handler: content-length > 0 returns 413 Payload Too Large", () => {
   let headersWithContent: array<(string, string)> = [("content-length", "5")]
   let headersEmpty: array<(string, string)> = []
   let headersZero: array<(string, string)> = [("content-length", "0")]
-  assertion(~message="positive content-length detected", ~operator="=", (a, b) => a == b, hasPositiveContentLength(headersWithContent), true)
-  assertion(~message="empty content-length not positive", ~operator="=", (a, b) => a == b, hasPositiveContentLength(headersEmpty), false)
-  assertion(~message="zero content-length not positive", ~operator="=", (a, b) => a == b, hasPositiveContentLength(headersZero), false)
+  assertion(
+    ~message="positive content-length detected",
+    ~operator="=",
+    (a, b) => a == b,
+    hasPositiveContentLength(headersWithContent),
+    true,
+  )
+  assertion(
+    ~message="empty content-length not positive",
+    ~operator="=",
+    (a, b) => a == b,
+    hasPositiveContentLength(headersEmpty),
+    false,
+  )
+  assertion(
+    ~message="zero content-length not positive",
+    ~operator="=",
+    (a, b) => a == b,
+    hasPositiveContentLength(headersZero),
+    false,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -154,7 +177,8 @@ test("Handler: valid path decodes without error", () => {
   | _ => None
   }
   switch decoded {
-  | Some(d) => assertion(~message="decoded correctly", ~operator="=", (a, b) => a == b, d, "/file name.txt")
+  | Some(d) =>
+    assertion(~message="decoded correctly", ~operator="=", (a, b) => a == b, d, "/file name.txt")
   | None => JsError.throwWithMessage("decodeURIComponent should not throw for valid input")
   }
 })
@@ -167,7 +191,14 @@ test("Handler: malformed percent encoding throws and returns 400", () => {
   }
   switch decoded {
   | Some(_) => JsError.throwWithMessage("decodeURIComponent should throw for malformed input")
-  | None => assertion(~message="malformed encoding returns None", ~operator="=", (a, b) => a == b, true, true)
+  | None =>
+    assertion(
+      ~message="malformed encoding returns None",
+      ~operator="=",
+      (a, b) => a == b,
+      true,
+      true,
+    )
   }
 })
 
@@ -191,7 +222,7 @@ test("Handler: /livereload + upgrade:websocket returns WsUpgrade when liveReload
         if i >= Array.length(req.headers) {
           None
         } else {
-          switch Array.get(req.headers, i) {
+          switch req.headers[i] {
           | Some(("upgrade", v)) => Some(v)
           | _ => findUpgrade(i + 1)
           }
@@ -219,7 +250,7 @@ test("Handler: /livereload without upgrade header does not WS upgrade", () => {
         if i >= Array.length(req.headers) {
           None
         } else {
-          switch Array.get(req.headers, i) {
+          switch req.headers[i] {
           | Some(("upgrade", v)) => Some(v)
           | _ => findUpgrade(i + 1)
           }
@@ -229,7 +260,13 @@ test("Handler: /livereload without upgrade header does not WS upgrade", () => {
     } == Some("websocket")
   }
   let result = shouldUpgrade(testConfigBase, req)
-  assertion(~message="WS upgrade should not trigger without upgrade header", ~operator="=", (a, b) => a == b, result, false)
+  assertion(
+    ~message="WS upgrade should not trigger without upgrade header",
+    ~operator="=",
+    (a, b) => a == b,
+    result,
+    false,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -242,7 +279,13 @@ test("Handler: safe path resolves within base directory", () => {
   | Some(p) => {
       let rel = Node_Path.relative("/test/serve", p)
       let startsWithDotDot = String.startsWith(rel, "..")
-      assertion(~message="resolved path should not escape base", ~operator="=", (a, b) => a == b, startsWithDotDot, false)
+      assertion(
+        ~message="resolved path should not escape base",
+        ~operator="=",
+        (a, b) => a == b,
+        startsWithDotDot,
+        false,
+      )
     }
   | None => JsError.throwWithMessage("Expected Some for safe path")
   }
@@ -252,7 +295,8 @@ test("Handler: path traversal returns None from resolveSafePath", () => {
   let safePath = Path.resolveSafePath(~base="/test/serve", ~requested="/../../etc/passwd")
   switch safePath {
   | Some(_) => JsError.throwWithMessage("Expected None for path traversal")
-  | None => assertion(~message="path traversal blocked", ~operator="=", (a, b) => a == b, true, true)
+  | None =>
+    assertion(~message="path traversal blocked", ~operator="=", (a, b) => a == b, true, true)
   }
 })
 
@@ -270,7 +314,13 @@ test("Handler: node_modules matches ignore pattern", () => {
 test("Handler: regular file does not match ignore pattern", () => {
   let relPath = "src/index.js"
   let matches = Path.matchesPattern(~path=relPath, ~patterns=["node_modules"])
-  assertion(~message="src/index.js should not match", ~operator="=", (a, b) => a == b, matches, false)
+  assertion(
+    ~message="src/index.js should not match",
+    ~operator="=",
+    (a, b) => a == b,
+    matches,
+    false,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -284,7 +334,13 @@ test("Handler: hasSymlinkPrefix returns false when no symlink in path", () => {
   // after safe-path is confirmed, so a non-traversal path with no symlinks returns false.
   let rel = Node_Path.relative("/test/serve", "/test/serve/file.txt")
   let startsWithDotDot = String.startsWith(rel, "..")
-  assertion(~message="relative path should not start with ..", ~operator="=", (a, b) => a == b, startsWithDotDot, false)
+  assertion(
+    ~message="relative path should not start with ..",
+    ~operator="=",
+    (a, b) => a == b,
+    startsWithDotDot,
+    false,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -292,14 +348,32 @@ test("Handler: hasSymlinkPrefix returns false when no symlink in path", () => {
 // ---------------------------------------------------------------------------
 
 test("Handler: stat returns isFile=true routes to serveFile", () => {
-  let stats = { isFile: true, isDirectory: false, isSymlink: false }
-  assertion(~message="isFile routes to serveFile", ~operator="=", (a, b) => a == b, stats.isFile, true)
-  assertion(~message="isDirectory should be false", ~operator="=", (a, b) => a == b, stats.isDirectory, false)
+  let stats = {isFile: true, isDirectory: false, isSymlink: false}
+  assertion(
+    ~message="isFile routes to serveFile",
+    ~operator="=",
+    (a, b) => a == b,
+    stats.isFile,
+    true,
+  )
+  assertion(
+    ~message="isDirectory should be false",
+    ~operator="=",
+    (a, b) => a == b,
+    stats.isDirectory,
+    false,
+  )
 })
 
 test("Handler: stat returns isDirectory=true routes to serveDirectory or index.html", () => {
-  let stats = { isFile: false, isDirectory: true, isSymlink: false }
-  assertion(~message="isDirectory routes to serveDirectory", ~operator="=", (a, b) => a == b, stats.isDirectory, true)
+  let stats = {isFile: false, isDirectory: true, isSymlink: false}
+  assertion(
+    ~message="isDirectory routes to serveDirectory",
+    ~operator="=",
+    (a, b) => a == b,
+    stats.isDirectory,
+    true,
+  )
   assertion(~message="isFile should be false", ~operator="=", (a, b) => a == b, stats.isFile, false)
 })
 
@@ -309,19 +383,37 @@ test("Handler: stat returns isDirectory=true routes to serveDirectory or index.h
 
 test("Handler: fromPath returns text/html for .html", () => {
   let mime = Mime.fromPath(~path="index.html")
-  assertion(~message="html contentType", ~operator="=", (a, b) => a == b, mime.contentType, "text/html")
+  assertion(
+    ~message="html contentType",
+    ~operator="=",
+    (a, b) => a == b,
+    mime.contentType,
+    "text/html",
+  )
   assertion(~message="html isText", ~operator="=", (a, b) => a == b, mime.isText, true)
 })
 
 test("Handler: fromPath returns image/svg+xml for .svg", () => {
   let mime = Mime.fromPath(~path="logo.svg")
-  assertion(~message="svg contentType", ~operator="=", (a, b) => a == b, mime.contentType, "image/svg+xml")
+  assertion(
+    ~message="svg contentType",
+    ~operator="=",
+    (a, b) => a == b,
+    mime.contentType,
+    "image/svg+xml",
+  )
   assertion(~message="svg isText", ~operator="=", (a, b) => a == b, mime.isText, false)
 })
 
 test("Handler: fromPath returns application/octet-stream for unknown ext", () => {
   let mime = Mime.fromPath(~path="file.foobar")
-  assertion(~message="unknown contentType", ~operator="=", (a, b) => a == b, mime.contentType, "application/octet-stream")
+  assertion(
+    ~message="unknown contentType",
+    ~operator="=",
+    (a, b) => a == b,
+    mime.contentType,
+    "application/octet-stream",
+  )
   assertion(~message="unknown isText", ~operator="=", (a, b) => a == b, mime.isText, false)
 })
 
@@ -357,7 +449,13 @@ test("Handler: withSecurityHeaders includes x-content-type-options", () => {
   let existing: array<(string, string)> = []
   let withSec = Headers.withSecurityHeaders(existing)
   let hasHeader = Array.some(withSec, ((name, _)) => name == "x-content-type-options")
-  assertion(~message="x-content-type-options present", ~operator="=", (a, b) => a == b, hasHeader, true)
+  assertion(
+    ~message="x-content-type-options present",
+    ~operator="=",
+    (a, b) => a == b,
+    hasHeader,
+    true,
+  )
 })
 
 test("Handler: withSecurityHeaders does not duplicate existing security headers", () => {
@@ -366,7 +464,13 @@ test("Handler: withSecurityHeaders does not duplicate existing security headers"
   let xctoEntries = Array.filter(withSec, ((name, _)) => name == "x-content-type-options")
   let count = Array.length(xctoEntries)
   // Should still be exactly 1 (replaced, not duplicated)
-  assertion(~message="no duplicate x-content-type-options", ~operator="=", (a, b) => a == b, count, 1)
+  assertion(
+    ~message="no duplicate x-content-type-options",
+    ~operator="=",
+    (a, b) => a == b,
+    count,
+    1,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -381,8 +485,20 @@ test("Handler: ENOENT is classifiable from error code", () => {
     | _ => 500
     }
   }
-  assertion(~message="ENOENT -> 404", ~operator="=", (a, b) => a == b, classifyError(Some("ENOENT")), 404)
-  assertion(~message="other error -> 500", ~operator="=", (a, b) => a == b, classifyError(Some("EACCES")), 500)
+  assertion(
+    ~message="ENOENT -> 404",
+    ~operator="=",
+    (a, b) => a == b,
+    classifyError(Some("ENOENT")),
+    404,
+  )
+  assertion(
+    ~message="other error -> 500",
+    ~operator="=",
+    (a, b) => a == b,
+    classifyError(Some("EACCES")),
+    500,
+  )
   assertion(~message="no code -> 500", ~operator="=", (a, b) => a == b, classifyError(None), 500)
 })
 
@@ -421,8 +537,8 @@ test("Handler: injectLiveReloadScript inserts before </body>", () => {
 
 test("Handler: renderDirectoryListing produces HTML with title", () => {
   let entries: array<Templates.fileEntry> = [
-    { name: "file.txt", isDirectory: false, url: "/file.txt" },
-    { name: "subdir", isDirectory: true, url: "/subdir" },
+    {name: "file.txt", isDirectory: false, url: "/file.txt"},
+    {name: "subdir", isDirectory: true, url: "/subdir"},
   ]
   let html = Templates.renderDirectoryListing(~entries, ~urlPath="/")
   let hasTitle = String.includes(html, "<title>Index of /</title>")

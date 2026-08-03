@@ -15,7 +15,7 @@ external _fsWatch: (string, watchOptions, (string, string) => unit) => watcher =
 let startWatcher: (
   ~path: string,
   ~options: watchOptions,
-  ~onEvent: (Types.fsEvent) => unit,
+  ~onEvent: Types.fsEvent => unit,
 ) => watcher = (~path, ~options, ~onEvent) => {
   let wrappedCallback = (eventType: string, filename: string) => {
     let event: Types.fsEvent = switch eventType {

@@ -61,7 +61,7 @@ external lstatSync: string => stats = "lstatSync"
 external statSync: string => stats = "statSync"
 
 @bs.scope("fs") @bs.val
-external readdirSync: (string) => array<dirent> = "readdirSync"
+external readdirSync: string => array<dirent> = "readdirSync"
 
 @bs.scope("fs") @bs.val
 external mkdirSync: string => unit = "mkdirSync"
@@ -82,13 +82,13 @@ external writeFileSync: (string, string) => unit = "writeFileSync"
 // Promise-based bindings using node:fs/promises
 // ---------------------------------------------------------------------------
 
-type readdirOptions = { withFileTypes: bool }
+type readdirOptions = {withFileTypes: bool}
 
 @module("node:fs/promises")
 external _readdir: (string, readdirOptions) => promise<array<dirent>> = "readdir"
 
 let readdir = (path: string): promise<array<dirent>> => {
-  _readdir(path, { withFileTypes: true })
+  _readdir(path, {withFileTypes: true})
 }
 
 @module("node:fs/promises")

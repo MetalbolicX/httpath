@@ -15,7 +15,11 @@ let matchesIgnorePattern = (path: string, patterns: array<string>): bool => {
         } else {
           switch String.get(s, i) {
           | Some(c) =>
-            let acc2 = if c == "*" { acc } else { acc ++ String.make(c) }
+            let acc2 = if c == "*" {
+              acc
+            } else {
+              acc ++ String.make(c)
+            }
             go(s, i + 1, acc2)
           | None => acc
           }

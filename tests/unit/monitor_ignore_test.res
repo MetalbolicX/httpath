@@ -45,8 +45,20 @@ test("glob prefix pattern matches start of path", () => {
   let r4 = IgnoreMatcher.matchesIgnorePattern("my-deno.json", patterns)
   assertion(~message="deno.json matches", ~operator="=", (a, b) => a == b, r1, true)
   assertion(~message="deno.lock matches", ~operator="=", (a, b) => a == b, r2, true)
-  assertion(~message="deno.json.lock matches (deno prefix)", ~operator="=", (a, b) => a == b, r3, true)
-  assertion(~message="my-deno.json does not match (not prefix)", ~operator="=", (a, b) => a == b, r4, false)
+  assertion(
+    ~message="deno.json.lock matches (deno prefix)",
+    ~operator="=",
+    (a, b) => a == b,
+    r3,
+    true,
+  )
+  assertion(
+    ~message="my-deno.json does not match (not prefix)",
+    ~operator="=",
+    (a, b) => a == b,
+    r4,
+    false,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -62,9 +74,21 @@ test("glob suffix pattern matches end of path", () => {
   let r4 = IgnoreMatcher.matchesIgnorePattern("foo.module.js", patterns)
   assertion(~message="foo.js matches", ~operator="=", (a, b) => a == b, r1, true)
   assertion(~message="bar.ts matches", ~operator="=", (a, b) => a == b, r2, true)
-  assertion(~message="foo.jsx does not match (extra suffix)", ~operator="=", (a, b) => a == b, r3, false)
+  assertion(
+    ~message="foo.jsx does not match (extra suffix)",
+    ~operator="=",
+    (a, b) => a == b,
+    r3,
+    false,
+  )
   // foo.module.js contains .js as substring, so matches *.js per substring semantics
-  assertion(~message="foo.module.js matches *.js (substring)", ~operator="=", (a, b) => a == b, r4, true)
+  assertion(
+    ~message="foo.module.js matches *.js (substring)",
+    ~operator="=",
+    (a, b) => a == b,
+    r4,
+    true,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -109,8 +133,20 @@ test("patterns are matched case insensitively", () => {
   let r2 = IgnoreMatcher.matchesIgnorePattern("NODE_MODULES/pkg/index.js", patterns)
   let r3 = IgnoreMatcher.matchesIgnorePattern("Node_Modules/pkg/index.js", patterns)
   assertion(~message=".git/hooks matches .GIT pattern", ~operator="=", (a, b) => a == b, r1, true)
-  assertion(~message="NODE_MODULES matches NODE_MODULES pattern", ~operator="=", (a, b) => a == b, r2, true)
-  assertion(~message="Node_Modules matches NODE_MODULES pattern", ~operator="=", (a, b) => a == b, r3, true)
+  assertion(
+    ~message="NODE_MODULES matches NODE_MODULES pattern",
+    ~operator="=",
+    (a, b) => a == b,
+    r2,
+    true,
+  )
+  assertion(
+    ~message="Node_Modules matches NODE_MODULES pattern",
+    ~operator="=",
+    (a, b) => a == b,
+    r3,
+    true,
+  )
 })
 
 // ---------------------------------------------------------------------------

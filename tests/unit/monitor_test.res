@@ -23,13 +23,13 @@ external restoreClock: unit => unit = "restoreClock"
 
 let makeReloadCallback = () => {
   let count = ref(0)
-  let fn = () => { count.contents = count.contents + 1 }
+  let fn = () => {count.contents = count.contents + 1}
   (fn, count)
 }
 
 let makeRestartCallback = () => {
   let count = ref(0)
-  let fn = () => { count.contents = count.contents + 1 }
+  let fn = () => {count.contents = count.contents + 1}
   (fn, count)
 }
 
@@ -53,13 +53,7 @@ test("Monitor.start returns a handle", () => {
   let h = switch handle {
   | _ => true
   }
-  assertion(
-    ~message="start returns a handle",
-    ~operator="=",
-    (a, b) => a == b,
-    h,
-    true,
-  )
+  assertion(~message="start returns a handle", ~operator="=", (a, b) => a == b, h, true)
   Monitor.cancel(handle)
 })
 
@@ -79,10 +73,7 @@ test("Monitor.cancel does not throw on valid handle", () => {
     ~onReload=reloadFn,
     ~onRestart=restartFn,
   )
-  doesNotThrow(
-    ~message="cancel does not throw",
-    () => { Monitor.cancel(handle) },
-  )
+  doesNotThrow(~message="cancel does not throw", () => {Monitor.cancel(handle)})
 })
 
 // ---------------------------------------------------------------------------
@@ -102,10 +93,7 @@ test("Monitor.cancel is idempotent", () => {
     ~onRestart=restartFn,
   )
   Monitor.cancel(handle)
-  doesNotThrow(
-    ~message="second cancel does not throw",
-    () => { Monitor.cancel(handle) },
-  )
+  doesNotThrow(~message="second cancel does not throw", () => {Monitor.cancel(handle)})
 })
 
 // ---------------------------------------------------------------------------
@@ -128,13 +116,7 @@ test("Monitor.start accepts all required labeled args", () => {
   let h = switch handle {
   | _ => true
   }
-  assertion(
-    ~message="start accepts all labeled args",
-    ~operator="=",
-    (a, b) => a == b,
-    h,
-    true,
-  )
+  assertion(~message="start accepts all labeled args", ~operator="=", (a, b) => a == b, h, true)
   Monitor.cancel(handle)
 })
 
@@ -383,10 +365,7 @@ test("Monitor.handle is not directly constructible", () => {
     ~onRestart=restartFn,
   )
   // Verify cancel works (handle is valid).
-  doesNotThrow(
-    ~message="handle returned by start is valid",
-    () => { Monitor.cancel(handle) },
-  )
+  doesNotThrow(~message="handle returned by start is valid", () => {Monitor.cancel(handle)})
 })
 
 // ---------------------------------------------------------------------------
@@ -416,14 +395,8 @@ test("Multiple Monitor.start calls return independent handles", () => {
     ~onRestart=onRestart2,
   )
   // Both handles should be independently cancelable.
-  doesNotThrow(
-    ~message="first handle cancelable",
-    () => { Monitor.cancel(h1) },
-  )
-  doesNotThrow(
-    ~message="second handle cancelable",
-    () => { Monitor.cancel(h2) },
-  )
+  doesNotThrow(~message="first handle cancelable", () => {Monitor.cancel(h1)})
+  doesNotThrow(~message="second handle cancelable", () => {Monitor.cancel(h2)})
 })
 
 // ---------------------------------------------------------------------------
@@ -442,10 +415,7 @@ test("Monitor.start accepts empty ignorePatterns", () => {
     ~onReload=reloadFn,
     ~onRestart=restartFn,
   )
-  doesNotThrow(
-    ~message="start with empty ignorePatterns works",
-    () => { Monitor.cancel(handle) },
-  )
+  doesNotThrow(~message="start with empty ignorePatterns works", () => {Monitor.cancel(handle)})
 })
 
 // ---------------------------------------------------------------------------
@@ -464,8 +434,5 @@ test("Monitor.start accepts restartOnChange=true", () => {
     ~onReload=reloadFn,
     ~onRestart=restartFn,
   )
-  doesNotThrow(
-    ~message="start with restartOnChange=true works",
-    () => { Monitor.cancel(handle) },
-  )
+  doesNotThrow(~message="start with restartOnChange=true works", () => {Monitor.cancel(handle)})
 })

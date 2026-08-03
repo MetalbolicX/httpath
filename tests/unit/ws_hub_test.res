@@ -290,20 +290,8 @@ test("WsHub.notifyReload broadcasts to all registered clients", () => {
   let wc1 = getWriteCount(fake1)
   let wc2 = getWriteCount(fake2)
 
-  assertion(
-    ~message="first socket received one write",
-    ~operator="=",
-    (a, b) => a == b,
-    wc1,
-    1,
-  )
-  assertion(
-    ~message="second socket received one write",
-    ~operator="=",
-    (a, b) => a == b,
-    wc2,
-    1,
-  )
+  assertion(~message="first socket received one write", ~operator="=", (a, b) => a == b, wc1, 1)
+  assertion(~message="second socket received one write", ~operator="=", (a, b) => a == b, wc2, 1)
 })
 
 // ---------------------------------------------------------------------------
