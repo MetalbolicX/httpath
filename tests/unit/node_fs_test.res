@@ -207,6 +207,9 @@ test("Fs.lstatSync on a symlink: isSymlink=true (while statSync follows)", () =>
 // Existing stream API remains intact (smoke test)
 // ---------------------------------------------------------------------------
 
+@send external rsDestroy: Fs.readStream => unit = "destroy"
+@send external rsOnError: (Fs.readStream, string, unit => unit) => unit = "on"
+
 test("Fs.createReadStream returns a readStream (existing API)", () => {
   withTempDir(tempDir => {
     withFile(
@@ -214,7 +217,9 @@ test("Fs.createReadStream returns a readStream (existing API)", () => {
       ~name="stream-test.txt",
       ~content="stream content",
       ~f=filePath => {
-        let _rs: Fs.readStream = Fs.createReadStream(filePath)
+        let rs: Fs.readStream = Fs.createReadStream(filePath)
+        // swallow any late error event from the dangling stream
+        let _ = rsOnError(rs, "error", _ => ())
         assertion(
           ~message="createReadStream produces a value",
           ~operator="=",
@@ -222,6 +227,8 @@ test("Fs.createReadStream returns a readStream (existing API)", () => {
           true,
           true,
         )
+        // close the fd before withFile unlinkSyncs the file
+        rsDestroy(rs)
       },
     )
   })

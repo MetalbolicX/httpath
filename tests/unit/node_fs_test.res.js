@@ -89,8 +89,10 @@ Test.test("Fs.lstatSync on a symlink: isSymlink=true (while statSync follows)", 
 }));
 
 Test.test("Fs.createReadStream returns a readStream (existing API)", () => withTempDir(tempDir => withFile(tempDir, "stream-test.txt", "stream content", filePath => {
-  Fs.createReadStream(filePath);
+  let rs = Fs.createReadStream(filePath);
+  rs.on("error", () => {});
   Test.assertion("createReadStream produces a value", "=", (a, b) => a === b, true, true);
+  rs.destroy();
 })));
 
 export {
