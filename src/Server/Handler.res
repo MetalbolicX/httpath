@@ -139,7 +139,7 @@ let serveFile = (
       let contentLengthHeader = ("content-length", Js.Int.toString(fileSize))
       let finalHeaders = if mime.contentType == "image/svg+xml" {
         let basename = NodePath.basename(safePath)
-        let noQuotes = Js.String.replaceByRe(%re("/\"/g"), basename, "")
+        let noQuotes = Js.String.replaceByRe(%re("/\"/g"), "", basename)
         Array.concat(baseHeaders, [contentLengthHeader, ("content-disposition", "attachment; filename=\"" ++ noQuotes ++ "\"")])
       } else {
         Array.concat(baseHeaders, [contentLengthHeader])
