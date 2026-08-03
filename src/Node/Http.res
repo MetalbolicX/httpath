@@ -75,6 +75,7 @@ external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => 
   "createServer"
 @send external _listen: (server, int, string, unit => unit) => unit = "listen"
 @send external _close: (server, Nullable.t<JsExn.t> => unit) => unit = "close"
+@send external closeAllConnections: server => unit = "closeAllConnections"
 
 // EventEmitter .on — used to register the 'upgrade' listener (the 'request'
 // listener is registered via createServer's callback).
@@ -205,6 +206,10 @@ let startServer = (
 
   // Close on abort signal; resolve closed after closeServer completes.
   let _ = setOnAbort(signal, () => {
+    // Force-close all connections first so closeServer unblocks immediately.
+    // This handles the case where a keep-alive or WS connection is holding
+    // the server open. closeAllConnections is Node ≥22.
+    closeAllConnections(server)
     let _ = closeServer(server)->Promise.then(() => {
       switch closedResolve.contents {
       | Some(r) => r()

@@ -227,7 +227,13 @@ test("Httpath.start boots HTTP server and fake handler responds 200", async () =
     // Cleanup: kill child if still alive, remove temp dir.
     if (child.exitCode === null) {
       child.kill("SIGTERM");
-      await new Promise((r) => child.on("exit", r));
+      await Promise.race([
+        new Promise((r) => child.on("exit", r)),
+        new Promise((r) => setTimeout(() => {
+          if (child.exitCode === null) child.kill("SIGKILL");
+          r();
+        }, 1500)),
+      ]);
     }
     rmSync(scriptPath, { force: true });
     rmSync(tmpDir, { recursive: true, force: true });
@@ -344,7 +350,13 @@ start(wsHandler, configResult._0);
   } finally {
     if (child.exitCode === null) {
       child.kill("SIGTERM");
-      await new Promise((r) => child.on("exit", r));
+      await Promise.race([
+        new Promise((r) => child.on("exit", r)),
+        new Promise((r) => setTimeout(() => {
+          if (child.exitCode === null) child.kill("SIGKILL");
+          r();
+        }, 1500)),
+      ]);
     }
     rmSync(scriptPath, { force: true });
     rmSync(tmpDir, { recursive: true, force: true });
@@ -466,7 +478,13 @@ start(wsHandler, config);
   } finally {
     if (child.exitCode === null) {
       child.kill("SIGTERM");
-      await new Promise((r) => child.on("exit", r));
+      await Promise.race([
+        new Promise((r) => child.on("exit", r)),
+        new Promise((r) => setTimeout(() => {
+          if (child.exitCode === null) child.kill("SIGKILL");
+          r();
+        }, 1500)),
+      ]);
     }
     rmSync(scriptPath, { force: true });
     rmSync(tmpDir, { recursive: true, force: true });
@@ -489,7 +507,7 @@ test("SIGTERM → clean exit within 500ms", async () => {
     await waitForChildReady(child, port);
 
     // Verify child is still running (hasn't crashed on boot).
-    assert.notStrictEqual(
+    assert.strictEqual(
       child.exitCode,
       null,
       "child should still be running after 2s (may have crashed on boot)",
@@ -517,7 +535,13 @@ test("SIGTERM → clean exit within 500ms", async () => {
   } finally {
     if (child.exitCode === null) {
       child.kill("SIGTERM");
-      await new Promise((r) => child.on("exit", r));
+      await Promise.race([
+        new Promise((r) => child.on("exit", r)),
+        new Promise((r) => setTimeout(() => {
+          if (child.exitCode === null) child.kill("SIGKILL");
+          r();
+        }, 1500)),
+      ]);
     }
     rmSync(scriptPath, { force: true });
     rmSync(tmpDir, { recursive: true, force: true });

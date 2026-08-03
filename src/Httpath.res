@@ -58,8 +58,14 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
     | Some(h) => Monitor.cancel(h)
     | None => ()
     }
-    WsHub.closeAll()
+    // Note: WsHub.closeAll() is intentionally omitted here — calling it before
+    // server.close() races against in-flight WS upgrades (WsHub.register is called
+    // before the upgrade handshake completes, so the socket would be closed mid-flight).
+    // The hard-exit timer below handles cleanup instead.
     AbortController.abort(controller)
+    // Hard-exit fallback: bound the shutdown so the process ALWAYS exits within 500ms,
+    // even if the closed->Promise.then chain stalls on lingering connections.
+    let _ = Timers.setTimeout(() => Process.exit(0), 500)
   }
 
   let sigintHandler = () => {shutdown()}

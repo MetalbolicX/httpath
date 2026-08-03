@@ -153,6 +153,7 @@ function startServer(port, hostname, handler, onWsUpgrade, signal) {
     closedResolve.contents = resolve;
   });
   signal.onabort = () => {
+    server.closeAllConnections();
     closeServer(server).then(() => {
       let r = closedResolve.contents;
       if (r !== undefined) {

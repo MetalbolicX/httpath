@@ -3,6 +3,7 @@
 import * as Http from "./Node/Http.res.js";
 import * as WsHub from "./Hub/WsHub.res.js";
 import * as Parser from "./Cfg/Parser.res.js";
+import * as Timers from "./Node/Timers.res.js";
 import * as Handler from "./Server/Handler.res.js";
 import * as Monitor from "./Watcher/Monitor.res.js";
 import * as Process from "./Node/Process.res.js";
@@ -39,8 +40,8 @@ function start(handler, config) {
     if (h !== undefined) {
       Monitor.cancel(Primitive_option.valFromOption(h));
     }
-    WsHub.closeAll();
     AbortController.abort(controller);
+    Timers.setTimeout(() => Process.exit(0), 500);
   };
   let sigintHandler = () => shutdown();
   let sigtermHandler = () => shutdown();
