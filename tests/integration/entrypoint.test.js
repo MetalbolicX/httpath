@@ -28,9 +28,7 @@ globalThis.fs = fs;
 // Imports — compiled ReScript modules (loaded after global fs is set)
 // ---------------------------------------------------------------------------
 
-const Httpath = await import("../../src/Httpath.res.js");
-const WsHub = await import("../../src/Hub/WsHub.res.js");
-const Parser = await import("../../src/Cfg/Parser.res.js");
+
 
 // ---------------------------------------------------------------------------
 // Test port base — each test uses BASE + testIndex to avoid conflicts.
