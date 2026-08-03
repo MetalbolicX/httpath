@@ -3,29 +3,14 @@
 import * as Http from "./Node/Http.res.js";
 import * as WsHub from "./Hub/WsHub.res.js";
 import * as Parser from "./Cfg/Parser.res.js";
+import * as Handler from "./Server/Handler.res.js";
 import * as Monitor from "./Watcher/Monitor.res.js";
 import * as Process from "./Node/Process.res.js";
 import * as ParseError from "./Cfg/ParseError.res.js";
 import * as AbortController from "./Node/AbortController.res.js";
 
-function notImplementedHandler(_req) {
-  return Promise.resolve({
-    TAG: "Respond",
-    _0: {
-      status: 501,
-      headers: [[
-        "content-type",
-        "text/plain; charset=utf-8",
-      ]],
-      body: "Empty",
-    },
-  });
-}
-
 function warnRestart() {
-  console.warn(
-    "[Httpath] restart-on-change requested but Restart module is not yet implemented",
-  );
+  console.warn("[Httpath] restart-on-change requested but Restart module is not yet implemented");
 }
 
 function start(handler, config) {
@@ -36,16 +21,9 @@ function start(handler, config) {
     return Promise.resolve();
   };
   Http.startServer(config.port, config.hostname, handler, onWsUpgrade, sig);
-  let monitorHandle = Monitor.start(
-    config.directory,
-    config.ignorePatterns,
-    config.enableLiveReload,
-    config.restartOnChange,
-    WsHub.notifyReload,
-    warnRestart,
-  );
+  let monitorHandle = Monitor.start(config.directory, config.ignorePatterns, config.enableLiveReload, config.restartOnChange, WsHub.notifyReload, warnRestart);
   let shutdownResolve = {
-    contents: undefined,
+    contents: undefined
   };
   let shutdownPromise = new Promise((resolve, _reject) => {
     shutdownResolve.contents = resolve;
@@ -74,13 +52,13 @@ function main() {
   let args = Process.argv.slice(2, Process.argv.length);
   let config = Parser.parse(args);
   if (config.TAG === "Ok") {
-    return start(notImplementedHandler, config._0);
+    let config$1 = config._0;
+    let handler = Handler.make(config$1);
+    return start(handler, config$1);
   }
   let e = config._0;
   if (typeof e !== "object") {
-    console.log(
-      "Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]",
-    );
+    console.log("Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]");
     Process.exit(0);
     return Promise.resolve();
   }
@@ -89,5 +67,8 @@ function main() {
   return Promise.resolve();
 }
 
-export { main, start };
+export {
+  main,
+  start,
+}
 /* Http Not a pure module */

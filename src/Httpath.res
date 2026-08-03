@@ -2,16 +2,6 @@
 // Signal ownership: Httpath is the SOLE signal owner (per design Q3a).
 // Monitor does NOT register SIGINT/SIGTERM handlers.
 
-/// 501 Not Implemented fallback handler.
-/// TODO: replace with real static-file handler when follow-up SDD lands.
-let notImplementedHandler = (_req: Types.request): promise<Types.outcome> => {
-  Promise.resolve(Types.Respond({
-    status: 501,
-    headers: [("content-type", "text/plain; charset=utf-8")],
-    body: Types.Empty,
-  }))
-}
-
 /// onRestart callback: warn that restart is not yet implemented.
 let warnRestart = () => {
   Console.warn("[Httpath] restart-on-change requested but Restart module is not yet implemented")
@@ -81,7 +71,8 @@ let main = (): promise<unit> => {
   let args = Array.slice(argv, ~start=2, ~end=Array.length(argv))
   switch Parser.parse(args) {
   | Ok(config) =>
-    start(~handler=notImplementedHandler, ~config)
+    let handler = Handler.make(config)
+    start(~handler, ~config)
   | Error(ParseError.HelpRequested) =>
     Console.log("Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]")
     let _ = Process.exit(0)
