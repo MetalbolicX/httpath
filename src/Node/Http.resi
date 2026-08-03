@@ -10,7 +10,7 @@ type handlerCb = (Types.request) => promise<Types.outcome>
 type upgradeCb = (Types.request, serverSocket, Nullable.t<upgradeHead>) => promise<unit>
 
 let socketWrite: (serverSocket, string) => unit
-let socketWriteBuffer: (serverSocket, Buffer.t) => promise<unit>
+let socketWriteBuffer: (serverSocket, Buffer.t) => promise<result<unit, JsExn.t>>
 let closeServer: server => promise<unit>
 
 type serverHandle = {

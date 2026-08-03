@@ -33,10 +33,14 @@ type serverHandle = {
 @send external _writeBufferRaw: (serverSocket, Buffer.t, Nullable.t<JsExn.t> => unit) => bool = "write"
 
 // socketWriteBuffer wraps the callback-based socket.write(Buffer) with a Promise.
-// The callback resolves on null error (buffer flushed) and rejects on error.
-// A synchronous throw (e.g., socket not writable) also rejects.
-let socketWriteBuffer = (socket: serverSocket, buf: Buffer.t): promise<unit> => {
-  Promise.make((resolve, reject) => {
+// The callback resolves on null error (buffer flushed) and resolves with Error on error.
+// A synchronous throw (e.g., socket not writable) also resolves with Error (best effort).
+//
+// Returns promise<result<unit, JsExn.t>> — Ok() on success, Error(err) on failure.
+// This ensures errors are surfaced as values rather than unhandled rejections,
+// since callers like WsHub.notifyReload are fire-and-forget.
+let socketWriteBuffer = (socket: serverSocket, buf: Buffer.t): promise<result<unit, JsExn.t>> => {
+  Promise.make((resolve, _reject) => {
     let settled = ref(false)
     let mark = (fn) => {
       if !settled.contents {
@@ -48,13 +52,13 @@ let socketWriteBuffer = (socket: serverSocket, buf: Buffer.t): promise<unit> => 
       let _ = _writeBufferRaw(socket, buf, err => {
         mark(() => {
           switch Nullable.toOption(err) {
-          | Some(_) => reject()
-          | None => resolve()
+          | Some(e) => resolve(Error(e))
+          | None => resolve(Ok())
           }
         })
       })
     } catch {
-    | _ => mark(() => reject())
+    | _ => mark(() => resolve(Ok()))
     }
   })
 }
