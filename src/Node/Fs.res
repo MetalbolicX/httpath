@@ -41,8 +41,7 @@ type stats = {
 // Re-export existing stream API (unchanged)
 // ---------------------------------------------------------------------------
 
-@bs.scope("fs")
-@bs.val
+@module("node:fs")
 external createReadStream: string => readStream = "createReadStream"
 
 @send

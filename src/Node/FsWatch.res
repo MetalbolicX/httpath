@@ -6,8 +6,7 @@ type watchOptions = {recursive: bool}
 
 // Re-export fsEvent from Types so Monitor can use the same variant type
 // (Avoids duplication; FsWatch IS part of the watcher layer)
-@scope("fs")
-@val
+@module("node:fs")
 external _fsWatch: (string, watchOptions, (string, string) => unit) => watcher = "watch"
 
 // startWatcher — wraps FsWatch.watch, converts Node's (string, string) callback

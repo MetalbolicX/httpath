@@ -3,8 +3,7 @@
 type watcher
 type watchOptions = {recursive: bool}
 
-@scope("fs")
-@val
+@module("node:fs")
 external _fsWatch: (string, watchOptions, (string, string) => unit) => watcher = "watch"
 
 let startWatcher: (
