@@ -20,7 +20,7 @@ let start = (
     Promise.resolve()
   }
 
-  let _serverPromise = Http.startServer(
+  let { server: _server, closed } = Http.startServer(
     ~port=config.port,
     ~hostname=config.hostname,
     ~handler,
@@ -37,18 +37,9 @@ let start = (
     ~onRestart=warnRestart,
   )
 
-  let shutdownResolve = ref(None: option<unit => unit>)
-  let shutdownPromise = Promise.make((resolve, _reject) => {
-    shutdownResolve := Some(resolve)
-  })
-
   let shutdown = () => {
     Monitor.cancel(monitorHandle)
     AbortController.abort(controller)
-    switch shutdownResolve.contents {
-    | Some(r) => r()
-    | None => ()
-    }
   }
 
   let sigintHandler = () => { shutdown() }
@@ -57,7 +48,10 @@ let start = (
   Signals.onSignal("SIGINT", sigintHandler)
   Signals.onSignal("SIGTERM", sigtermHandler)
 
-  shutdownPromise->Promise.then(() => {
+  // Wait for the server to finish closing before exiting.
+  // The closed promise is resolved by Http.startServer's abort handler
+  // after closeServer(server) completes, ensuring in-flight streams drain.
+  closed->Promise.then(() => {
     let _ = Signals.offSignal("SIGINT", sigintHandler)
     let _ = Signals.offSignal("SIGTERM", sigtermHandler)
     let _ = Process.exit(0)

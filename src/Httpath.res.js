@@ -20,27 +20,19 @@ function start(handler, config) {
     WsHub.register(socket);
     return Promise.resolve();
   };
-  Http.startServer(config.port, config.hostname, handler, onWsUpgrade, sig);
+  let match = Http.startServer(config.port, config.hostname, handler, onWsUpgrade, sig);
   let monitorHandle = Monitor.start(config.directory, config.ignorePatterns, config.enableLiveReload, config.restartOnChange, WsHub.notifyReload, warnRestart);
-  let shutdownResolve = {
-    contents: undefined
-  };
-  let shutdownPromise = new Promise((resolve, _reject) => {
-    shutdownResolve.contents = resolve;
-  });
-  let shutdown = () => {
+  let sigintHandler = () => {
     Monitor.cancel(monitorHandle);
     AbortController.abort(controller);
-    let r = shutdownResolve.contents;
-    if (r !== undefined) {
-      return r();
-    }
   };
-  let sigintHandler = () => shutdown();
-  let sigtermHandler = () => shutdown();
+  let sigtermHandler = () => {
+    Monitor.cancel(monitorHandle);
+    AbortController.abort(controller);
+  };
   process.on("SIGINT", sigintHandler);
   process.on("SIGTERM", sigtermHandler);
-  return shutdownPromise.then(() => {
+  return match.closed.then(() => {
     process.off("SIGINT", sigintHandler);
     process.off("SIGTERM", sigtermHandler);
     Process.exit(0);

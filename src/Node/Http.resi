@@ -12,10 +12,16 @@ type upgradeCb = (Types.request, serverSocket, Nullable.t<upgradeHead>) => promi
 let socketWrite: (serverSocket, string) => unit
 let socketWriteBuffer: (serverSocket, Buffer.t) => promise<unit>
 let closeServer: server => promise<unit>
+
+type serverHandle = {
+  server: server,
+  closed: promise<unit>,
+}
+
 let startServer: (
   ~port: int,
   ~hostname: string,
   ~handler: handlerCb,
   ~onWsUpgrade: upgradeCb,
   ~signal: Signals.abortSignal,
-) => promise<server>
+) => serverHandle

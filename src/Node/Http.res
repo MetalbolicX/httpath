@@ -8,6 +8,11 @@ type serverResponse
 type serverSocket
 type upgradeHead
 
+type serverHandle = {
+  server: server,
+  closed: promise<unit>,
+}
+
 // IncomingMessage accessors
 @get external incomingMethod: incomingMessage => string = "method"
 @get external incomingUrl: incomingMessage => string = "url"
@@ -142,7 +147,7 @@ let startServer = (
   ~handler: handlerCb,
   ~onWsUpgrade: upgradeCb,
   ~signal: Signals.abortSignal,
-): promise<server> => {
+): serverHandle => {
   // 'request' event — normal HTTP. Build request, call handler, write response.
   let server = _createServer(async (req, res) => {
     let request = buildRequest(req)
@@ -190,15 +195,31 @@ let startServer = (
     }
   })
 
-  // Close on abort signal.
+  // closed — resolved by the abort handler after the server is closed.
+  // This is the promise Httpath.await)s before calling Process.exit.
+  let closedResolve = ref(None: option<unit => unit>)
+  let closed: promise<unit> = Promise.make((resolve, _reject) => {
+    closedResolve := Some(resolve)
+  })
+
+  // Close on abort signal; resolve closed after closeServer completes.
   let _ = setOnAbort(signal, () => {
-    let _ = closeServer(server)
+    let _ = closeServer(server)->Promise.then(() => {
+      switch closedResolve.contents {
+      | Some(r) => r()
+      | None => ()
+      }
+      Promise.resolve()
+    })
     ()
   })
 
-  // Listen and resolve with the server.
-  Promise.make((resolve, _reject) => {
-    let _ = _listen(server, port, hostname, () => resolve(server))
-    ()
+  // Listen and return the server handle.
+  // The listen promise is fire-and-forget (listen happens async);
+  // the server is usable immediately. closed resolves on abort.
+  let _listenPromise = Promise.make((resolve, _reject) => {
+    let _ = _listen(server, port, hostname, () => resolve())
   })
+
+  { server, closed }
 }
