@@ -566,3 +566,98 @@ test("SIGTERM → clean exit within 500ms", async () => {
     rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Test: startup banner is printed after server binds
+// ---------------------------------------------------------------------------
+
+test("startup banner contains directory and URL after binding", async () => {
+  const port = PORT_BASE + 5;
+  const tmpDir = mkdtempSync(path.join("/tmp", "httpath-banner-"));
+  const scriptPath = path.join(tmpDir, "child.mjs");
+
+  const childScript = `
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+globalThis.fs = require("node:fs");
+
+import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.mjs")}";
+import { parse as parseArgs } from "${
+    path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs")
+  }";
+
+const handler = (req) => Promise.resolve({
+  TAG: "Respond",
+  _0: { status: 200, headers: [], body: "ok" },
+});
+
+const configResult = parseArgs([
+  "--port", "${port}",
+  "--host", "127.0.0.1",
+  "--dir", "${tmpDir}",
+  "--no-live-reload",
+]);
+if (configResult.TAG !== "Ok") { process.exit(1); }
+
+start(handler, configResult._0);
+`;
+
+  writeFileSync(scriptPath, childScript);
+
+  const child = spawn(process.execPath, [scriptPath], {
+    stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(),
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => (stdout += d.toString()));
+  child.stderr.on("data", (d) => (stderr += d.toString()));
+
+  try {
+    // Wait for child to be listening and capture stdout.
+    await waitForChildReady(child, port);
+
+    // Give Logger.log a moment to flush (it uses Console.log which is synchronous).
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Verify the banner contains the served directory and URL.
+    assert.ok(
+      stdout.includes("Serving"),
+      `Expected stdout to contain "Serving", got: ${stdout}`,
+    );
+    assert.ok(
+      stdout.includes(tmpDir),
+      `Expected stdout to contain directory "${tmpDir}", got: ${stdout}`,
+    );
+    assert.ok(
+      stdout.includes(`127.0.0.1:${port}`),
+      `Expected stdout to contain URL "127.0.0.1:${port}", got: ${stdout}`,
+    );
+
+    // Shutdown cleanly.
+    child.kill("SIGTERM");
+    const exitCode = await new Promise((res) => {
+      child.on("exit", (c) => res(c));
+      setTimeout(() => res(-1), 600);
+    });
+    assert.strictEqual(
+      exitCode,
+      0,
+      `Expected exit code 0, got ${exitCode} (stderr: ${stderr})`,
+    );
+  } finally {
+    if (child.exitCode === null) {
+      child.kill("SIGTERM");
+      await Promise.race([
+        new Promise((r) => child.on("exit", r)),
+        new Promise((r) => setTimeout(() => {
+          if (child.exitCode === null) child.kill("SIGKILL");
+          r();
+        }, 1500)),
+      ]);
+    }
+    rmSync(scriptPath, { force: true });
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});

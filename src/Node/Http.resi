@@ -17,6 +17,7 @@ let closeServer: server => promise<unit>
 type serverHandle = {
   server: server,
   closed: promise<unit>,
+  listening: promise<unit>,
 }
 
 let startServer: (

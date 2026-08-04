@@ -11,6 +11,7 @@ type upgradeHead
 type serverHandle = {
   server: server,
   closed: promise<unit>,
+  listening: promise<unit>,
 }
 
 // IncomingMessage accessors
@@ -226,5 +227,5 @@ let startServer = (
     let _ = _listen(server, port, hostname, () => resolve())
   })
 
-  {server, closed}
+  {server, closed, listening: _listenPromise}
 }

@@ -29,7 +29,7 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
       })
     }
 
-  let {server, closed} = Http.startServer(
+  let {server, closed, listening} = Http.startServer(
     ~port=config.port,
     ~hostname=config.hostname,
     ~handler,
@@ -41,6 +41,14 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
   // it before Monitor.start returns (Monitor may invoke onRestart synchronously
   // on the first file event).
   let monitorHandle = ref((None: option<Monitor.handle>))
+
+  // Print startup banner after the server is listening.
+  listening->Promise.then(() => {
+    let addr = config.hostname == "0.0.0.0" ? "127.0.0.1" : config.hostname
+    let url = `http://${addr}:${Int.toString(config.port)}`
+    Logger.log(Logger.Info, `Serving ${config.directory} at ${url}`)
+    Promise.resolve()
+  })->ignore
 
   let onRestart = () => {
     let _ = Http.closeServer(server)
