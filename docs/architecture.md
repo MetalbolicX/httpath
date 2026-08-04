@@ -1,7 +1,7 @@
 # Architecture
 
-> **httpath** is a lightweight, zero-dependency static file server for Deno with
-> live-reload, directory listing, and smart file-watching. This document
+> **httpath** is a lightweight static file server for Node.js, written in
+> ReScript and compiled to a single ESM bundle via Rolldown. This document
 > describes the internal architecture, key flows, and the rationale behind every
 > design decision.
 
@@ -16,70 +16,94 @@ interfaces (`Config`, function parameters).
 ```mermaid
 graph TB
     subgraph "Entrypoint"
-        A[httpath.ts]
+        A[bin.mjs] -->|Rolldown bundle| B[dist/httpath.mjs]
     end
 
     subgraph "CLI Layer"
-        B[cli/parser.mts]
+        C[src/Cfg/Parser.res]
+        D[src/Cfg/Config.res]
+        E[src/Cfg/ParseError.res]
     end
 
     subgraph "Server Layer"
-        C[server/http.mts]
-        D[server/websocket.mts]
+        F[src/Node/Http.res]
+        G[src/Server/Handler.res]
+    end
+
+    subgraph "WebSocket Layer"
+        H[src/Hub/WsHub.res]
+        I[src/Http/WsHandshake.res]
     end
 
     subgraph "Watcher Layer"
-        E[watcher/monitor.mts]
-        F[watcher/rules.mts]
+        J[src/Watcher/Monitor.res]
+        K[src/Watcher/Rules.res]
+        L[src/Watcher/Restart.res]
+        M[src/Watcher/IgnoreMatcher.res]
     end
 
     subgraph "UI Layer"
-        G[ui/templates.mts]
-        H[ui/injector.mts]
+        N[src/Ui/Templates.res]
+        O[src/Ui/Injector.res]
+    end
+
+    subgraph "Security Layer"
+        P[src/Security/Headers.res]
     end
 
     subgraph "Utils Layer"
-        I[utils/logger.mts]
-        J[utils/path.mts]
-        K[utils/mime.mts]
-        L[utils/debounce.mts]
+        Q[src/Utils/Logger.res]
+        R[src/Utils/Path.res]
     end
 
-    A -->|parse CLI| B
-    A -->|start server| C
-    A -->|start watcher| E
-    C -->|HTML response| G
-    C -->|inject script| H
-    C -->|WebSocket upgrade| D
-    E -->|evaluate rules| F
-    E -->|notify clients| D
-    F -->|pattern matching| J
-    G -->|escape HTML| G
-    I -.->|logging| A
-    I -.->|logging| C
-    I -.->|logging| E
-    I -.->|logging| D
+    subgraph "Node FFI Layer"
+        S[src/Node/Process.res]
+        T[src/Node/Fs.res]
+        U[src/Node/FsWatch.res]
+        V[src/Node/Signals.res]
+    end
+
+    B -->|import| C
+    B -->|import| F
+    B -->|import| J
+    F -->|HTTP response| N
+    F -->|inject script| O
+    F -->|WS upgrade| H
+    J -->|evaluate rules| K
+    J -->|notify clients| H
+    K -->|pattern match| M
+    N -->|escape HTML| N
+    Q -.->|logging| B
+    Q -.->|logging| F
+    Q -.->|logging| J
 ```
 
 ---
 
 ## Module Map
 
-| Layer          | Module                 | Responsibility                                          | Key Exports                                                                    |
-| -------------- | ---------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **Entrypoint** | `httpath.ts`           | Orchestration, signal handling, validation              | `main()`                                                                       |
-| **CLI**        | `cli/parser.mts`       | Argument parsing, defaults, validation                  | `parseArguments()`, `DEFAULT_CONFIG`                                           |
-| **Server**     | `server/http.mts`      | HTTP request routing, file/directory serving            | `createRequestHandler()`, `startHttpServer()`                                  |
-| **Server**     | `server/websocket.mts` | WebSocket live-reload client management                 | `handleWebSocket()`, `notifyLiveReloadClients()`                               |
-| **Watcher**    | `watcher/monitor.mts`  | File system watching, debounce, restart/reload dispatch | `startFileWatcher()`, `reloadServer()`                                         |
-| **Watcher**    | `watcher/rules.mts`    | Pure decision functions for restart vs. reload          | `shouldIgnoreEvent()`, `shouldRestartServer()`, `shouldTriggerBrowserReload()` |
-| **UI**         | `ui/templates.mts`     | HTML/CSS generation for directory listings              | `generateDirectoryListingHTML()`, `escapeHtml()`                               |
-| **UI**         | `ui/injector.mts`      | Live-reload script generation and injection             | `getLiveReloadScript()`, `injectLiveReloadScript()`                            |
-| **Utils**      | `utils/logger.mts`     | Leveled console logging                                 | `log()`, `setLogLevel()`                                                       |
-| **Utils**      | `utils/path.mts`       | Path security, pattern matching                         | `resolveSafePath()`, `matchesPattern()`, `isProtectedSystemPath()`             |
-| **Utils**      | `utils/mime.mts`       | MIME type detection via `@std/media-types`              | `getMimeType()`                                                                |
-| **Utils**      | `utils/debounce.mts`   | Debounce factory and singleton                          | `createDebouncer()`, `debounce()`                                              |
-| **Shared**     | `types.mts`            | Shared TypeScript interfaces and constants              | `Config` (including `auth?`), `FileEntry`, `LIVE_RELOAD_ENDPOINT`              |
+| Layer           | Module                                                                        | Responsibility                                          | Key Exports                                                                 |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Entrypoint**  | `bin.mjs` (source) → `dist/httpath.mjs` (Rolldown bundle)                    | CLI entry; imports and runs Httpath                    | `main()`                                                                    |
+| **Lifecycle**   | `src/Httpath.res`                                                             | Parse argv → HTTP server + Monitor + signals           | `main()`, startHttpServer(), startFileWatcher()                            |
+| **CLI**         | `src/Cfg/Parser.res`                                                          | Argument parsing, defaults, validation                  | `parseArguments()`, `DEFAULT_CONFIG`                                        |
+| **CLI**         | `src/Cfg/Config.res`                                                          | Config type definitions                                 | `Config`, config fields                                                     |
+| **CLI**         | `src/Cfg/ParseError.res`                                                      | CLI error variants                                      | `ParseError`                                                                |
+| **HTTP server** | `src/Node/Http.res`                                                           | Node `node:http` server + upgrade handling             | `createServer()`, `upgradeHandler()`                                        |
+| **HTTP server** | `src/Server/Handler.res`                                                      | Request routing, file/directory serving                | `createRequestHandler()`                                                    |
+| **WebSocket**   | `src/Hub/WsHub.res`                                                           | Live-reload client registry + notifications             | `addClient()`, `notifyClients()`                                            |
+| **WebSocket**   | `src/Http/WsHandshake.res`                                                    | RFC 6455 WebSocket handshake                           | `isWsUpgrade()`, `performHandshake()`                                       |
+| **Watcher**     | `src/Watcher/Monitor.res`                                                     | File watching, debounce, restart/reload dispatch       | `startFileWatcher()`                                                        |
+| **Watcher**     | `src/Watcher/Rules.res`                                                       | Pure decision functions for restart vs. reload          | `shouldIgnoreEvent()`, `shouldRestartServer()`, `shouldTriggerBrowserReload()` |
+| **Watcher**     | `src/Watcher/Restart.res`                                                      | Process spawn for server restart                       | `restartServer()`                                                           |
+| **Watcher**     | `src/Watcher/IgnoreMatcher.res`                                                | Ignore pattern matching                                 | `shouldIgnore()`                                                            |
+| **UI**          | `src/Ui/Templates.res`                                                         | HTML/CSS generation for directory listings              | `generateDirectoryListingHTML()`, `escapeHtml()`                            |
+| **UI**          | `src/Ui/Injector.res`                                                          | Live-reload script generation and injection             | `getLiveReloadScript()`, `injectLiveReloadScript()`                         |
+| **Security**    | `src/Security/Headers.res`                                                    | Security headers                                        | `setSecurityHeaders()`                                                       |
+| **Utils**       | `src/Utils/Logger.res`                                                         | Leveled console logging                                 | `log()`, `setLogLevel()`                                                    |
+| **Utils**       | `src/Utils/Path.res`                                                           | Path security, pattern matching                         | `resolveSafePath()`, `matchesPattern()`, `isProtectedSystemPath()`          |
+| **Types**       | `src/Types.res`                                                                | Shared ReScript types and variants                      | `Config`, `FileEntry`, `LIVE_RELOAD_ENDPOINT`                               |
+| **Node FFI**    | `src/Node/Process.res`, `Buffer.res`, `Crypto.res`, `Events.res`, `Fs.res`, `FsWatch.res`, `Node_Path.res`, `Signals.res`, `Timers.res`, `AbortController.res`, `Process_spawn.res` | Typed externals for Node built-ins | Direct bindings to `node:*` built-in modules               |
 
 ---
 
@@ -90,19 +114,19 @@ When the user runs `httpath`, the following sequence executes:
 ```mermaid
 sequenceDiagram
     actor User
-    participant Main as httpath.ts
-    participant CLI as cli/parser
+    participant Main as bin.mjs / dist/httpath.mjs
+    participant Cfg as Cfg/Parser
     participant FS as Filesystem
-    participant Server as server/http
-    participant Watcher as watcher/monitor
+    participant Server as Node/Http
+    participant Watcher as Watcher/Monitor
 
-    User->>Main: deno task dev -- -d ./public
-    Main->>CLI: parseArguments(Deno.args)
-    CLI-->>Main: Config object
+    User->>Main: node dist/httpath.mjs -d ./public
+    Main->>Cfg: parseArguments(process.argv)
+    Cfg-->>Main: Config object
     Main->>Main: setLogLevel(config.logLevel)
 
     Note over Main: Validate directory exists
-    Main->>FS: Deno.stat(config.directory)
+    Main->>FS: process.stat(config.directory)
     FS-->>Main: FileInfo
 
     alt isProtectedSystemPath(dir)
@@ -114,10 +138,10 @@ sequenceDiagram
 
     par
         Main->>Server: startHttpServer(config, abortController)
-        Note over Server: Deno.serve() on config.port
+        Note over Server: node:http.createServer() on config.port
     and
         Main->>Watcher: startFileWatcher(config, abortController)
-        Note over Watcher: Deno.watchFs(config.directory)
+        Note over Watcher: node:fs.watch (via Node/FsWatch)
     end
 
     Note over Main: Promise.race — both run concurrently
@@ -138,14 +162,14 @@ flowchart TD
     B -->|GET/HEAD| D[Decode URL pathname]
 
     D --> E{WebSocket upgrade<br>for /livereload?}
-    E -->|Yes| F[handleWebSocket<br>upgrade connection]
+    E -->|Yes| F[performHandshake<br>upgrade connection]
     E -->|No| G[resolveSafePath]
 
     G --> H{Path valid?<br>Inside serve root?}
     H -->|No| I[403 Forbidden]
     H -->|Yes| J{Matches<br>ignore pattern?}
     J -->|Yes| I
-    J -->|No| K[Deno.stat]
+    J -->|No| K[process.stat]
 
     K --> L{Type?}
     L -->|File| M[serveFile]
@@ -159,7 +183,7 @@ flowchart TD
 
     M --> R{HTML file?<br>Live-reload enabled?}
     R -->|Yes| S[injectLiveReloadScript]
-    R -->|No| T[Stream file via Deno.open]
+    R -->|No| T[Stream file via process.stdin]
 
     S --> U[200 Response]
     T --> U
@@ -180,10 +204,10 @@ always restarts the server.
 ```mermaid
 sequenceDiagram
     participant FS as Filesystem
-    participant Watch as watcher/monitor
-    participant Rules as watcher/rules
-    participant WS as server/websocket
-    participant Deno as Deno.Command
+    participant Watch as Watcher/Monitor
+    participant Rules as Watcher/Rules
+    participant WS as Hub/WsHub
+    participant Child as child process
 
     FS-->>Watch: FsEvent (create/modify/remove)
 
@@ -201,19 +225,19 @@ sequenceDiagram
     Watch->>Watch: await debounceChange(500ms)
 
     alt restartOnChange (legacy mode)
-        Watch->>WS: notifyLiveReloadClients("server restart")
-        Watch->>Deno: spawn new process + exit(0)
+        Watch->>WS: notifyClients("server restart")
+        Watch->>Child: spawn new process + exit(0)
     else smart mode
         Watch->>Rules: shouldRestartServer(paths)?
 
         alt server restart
-            Rules-->>Watch: true (e.g. .ts, .json, deno.json)
-            Watch->>WS: notifyLiveReloadClients("server restart")
-            Watch->>Deno: spawn new process + exit(0)
+            Rules-->>Watch: true (e.g. .res, .json, package.json)
+            Watch->>WS: notifyClients("server restart")
+            Watch->>Child: spawn new process + exit(0)
         else browser reload
             Watch->>Rules: shouldTriggerBrowserReload(paths)?
             Rules-->>Watch: true (e.g. .html, .css, .png)
-            Watch->>WS: notifyLiveReloadClients("frontend change")
+            Watch->>WS: notifyClients("frontend change")
         else no action
             Watch-->>Watch: log("not a monitored file type")
         end
@@ -226,10 +250,10 @@ sequenceDiagram
 
 | File Extension                                  | `shouldRestartServer` | `shouldTriggerBrowserReload` | Action                              |
 | ----------------------------------------------- | :-------------------: | :--------------------------: | ----------------------------------- |
-| `.ts`, `.js`, `.mjs`                            |          ✅           |              ✅              | **Server restart** (takes priority) |
+| `.res`, `.js`, `.mjs`                           |          ✅           |              ✅              | **Server restart** (takes priority) |
 | `.json`                                         |          ✅           |              ✅              | **Server restart**                  |
 | `.toml`, `.yaml`, `.yml`                        |          ✅           |              ❌              | **Server restart**                  |
-| `deno.json`, `deno.lock`, `package.json`        |          ✅           |              ❌              | **Server restart**                  |
+| `package.json`, `rescript.json`, `rolldown.config.mjs` |     ✅        |              ❌              | **Server restart**                  |
 | `.html`, `.css`                                 |          ❌           |              ✅              | **Browser reload**                  |
 | `.scss`, `.sass`, `.less`                       |          ❌           |              ✅              | **Browser reload**                  |
 | `.vue`, `.svelte`, `.tsx`, `.jsx`               |          ❌           |              ✅              | **Browser reload**                  |
@@ -249,8 +273,8 @@ establishes a WebSocket connection. File changes trigger notifications:
 sequenceDiagram
     participant Browser
     participant Server as HTTP Server
-    participant WS as WebSocket Manager
-    participant Watcher as File Watcher
+    participant WS as Hub/WsHub
+    participant Watcher as Watcher/Monitor
 
     Note over Browser: GET /index.html
     Browser->>Server: HTTP GET
@@ -259,10 +283,10 @@ sequenceDiagram
 
     Note over Browser: Script runs immediately
     Browser->>WS: WebSocket connect /livereload
-    WS->>WS: liveReloadClients.add(socket)
+    WS->>WS: clients.add(socket)
 
     Note over Watcher: File change detected
-    Watcher->>WS: notifyLiveReloadClients("frontend change")
+    Watcher->>WS: notifyClients("frontend change")
     WS->>Browser: send("reload")
     Note over Browser: window.location.reload()
 
@@ -298,9 +322,9 @@ flowchart LR
 
 | Layer                    | Where                                 | What It Protects Against                        | How                                                                               |
 | ------------------------ | ------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Startup Guard**        | `httpath.ts:main()`                   | Accidentally serving `/etc`, `C:\Windows`, etc. | Prefix-match against per-OS blocklist. Hard error unless `--allow-protected-dir`. |
-| **Traversal Prevention** | `utils/path.mts:resolveSafePath()`    | `../../etc/passwd` attacks                      | Resolve + normalize + check `relative()` starts with `..`.                        |
-| **Ignore Patterns**      | `server/http.mts:isIgnoredSafePath()` | Serving `.git/`, `node_modules/`, `.DS_Store`   | Substring/suffix match against configurable patterns.                             |
+| **Startup Guard**        | `Httpath.res:main()`                  | Accidentally serving `/etc`, `C:\Windows`, etc. | Prefix-match against per-OS blocklist. Hard error unless `--allow-protected-dir`. |
+| **Traversal Prevention** | `Utils/Path.res:resolveSafePath()`   | `../../etc/passwd` attacks                      | Resolve + normalize + check `relative()` starts with `..`.                        |
+| **Ignore Patterns**      | `Server/Handler.res:isIgnoredPath()` | Serving `.git/`, `node_modules/`, `.DS_Store`   | Substring/suffix match against configurable patterns.                             |
 
 ---
 
@@ -315,14 +339,14 @@ graph LR
         B["startFileWatcher()"]
     end
 
-    A --> C["Deno.serve()"]
-    B --> D["Deno.watchFs()"]
+    A --> C["node:http.createServer()"]
+    B --> D["node:fs.watch() (via Node/FsWatch)"]
 
     C --> E["AbortController.signal"]
     D --> E
 
     E -->|SIGINT / SIGTERM| F["Graceful shutdown"]
-    E -->|Error| G["log + Deno.exit(1)"]
+    E -->|Error| G["log + process.exit(1)"]
 ```
 
 - Both tasks share an `AbortController` for coordinated shutdown.
@@ -343,24 +367,24 @@ closures rather than using classes.
 
 - Closures capture `config` / internal state via lexical scope — no `this`
   binding issues, no class instantiation ceremony.
-- The returned function is a plain `async (Request) => Response`, compatible
-  directly with `Deno.serve({ handler })`.
+- The returned function is a plain `async (IncomingMessage, ServerResponse) => void`,
+  compatible directly with `node:http.createServer()`.
 - Each debouncer instance has isolated state (`pendingResolvers`, timeout
   handle), preventing cross-contamination between watcher and potential future
   consumers.
 
 ### 2. Separate Watcher Rules from Watcher Engine
 
-**Decision:** `watcher/rules.mts` exports pure functions (`shouldRestartServer`,
-`shouldTriggerBrowserReload`). `watcher/monitor.mts` contains the imperative
+**Decision:** `Watcher/Rules.res` exports pure functions (`shouldRestartServer`,
+`shouldTriggerBrowserReload`). `Watcher/Monitor.res` contains the imperative
 watcher loop.
 
 **Rationale:**
 
 - **Testability:** Rules are pure functions — trivially testable without
   filesystem mocking.
-- **Single Responsibility:** `monitor.mts` handles debounce, concurrency guards,
-  and process lifecycle. `rules.mts` handles file-extension classification.
+- **Single Responsibility:** `Monitor.res` handles debounce, concurrency guards,
+  and process lifecycle. `Rules.res` handles file-extension classification.
 - Rules can be swapped or extended without touching the watcher loop.
 
 ### 3. Hoisted Regex Constants
@@ -391,13 +415,13 @@ guard that resets immediately after processing (not via a fixed timer).
 ### 5. Immutable Client Set (Encapsulated)
 
 **Decision:** `liveReloadClients` is a private `Set<WebSocket>`, exposed only
-through `handleWebSocket()` and `notifyLiveReloadClients()`.
+through `handleWebSocket()` and `notifyClients()`.
 
 **Rationale:**
 
 - Exporting a mutable `Set` would let any consumer `.add()`, `.delete()`, or
   `.clear()` it, breaking the WebSocket lifecycle contract.
-- `getLiveReloadClientCount()` provides read-only access for diagnostics.
+- `getClientCount()` provides read-only access for diagnostics.
 
 ### 6. Smart vs. Legacy Mode
 
@@ -408,7 +432,7 @@ browser reload for frontend files). `--restart-on-change` activates legacy mode.
 
 - Most developers edit HTML/CSS/JS during development — restarting the server
   for these changes is unnecessary and slow.
-- Config files (`.json`, `.yaml`, `deno.json`) require a server restart because
+- Config files (`.json`, `.yaml`, `package.json`) require a server restart because
   they affect runtime behavior.
 - Legacy mode exists for edge cases where users want the old behavior.
 
@@ -428,7 +452,7 @@ responses, not loaded as an external file.
 ### 8. Cross-Platform Protected Paths
 
 **Decision:** Blocklist of system directories, selected at runtime via
-`Deno.build.os`. Case-insensitive on Windows.
+`process.platform`. Case-insensitive on Windows.
 
 **Rationale:**
 
@@ -439,41 +463,43 @@ responses, not loaded as an external file.
   legitimate development use cases.
 - `--allow-protected-dir` provides an explicit escape hatch.
 
-### 9. Zero External Dependencies
+### 9. Zero External Runtime Dependencies
 
-**Decision:** Only `@std/*` standard library modules (cli, path, media-types,
-assert, testing/mock).
-
-**Rationale:**
-
-- Eliminates supply-chain risk — no `node_modules`, no transitive
-  vulnerabilities.
-- Smaller binary footprint when compiled.
-- The Deno standard library covers all required functionality.
-
-### 10. Barrel Exports
-
-**Decision:** Each `src/` subdirectory has an `index.ts` that re-exports all
-public symbols from its modules.
-
-**Rationale:**
-
-- Clean import paths: `import { log, getMimeType } from "../utils/index.ts"`
-  instead of importing from individual files.
-- Single point of control for what each layer exposes externally.
-- Changing internal file structure doesn't break consumers.
-
-### 11. Zero External Dependencies
-
-**Decision:** Only `@std/*` standard library modules (cli, path, media-types,
-assert, testing/mock).
+**Decision:** Only Node.js built-in modules (`node:http`, `node:fs`, `node:path`,
+etc.) at runtime. Build tools (`rescript`, `rolldown`) are dev dependencies.
 
 **Rationale:**
 
 - Eliminates supply-chain risk — no `node_modules`, no transitive
-  vulnerabilities.
-- Smaller binary footprint when compiled.
-- The Deno standard library covers all required functionality.
+  vulnerabilities beyond Node itself.
+- Smaller bundle footprint.
+- Node's built-in modules cover all required functionality.
+
+### 10. In-Source ReScript Compilation
+
+**Decision:** ReScript source files (`.res`) compile to `.res.mjs` in the same
+`src/` directory, alongside source. Rolldown bundles from `bin.mjs`.
+
+**Rationale:**
+
+- No separate `lib/` or `build/` output directory to manage.
+- `rescript.json` configures `suffix` as `.res.mjs` so compiled output is
+  colocated with source.
+- Rolldown takes `bin.mjs` as input and bundles all imports (including
+  `src/**/*.res.mjs`) into `dist/httpath.mjs`.
+
+### 11. AbortController for Coordinated Shutdown
+
+**Decision:** A single `AbortController` is shared between the HTTP server and
+file watcher. Both tasks monitor `signal` and clean up on abort.
+
+**Rationale:**
+
+- Standard web API — consistent with `fetch`, `EventTarget`, etc.
+- No custom event bus or shared state object needed.
+- SIGINT/SIGTERM handlers call `abort()` on the controller, and both tasks
+  react independently.
+- Works correctly on Node 18+.
 
 ---
 
@@ -481,42 +507,46 @@ assert, testing/mock).
 
 ```text
 httpath/
-├── deno.json                    # Tasks, imports, metadata
-├── deno.lock                    # Pinned dependency versions
-├── httpath.ts                   # Entry point (shebang + main)
+├── bin.mjs                     # Rolldown input — CLI entry point
+├── dist/
+│   └── httpath.mjs             # Published bundle (npm package entry)
+├── package.json                # Dependencies, scripts, bin entry
+├── rescript.json               # ReScript compiler config (suffix: .res.mjs)
+├── rolldown.config.mjs         # Rolldown bundler config
 ├── src/
-│   ├── types.mts                # Config, FileEntry, LIVE_RELOAD_ENDPOINT
-│   ├── cli/
-│   │   ├── index.ts             # Barrel export
-│   │   └── parser.mts           # CLI argument parsing + defaults
-│   ├── server/
-│   │   ├── index.ts             # Barrel export
-│   │   ├── http.mts             # Request handler + Deno.serve
-│   │   └── websocket.mts        # WebSocket client management
-│   ├── watcher/
-│   │   ├── index.ts             # Barrel export
-│   │   ├── monitor.mts          # File watcher + debounce + restart
-│   │   └── rules.mts            # Pure decision functions
-│   ├── ui/
-│   │   ├── index.ts             # Barrel export
-│   │   ├── templates.mts        # HTML/CSS directory listing
-│   │   └── injector.mts         # Live-reload script injection
-│   └── utils/
-│       ├── index.ts             # Barrel export
-│       ├── logger.mts           # Leveled logging
-│       ├── path.mts             # Path security + pattern matching
-│       ├── mime.mts             # MIME type detection
-│       └── debounce.mts         # Debounce factory
-├── tests/
-│   ├── debounce.test.ts
-│   ├── http.test.ts
-│   ├── injector.test.ts
-│   ├── logger.test.ts
-│   ├── mime.test.ts
-│   ├── parser.test.ts
-│   ├── path.test.ts
-│   ├── rules.test.ts
-│   └── templates.test.ts
+│   ├── Httpath.res             # Main lifecycle (main, startServer, startWatcher)
+│   ├── Types.res               # Shared types: Config, FileEntry, LIVE_RELOAD_ENDPOINT
+│   ├── Cfg/
+│   │   ├── Config.res          # Config type
+│   │   ├── Parser.res          # CLI argument parsing
+│   │   └── ParseError.res      # CLI error variants
+│   ├── Server/
+│   │   └── Handler.res         # Request handler (file/directory serving)
+│   ├── Hub/
+│   │   └── WsHub.res            # WebSocket client registry
+│   ├── Http/
+│   │   └── WsHandshake.res      # RFC 6455 WebSocket handshake
+│   ├── Node/
+│   │   ├── Http.res            # node:http wrapper
+│   │   ├── Fs.res              # node:fs wrappers
+│   │   ├── FsWatch.res          # node:fs.watch wrapper
+│   │   ├── Signals.res         # process.on('SIGINT'/'SIGTERM') wrapper
+│   │   ├── Process_spawn.res   # child_process.spawn wrapper
+│   │   └── ... (Buffer, Crypto, Events, Node_Path, Timers, AbortController)
+│   ├── Watcher/
+│   │   ├── Monitor.res         # File watcher + debounce + restart dispatch
+│   │   ├── Rules.res           # Pure extension-based decision functions
+│   │   ├── Restart.res         # Process restart logic
+│   │   └── IgnoreMatcher.res   # Ignore pattern matching
+│   ├── Ui/
+│   │   ├── Templates.res       # HTML/CSS directory listing generation
+│   │   └── Injector.res        # Live-reload script injection
+│   ├── Security/
+│   │   └── Headers.res         # Security headers
+│   └── Utils/
+│       ├── Logger.res           # Leveled logging
+│       └── Path.res             # Path security + pattern matching
+├── tests/                       # Unit + integration tests (node --test)
 └── docs/
     ├── architecture.md          # This file
     └── workflow.md              # Development workflow

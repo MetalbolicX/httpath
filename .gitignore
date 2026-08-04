@@ -162,3 +162,6 @@ dist
 
 # SDD / skill registry artifacts
 .atl/
+
+# Rolldown build output
+dist/

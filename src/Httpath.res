@@ -51,7 +51,7 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
     WsHub.closeAll()
     Restart.reload(
       ~execPath=Process.execPath,
-      ~entrypoint="bin.mjs",
+      ~entrypoint=Belt.Option.getWithDefault(Process.argv[1], "bin.mjs"),
       ~argv=Array.slice(Process.argv, ~start=2, ~end=Array.length(Process.argv)),
     )
   }

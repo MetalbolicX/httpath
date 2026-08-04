@@ -1,22 +1,25 @@
-# HTTPath Demo
+# httpath Demo
 
-This demo showcases all the features of HTTPath, a minimalist Node.js file
-server with hot-reload capabilities.
+This demo showcases all the features of httpath, a minimalist static file server
+with live-reload capabilities.
 
-## 🚀 Quick Start
+## Quick Start
 
-1. **Build HTTPath** (if not already built):
+1. **Build httpath** (if not already built):
    ```bash
    npm run build
    ```
 
 2. **Start the demo server**:
    ```bash
-   # Basic server
-   node ../dist/index.mjs --path . --port 8080
+   # Serve the current directory (live reload is on by default)
+   node ../dist/httpath.mjs -d . -p 8080
 
-   # With hot-reload (recommended for demo)
-   node ../dist/index.mjs --path . --port 8080 --reload
+   # Disable live reload
+   node ../dist/httpath.mjs -d . -p 8080 --no-live-reload
+
+   # Or via npx (from the repo root, after npm install)
+   npx httpath -d demo -p 8080
    ```
 
 3. **Open your browser** and navigate to:
@@ -24,60 +27,64 @@ server with hot-reload capabilities.
    http://localhost:8080
    ```
 
-## 📁 Demo Contents
+## Demo Contents
 
 ### Files Included
 
-- **`index.html`** - Main demo page with interactive features
-- **`styles.css`** - Responsive CSS styles with animations
-- **`demo.js`** - Interactive JavaScript functionality
-- **`sample-data.json`** - Sample JSON data for AJAX testing
-- **`assets/sample.txt`** - Sample text file for MIME type testing
-- **`README.md`** - This file
+- **`index.html`** — Main demo page with interactive features
+- **`styles.css`** — Responsive CSS styles with animations
+- **`demo.js`** — Interactive JavaScript functionality
+- **`sample-data.json`** — Sample JSON data for testing
+- **`assets/`** — Subdirectory for directory listing demo
+- **`README.md`** — This file
 
 ### Features Demonstrated
 
-#### 🎯 Static File Serving
+#### Static File Serving
 
-- HTML files with proper content-type headers
+- HTML files with proper `text/html` MIME type
 - CSS files with `text/css` MIME type
 - JavaScript files with `text/javascript` MIME type
 - JSON files with `application/json` MIME type
 - Text files with `text/plain` MIME type
 
-#### 📂 Directory Indexing
+#### Directory Listing
 
 - Browse the `assets/` folder to see directory listing
-- Navigate up directories with "../" links
-- Clean, responsive directory listing interface
+- Navigate up directories with `../` links
+- Clean, responsive directory listing interface with dark mode
 
-#### 🔄 Hot-Reload (when enabled with `--reload`)
+#### Live Reload
 
-- Edit any HTML, CSS, or JS file
-- Save the file
-- Watch the browser automatically refresh
-- Real-time development experience
+Live reload is enabled by default. To test it:
 
-#### 🛡️ Security Features
+- Start the server: `node ../dist/httpath.mjs -d . -p 8080`
+- Open `http://localhost:8080` in your browser
+- Edit `index.html` or `styles.css` and save
+- The browser automatically refreshes
 
-- Try accessing `../../../etc/passwd` - should get 403 Forbidden
-- Path traversal attempts are blocked
+To disable live reload: `node ../dist/httpath.mjs -d . -p 8080 --no-live-reload`
+
+#### Security Features
+
+- Path traversal attempts (e.g., `../../../etc/passwd`) return 403 Forbidden
 - Directory escape attempts are prevented
+- Protected system directories are blocked by default
 
-#### ⚡ Interactive Features
+#### Interactive Features
 
-- **Theme Changer** - Click "Change Theme Color" to see CSS updates
-- **Dynamic Elements** - Add interactive elements to the page
-- **JSON Fetching** - Test AJAX requests to JSON files
-- **Hot-Reload Testing** - Instructions for testing live reload
+- **Theme Changer** — Click buttons to change the page color scheme
+- **Dynamic Elements** — Add and remove interactive elements from the page
+- **JSON Fetching** — Test AJAX requests to JSON files
+- **Live Reload Testing** — Instructions for testing automatic refresh
 
-## 🧪 Testing Scenarios
+## Testing Scenarios
 
 ### 1. Basic File Serving
 
 ```bash
 # Start server
-node ../dist/index.mjs --path . --port 8080
+node ../dist/httpath.mjs -d . -p 8080
 
 # Test different file types
 curl -I http://localhost:8080/index.html
@@ -93,14 +100,14 @@ curl -I http://localhost:8080/sample-data.json
 curl http://localhost:8080/assets/
 ```
 
-### 3. Hot-Reload Testing
+### 3. Live Reload Testing
 
 ```bash
-# Start with hot-reload enabled
-node ../dist/index.mjs --path . --port 8080 --reload
+# Start with live reload (default)
+node ../dist/httpath.mjs -d . -p 8080
 
 # In browser, open http://localhost:8080
-# Edit index.html and save - page should auto-refresh
+# Edit index.html or styles.css and save - page should auto-refresh
 ```
 
 ### 4. Security Testing
@@ -108,40 +115,33 @@ node ../dist/index.mjs --path . --port 8080 --reload
 ```bash
 # These should return 403 Forbidden
 curl http://localhost:8080/../../../etc/passwd
-curl http://localhost:8080/..%2F..%2Fwindows%2Fsystem32
+curl "http://localhost:8080/..%2F..%2F..%2Fetc%2Fpasswd"
 ```
 
-## 📊 Performance Testing
+## CLI Options Used in Demo
 
-You can test HTTPath's performance with tools like:
+| Option                     | Description                                      |
+| -------------------------- | ------------------------------------------------ |
+| `-d, --dir <path>`         | Directory to serve (default: current directory)  |
+| `-p, --port <n>`           | Port to listen on (default: 8080)                |
+| `-i, --ignore <patterns>`  | Comma-separated patterns to exclude               |
+| `--no-listing`             | Disable directory listing                        |
+| `--no-live-reload`         | Disable automatic browser refresh                |
+| `-r, --restart-on-change`  | Legacy mode: restart server on any file change   |
+| `--log <level>`            | Log level: `info`, `debug`, `error`              |
 
-```bash
-# Apache Bench
-ab -n 1000 -c 10 http://localhost:8080/
+Full reference: [../README.md](../README.md)
 
-# curl timing
-curl -w "@curl-format.txt" -o /dev/null -s http://localhost:8080/
-```
-
-## 🎮 Interactive Demo Features
-
-When you visit `http://localhost:8080`, you can:
-
-1. **Change Theme Colors** - See CSS variables update in real-time
-2. **Add Dynamic Elements** - Test JavaScript DOM manipulation
-3. **Fetch JSON Data** - Demonstrate AJAX capabilities
-4. **Test Hot-Reload** - Follow instructions for live development
-
-## 🔧 Customization
+## Customization
 
 ### Adding Your Own Files
 
 1. Add any file type to the demo directory
-2. HTTPath will automatically serve it with the correct MIME type
+2. httpath automatically serves it with the correct MIME type
 3. Supported formats include:
-   - Web: `.html`, `.css`, `.js`
+   - Web: `.html`, `.css`, `.js`, `.mjs`
    - Images: `.png`, `.jpg`, `.gif`, `.svg`
-   - Documents: `.pdf`, `.txt`, `.xml`
+   - Documents: `.pdf`, `.txt`, `.xml`, `.json`
    - Fonts: `.woff`, `.woff2`, `.ttf`
    - Archives: `.zip`
 
@@ -152,37 +152,39 @@ When you visit `http://localhost:8080`, you can:
 - **Edit `index.html`** to modify the content and layout
 - **Add new JSON files** for data testing
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Port Already in Use
 
-If port 8080 is busy, HTTPath will automatically try 8081, 8082, etc.
+If port 8080 is busy, specify a different port:
 
-### Hot-Reload Not Working
+```bash
+node ../dist/httpath.mjs -d . -p 3000
+```
 
-- Ensure you started the server with `--reload` flag
-- Check browser console for EventSource connections
-- Verify the server shows "Hot-reload enabled" message
+### Live Reload Not Working
+
+- Live reload is **on by default** — no `--reload` flag needed
+- Check the browser console for WebSocket connections
+- Verify the server shows live reload is enabled in startup output
+- Ensure your files are being served from the correct directory
 
 ### Files Not Loading
 
 - Check file permissions
 - Ensure files exist in the demo directory
 - Look at server logs for 404 errors
+- Use `--log debug` for verbose output
 
-## 💡 Tips
+## Tips
 
-- **Development**: Always use `--reload` flag for active development
+- **Development**: Live reload is on by default — just edit and save
 - **Testing**: Try different browsers to test compatibility
-- **Learning**: Check browser DevTools Network tab to see MIME types
+- **Learning**: Check browser DevTools Network tab to see MIME types and headers
 - **Performance**: Monitor memory usage with large files
 
-## 🔗 Related
+## Related
 
-- [Main HTTPath Documentation](../README.md)
-- [Source Code](../src/index.mts)
-- [Test Suite](../test/)
-
----
-
-**HTTPath Demo** - Experience the full power of minimalist file serving!
+- [Main httpath Documentation](../README.md)
+- [Architecture](../docs/architecture.md)
+- [Source Code](../src/)
