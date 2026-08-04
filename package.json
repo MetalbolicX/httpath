@@ -28,6 +28,7 @@
     "test": "pnpm run build && pnpm run test:unit && pnpm run test:integration"
   },
   "devDependencies": {
+    "@rescript/runtime": "^12.3.0",
     "rescript": "^12.3.0",
     "rescript-test": "8.0.1",
     "rolldown": "^1.2.2"
