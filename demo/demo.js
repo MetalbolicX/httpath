@@ -1,58 +1,47 @@
-// HTTPath Demo Interactive JavaScript
+// httpath Demo Interactive JavaScript
 
 let requestCount = 0;
 let colorIndex = 0;
 const colors = [
-  "#667eea",
-  "#4CAF50",
-  "#ff9800",
-  "#e91e63",
-  "#9c27b0",
-  "#3f51b5",
-  "#00bcd4",
-  "#009688",
+  "#5a67d8",
+  "#48bb78",
+  "#ed8936",
+  "#e53e3e",
+  "#9f7aea",
+  "#4299e1",
+  "#00b5d8",
+  "#38a169",
 ];
 
 // Initialize demo when DOM is loaded
 document.addEventListener("DOMContentLoaded", function () {
-  console.log("🎮 HTTPath Demo JavaScript loaded");
+  console.log("🎮 httpath Demo JavaScript loaded");
 
-  // Set up event listeners
   setupEventListeners();
-
-  // Start request counter (simulated)
   startRequestCounter();
-
-  // Check for hot-reload functionality
-  detectHotReload();
-
-  // Initialize dynamic features
+  detectLiveReload();
   initializeDynamicFeatures();
 });
 
 function setupEventListeners() {
-  // Change theme color button
   const changeColorBtn = document.getElementById("changeColorBtn");
   if (changeColorBtn) {
     changeColorBtn.addEventListener("click", changeThemeColor);
   }
 
-  // Add dynamic element button
   const addElementBtn = document.getElementById("addElementBtn");
   if (addElementBtn) {
     addElementBtn.addEventListener("click", addDynamicElement);
   }
 
-  // Fetch JSON data button
   const fetchDataBtn = document.getElementById("fetchDataBtn");
   if (fetchDataBtn) {
     fetchDataBtn.addEventListener("click", fetchJsonData);
   }
 
-  // Test hot-reload button
   const testReloadBtn = document.getElementById("testReloadBtn");
   if (testReloadBtn) {
-    testReloadBtn.addEventListener("click", testHotReload);
+    testReloadBtn.addEventListener("click", testLiveReload);
   }
 }
 
@@ -60,14 +49,12 @@ function changeThemeColor() {
   const root = document.documentElement;
   const newColor = colors[colorIndex % colors.length];
 
-  root.style.setProperty("--primary-color", newColor);
+  root.style.setProperty("--color-primary", newColor);
 
-  // Update status
   updateDemoResults(`🎨 Theme color changed to: ${newColor}`);
 
   colorIndex++;
 
-  // Animate the button
   const btn = document.getElementById("changeColorBtn");
   if (btn) {
     btn.style.transform = "scale(0.95)";
@@ -86,7 +73,7 @@ function addDynamicElement() {
   const newElement = document.createElement("div");
   newElement.className = "dynamic-element";
   newElement.style.cssText = `
-    background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
     color: white;
     padding: 16px;
     margin: 12px 0;
@@ -100,11 +87,11 @@ function addDynamicElement() {
   newElement.innerHTML = `
     <div style="position: relative; z-index: 1;">
       <strong>🎯 Dynamic Element #${
-    document.querySelectorAll(".dynamic-element").length + 1
-  }</strong>
+        document.querySelectorAll(".dynamic-element").length + 1
+      }</strong>
       <br>
       <small>Created at: ${timestamp}</small>
-      <button onclick="this.parentElement.parentElement.remove()"
+      <button type="button" onclick="this.parentElement.parentElement.remove()"
               style="float: right; background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer;">
         ✕
       </button>
@@ -112,13 +99,12 @@ function addDynamicElement() {
     <div style="position: absolute; top: -50%; right: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); pointer-events: none;"></div>
   `;
 
-  // Add CSS animation keyframes if not already added
   if (!document.getElementById("dynamic-styles")) {
     const style = document.createElement("style");
     style.id = "dynamic-styles";
     style.textContent = `
       @keyframes slideIn {
-        from { opacity: 0; transform: translateX(-100%); }
+        from { opacity: 0; transform: translateX(-20px); }
         to { opacity: 1; transform: translateX(0); }
       }
       .dynamic-element:hover {
@@ -134,7 +120,6 @@ function addDynamicElement() {
 
   updateDemoResults(`✨ Added new dynamic element at ${timestamp}`);
 
-  // Scroll to the new element
   newElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
@@ -142,18 +127,16 @@ async function fetchJsonData() {
   updateDemoResults("🔄 Fetching JSON data...");
 
   try {
-    // Try to fetch sample data (create if doesn't exist)
     const response = await fetch("./sample-data.json");
 
     if (!response.ok) {
-      // If sample-data.json doesn't exist, create sample data
       const sampleData = {
-        message: "Hello from HTTPath!",
+        message: "Hello from httpath!",
         timestamp: new Date().toISOString(),
-        server: "HTTPath Demo Server",
+        server: "httpath Demo Server",
         features: [
           "Static file serving",
-          "Hot-reload functionality",
+          "Live-reload functionality",
           "Directory indexing",
           "MIME type detection",
           "Security features",
@@ -186,48 +169,48 @@ function displayJsonData(data, message) {
 
   const jsonDisplay = document.createElement("div");
   jsonDisplay.style.cssText = `
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: #1a202c;
+    color: #e2e8f0;
     padding: 20px;
     border-radius: 8px;
     margin: 16px 0;
     font-family: 'Monaco', 'Menlo', monospace;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     line-height: 1.5;
     overflow-x: auto;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--color-border);
   `;
 
   jsonDisplay.innerHTML = `
-    <div style="color: var(--accent-color); margin-bottom: 12px; font-weight: bold;">
+    <div style="color: var(--color-accent); margin-bottom: 12px; font-weight: bold;">
       📄 ${message}
     </div>
     <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${
-    JSON.stringify(data, null, 2)
-  }</pre>
+      JSON.stringify(data, null, 2)
+    }</pre>
   `;
 
   demoResults.appendChild(jsonDisplay);
   updateDemoResults(`✅ ${message}`);
 }
 
-function testHotReload() {
+function testLiveReload() {
   const reloadInfo = document.getElementById("reloadInfo");
   if (!reloadInfo) return;
 
   reloadInfo.classList.add("show");
   reloadInfo.innerHTML = `
-    <div style="color: var(--primary-color); font-weight: 600; margin-bottom: 8px;">
-      🔄 Hot-Reload Test Instructions:
+    <div style="color: var(--color-primary); font-weight: 600; margin-bottom: 8px;">
+      🔄 Live-Reload Test Instructions:
     </div>
     <ol style="margin-left: 20px; line-height: 1.6;">
-      <li>Make sure the server is running with <code>--reload</code> flag</li>
+      <li>Live-reload is enabled by default when serving with httpath</li>
       <li>Edit any file in the served directory (try changing this HTML file)</li>
       <li>Save the file</li>
       <li>Watch the browser automatically refresh!</li>
     </ol>
-    <div style="margin-top: 12px; padding: 8px; background: var(--accent-color); color: white; border-radius: 4px; font-size: 0.9rem;">
-      💡 Tip: Try adding a comment or changing some text in the HTML to see it in action!
+    <div style="margin-top: 12px; padding: 8px; background: var(--color-accent); color: white; border-radius: 4px; font-size: 0.875rem;">
+      💡 Tip: The server uses WebSocket for live-reload communication.
     </div>
   `;
 }
@@ -240,7 +223,7 @@ function updateDemoResults(message) {
   messageElement.style.cssText = `
     padding: 12px;
     margin: 8px 0;
-    background: var(--accent-color);
+    background: var(--color-accent);
     color: white;
     border-radius: 6px;
     font-weight: 500;
@@ -248,10 +231,8 @@ function updateDemoResults(message) {
   `;
   messageElement.textContent = message;
 
-  // Insert at the beginning
   demoResults.insertBefore(messageElement, demoResults.firstChild);
 
-  // Remove old messages if there are too many
   const messages = demoResults.querySelectorAll("div");
   if (messages.length > 5) {
     messages[messages.length - 1].remove();
@@ -262,75 +243,77 @@ function startRequestCounter() {
   const requestCountElement = document.getElementById("requestCount");
   if (!requestCountElement) return;
 
-  // Simulate request counting
   const updateCount = () => {
     requestCount += Math.floor(Math.random() * 3) + 1;
     requestCountElement.textContent = requestCount.toLocaleString();
   };
 
-  // Initial count
   requestCount = Math.floor(Math.random() * 50) + 10;
   updateCount();
 
-  // Update every few seconds
   setInterval(updateCount, 3000 + Math.random() * 2000);
 }
 
-function detectHotReload() {
-  // Check if hot-reload script is injected
-  const scripts = Array.from(document.scripts);
-  const hasReloadScript = scripts.some((script) =>
-    script.textContent && script.textContent.includes("/__reload__")
-  );
+function detectLiveReload() {
+  // Check if live-reload WebSocket is available
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${window.location.host}/livereload`;
 
-  if (hasReloadScript) {
-    console.log("🔄 Hot-reload detected and active!");
+  try {
+    const ws = new WebSocket(wsUrl);
 
-    // Add visual indicator
-    const indicator = document.createElement("div");
-    indicator.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: var(--accent-color);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      z-index: 1000;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-      animation: slideIn 0.5s ease-out;
-    `;
-    indicator.innerHTML = "🔄 Hot-Reload Active";
-    document.body.appendChild(indicator);
+    ws.onopen = () => {
+      console.log("🔄 Live-reload WebSocket connected");
 
-    // Auto-hide after 5 seconds
-    setTimeout(() => {
-      indicator.style.opacity = "0";
-      setTimeout(() => indicator.remove(), 300);
-    }, 5000);
+      const indicator = document.createElement("div");
+      indicator.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--color-accent);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        z-index: 1000;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        animation: slideIn 0.5s ease-out;
+      `;
+      indicator.textContent = "🔄 Live-Reload Active";
+      document.body.appendChild(indicator);
+
+      setTimeout(() => {
+        indicator.style.opacity = "0";
+        setTimeout(() => indicator.remove(), 300);
+      }, 5000);
+
+      ws.close();
+    };
+
+    ws.onerror = () => {
+      console.log("⚠️ Live-reload WebSocket not available");
+    };
+  } catch (e) {
+    console.log("⚠️ Live-reload WebSocket not available");
   }
 }
 
 function initializeDynamicFeatures() {
-  // Add some interactive hover effects
   const featureCards = document.querySelectorAll(".feature-card");
-  featureCards.forEach((card, _index) => {
+  featureCards.forEach((card) => {
     card.addEventListener("mouseenter", () => {
-      card.style.transform = "translateY(-8px) rotateZ(0.5deg)";
+      card.style.transform = "translateY(-4px)";
     });
 
     card.addEventListener("mouseleave", () => {
-      card.style.transform = "translateY(0) rotateZ(0deg)";
+      card.style.transform = "translateY(0)";
     });
   });
 
-  // Add click effects to demo links
   const demoLinks = document.querySelectorAll(".demo-link");
   demoLinks.forEach((link) => {
     link.addEventListener("click", (e) => {
-      // Add ripple effect
       const ripple = document.createElement("span");
       const rect = link.getBoundingClientRect();
       const size = Math.max(rect.width, rect.height);
@@ -433,12 +416,12 @@ if (typeof PerformanceObserver !== "undefined") {
 }
 
 // Export functions for global access
-globalThis.HTTPathDemo = {
+globalThis.httpathDemo = {
   changeThemeColor,
   addDynamicElement,
   fetchJsonData,
-  testHotReload,
+  testLiveReload,
   updateDemoResults,
 };
 
-console.log("✅ HTTPath Demo fully initialized");
+console.log("✅ httpath Demo fully initialized");

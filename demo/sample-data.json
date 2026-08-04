@@ -1,10 +1,10 @@
 {
-  "message": "Hello from HTTPath Demo Server!",
+  "message": "Hello from httpath Demo Server!",
   "timestamp": "2024-01-15T10:30:00.000Z",
   "server": {
-    "name": "HTTPath",
+    "name": "httpath",
     "version": "0.1.0",
-    "description": "A minimalist Node.js file server with hot-reload capabilities",
+    "description": "A minimalist Node.js file server with live-reload capabilities",
     "author": "José Martínez Santana"
   },
   "features": [
@@ -29,9 +29,9 @@
       "status": "active"
     },
     {
-      "name": "Hot-Reload",
-      "description": "Automatic browser refresh when files change",
-      "status": "conditional"
+      "name": "Live-Reload",
+      "description": "Automatic browser refresh when files change via WebSocket",
+      "status": "active"
     }
   ],
   "stats": {
@@ -59,7 +59,7 @@
   "configuration": {
     "port": 8080,
     "rootPath": "./demo",
-    "hotReload": true,
+    "liveReload": true,
     "security": {
       "pathTraversalProtection": true,
       "inputSanitization": true,
@@ -87,7 +87,7 @@
   "demoData": {
     "colors": ["#667eea", "#4CAF50", "#ff9800", "#e91e63", "#9c27b0"],
     "randomFacts": [
-      "HTTPath uses Server-Sent Events for hot-reload functionality",
+      "httpath uses WebSocket for live-reload functionality",
       "The server automatically finds available ports if the default is busy",
       "Directory listings are generated dynamically with navigation support",
       "All file paths are sanitized to prevent security vulnerabilities"
@@ -104,6 +104,6 @@
     "apiVersion": "1.0",
     "dataFormat": "JSON",
     "encoding": "UTF-8",
-    "source": "HTTPath Demo Server"
+    "source": "httpath Demo Server"
   }
 }
