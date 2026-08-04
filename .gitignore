@@ -165,3 +165,7 @@ dist
 
 # Rolldown build output
 dist/
+
+.claude/
+.playwright-cli/
+.playwright/
