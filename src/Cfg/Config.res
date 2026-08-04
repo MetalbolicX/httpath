@@ -19,7 +19,7 @@ type t = {
 //   hostname: "127.0.0.1"
 //   port: 8080
 //   ignorePatterns: [".git", "node_modules", ".DS_Store"]
-//   enableDirectoryListing: false
+//   enableDirectoryListing: true
 //   logLevel: Logger.Info
 //   enableLiveReload: true
 //   restartOnChange: false
@@ -31,7 +31,7 @@ let default: t = {
   hostname: "127.0.0.1",
   port: 8080,
   ignorePatterns: [".git", "node_modules", ".DS_Store"],
-  enableDirectoryListing: false,
+  enableDirectoryListing: true,
   logLevel: Logger.Info,
   enableLiveReload: true,
   restartOnChange: false,

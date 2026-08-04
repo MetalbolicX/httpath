@@ -15,7 +15,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let hostname = ref((None: option<string>))
   let port = ref((None: option<int>))
   let ignorePatterns = ref((None: option<array<string>>))
-  let listing = ref(false)
+  let listing = ref(true)
   let noListing = ref(false)
   let noLiveReload = ref(false)
   let restartOnChange = ref(false)

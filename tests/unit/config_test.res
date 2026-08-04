@@ -60,13 +60,13 @@ test("Config.default ignorePatterns has .git, node_modules, .DS_Store", () => {
   )
 })
 
-test("Config.default enableDirectoryListing is false", () => {
+test("Config.default enableDirectoryListing is true", () => {
   assertion(
-    ~message="enableDirectoryListing defaults to false",
+    ~message="enableDirectoryListing defaults to true",
     ~operator="=",
     (a, b) => a == b,
     Config.default.enableDirectoryListing,
-    false,
+    true,
   )
 })
 
@@ -142,7 +142,7 @@ test("Config.t is a record with 10 fields", () => {
     h != "" &&
     p >= 0 &&
     Array.length(ip) > 0 &&
-    edl == false &&
+    edl == true &&
     elr == true &&
     roc == false &&
     lan == false &&

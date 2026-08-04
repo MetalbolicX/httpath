@@ -37,11 +37,11 @@ test("parse([]) returns all defaults", () => {
     )
     assertion(~message="port is 8080", ~operator="=", (a, b) => a == b, c.port, 8080)
     assertion(
-      ~message="enableDirectoryListing is false",
+      ~message="enableDirectoryListing is true",
       ~operator="=",
       (a, b) => a == b,
       c.enableDirectoryListing,
-      false,
+      true,
     )
     assertion(
       ~message="enableLiveReload is true",

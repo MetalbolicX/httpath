@@ -217,11 +217,17 @@ let serveDirectory = (
         !Path.matchesPattern(~path=normalized, ~patterns=ignorePatterns)
       })
       // Map to fileEntry
+      // Normalize urlPath so requests like /assets/ don't produce /assets//file URLs.
+      let basePath = if urlPath != "/" && Js.String.endsWith("/", urlPath) {
+        Js.String.slice(~from=0, ~to_=String.length(urlPath) - 1, urlPath)
+      } else {
+        urlPath
+      }
       let fileEntries: array<Templates.fileEntry> = Array.map(filtered, entry => {
-        let entryUrl = if urlPath == "/" {
+        let entryUrl = if basePath == "/" {
           "/" ++ encodeURIComponent(Fs.direntName(entry))
         } else {
-          urlPath ++ "/" ++ encodeURIComponent(Fs.direntName(entry))
+          basePath ++ "/" ++ encodeURIComponent(Fs.direntName(entry))
         }
         (
           {

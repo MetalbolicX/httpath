@@ -141,6 +141,49 @@ function makeTempDir(port, files, extraConfig) {
 }
 
 // ---------------------------------------------------------------------------
+// Test: GET /sub/ with directory listing enabled does not produce double-slash URLs
+// Regression: urlPath "/sub/" was concatenated as "/sub/" + "/" + name = "/sub//name".
+// ---------------------------------------------------------------------------
+
+test("GET /sub/ with enableDirectoryListing=true → listing links without double slashes", async () => {
+  const port = PORT_BASE + 11;
+  const tmpDir = mkdtempSync(path.join("/tmp", "httpath-static-"));
+  const subDir = path.join(tmpDir, "sub");
+  mkdirSync(subDir);
+  writeFileSync(path.join(subDir, "nested.txt"), "nested content");
+
+  const { scriptPath } = makeChildScript(port, tmpDir, "{ enableDirectoryListing: true }");
+
+  const child = spawn(process.execPath, [scriptPath], {
+    stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(),
+  });
+
+  try {
+    await new Promise((r) => setTimeout(r, 200));
+    await waitForChildReady(child, port);
+
+    const res = await httpGet(port, "/sub/");
+
+    assert.strictEqual(res.statusCode, 200, `Expected 200, got ${res.statusCode}`);
+    assert.ok(
+      res.headers["content-type"] && res.headers["content-type"].includes("text/html"),
+      `Expected text/html, got ${res.headers["content-type"]}`,
+    );
+    assert.ok(res.body.includes("nested.txt"), "Listing should contain nested.txt");
+    assert.ok(!res.body.includes('href="/sub//nested.txt"'), "Listing must not contain double-slash URL");
+    assert.ok(res.body.includes('href="/sub/nested.txt"'), "Listing should contain single-slash URL");
+
+    child.kill("SIGTERM");
+    await new Promise((r) => child.on("exit", r));
+  } finally {
+    if (child.exitCode === null) child.kill("SIGTERM");
+    rmSync(scriptPath, { force: true });
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Test: GET / with directory listing enabled → 200 + text/html + listing
 // ---------------------------------------------------------------------------
 
