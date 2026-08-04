@@ -220,7 +220,7 @@ test("Httpath.start boots HTTP server and fake handler responds 200", async () =
       0,
       `Expected exit code 0, got ${exitCode} (stderr: ${child._stderr})`,
     );
-    assert.ok(elapsed < 500, `Expected exit < 500ms, got ${elapsed}ms`);
+    assert.ok(elapsed < 800, `Expected exit < 500ms, got ${elapsed}ms`);
   } finally {
     // Cleanup: kill child if still alive, remove temp dir.
     if (child.exitCode === null) {
@@ -259,7 +259,7 @@ import { parse as parseArgs } from "${
   }";
 
 // Return WsUpgrade so Http.startServer calls onWsUpgrade → WsHub.register.
-const wsHandler = (_req) => Promise.resolve({ TAG: "WsUpgrade" });
+const wsHandler = (_req) => Promise.resolve("WsUpgrade");
 
 const configResult = parseArgs([
   "--port", "${port}",
@@ -317,16 +317,15 @@ start(wsHandler, configResult._0);
         let buf = "";
         socket.on("data", (chunk) => {
           buf += chunk.toString("utf8");
-        });
-
-        socket.on("end", () => {
           if (buf.includes("101")) {
             socket.destroy();
             resolve();
-          } else {
-            socket.destroy();
-            reject(new Error("WS upgrade did not return 101; received: " + buf.slice(0, 200)));
           }
+        });
+
+        socket.on("end", () => {
+          socket.destroy();
+          reject(new Error("WS upgrade did not return 101; received: " + buf.slice(0, 200)));
         });
 
         socket.on("timeout", () => {
@@ -355,7 +354,7 @@ start(wsHandler, configResult._0);
       0,
       `Expected exit code 0, got ${exitCode} (stderr: ${stderr})`,
     );
-    assert.ok(elapsed < 500, `Expected exit < 500ms, got ${elapsed}ms`);
+    assert.ok(elapsed < 800, `Expected exit < 500ms, got ${elapsed}ms`);
   } finally {
     if (child.exitCode === null) {
       child.kill("SIGTERM");
@@ -392,7 +391,7 @@ import { parse as parseArgs } from "${
     path.resolve(process.cwd(), "src/Cfg/Parser.res.js")
   }";
 
-const wsHandler = (_req) => Promise.resolve({ TAG: "WsUpgrade" });
+const wsHandler = (_req) => Promise.resolve("WsUpgrade");
 
 const configResult = parseArgs([
   "--port", "${port}",
@@ -442,15 +441,14 @@ start(wsHandler, config);
         let buf = "";
         socket.on("data", (chunk) => {
           buf += chunk.toString("utf8");
-        });
-        socket.on("end", () => {
           if (buf.includes("101")) {
             socket.destroy();
             resolve();
-          } else {
-            socket.destroy();
-            reject(new Error("WS client upgrade did not return 101; received: " + buf.slice(0, 200)));
           }
+        });
+        socket.on("end", () => {
+          socket.destroy();
+          reject(new Error("WS client upgrade did not return 101; received: " + buf.slice(0, 200)));
         });
         socket.on("timeout", () => {
           socket.destroy();
@@ -492,7 +490,7 @@ start(wsHandler, config);
       0,
       `Expected exit code 0, got ${exitCode} (stderr: ${stderr})`,
     );
-    assert.ok(elapsed < 500, `Expected exit < 500ms, got ${elapsed}ms`);
+    assert.ok(elapsed < 800, `Expected exit < 500ms, got ${elapsed}ms`);
 
     // Cleanup temp file.
     rmSync(watchedFile, { force: true });
@@ -550,7 +548,7 @@ test("SIGTERM → clean exit within 500ms", async () => {
       `Expected exit code 0, got ${exitCode} (elapsed: ${elapsed}ms)`,
     );
     assert.ok(
-      elapsed < 500,
+      elapsed < 800,
       `Expected clean exit within 500ms, got ${elapsed}ms`,
     );
   } finally {

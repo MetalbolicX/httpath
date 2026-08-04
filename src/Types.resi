@@ -29,3 +29,4 @@ type outcome =
 
 let liveReloadEndpoint: string
 let liveReloadMessage: string
+let getHeader: (array<(string, string)>, string) => option<string>

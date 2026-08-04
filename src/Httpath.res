@@ -8,13 +8,26 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
   let sig = AbortController.signal(controller)
 
   let onWsUpgrade = (
-    _req: Types.request,
+    req: Types.request,
     socket: Http.serverSocket,
     _head: Nullable.t<Http.upgradeHead>,
-  ): promise<unit> => {
-    WsHub.register(socket)
-    Promise.resolve()
-  }
+  ): promise<unit> =>
+    switch Types.getHeader(req.headers, "sec-websocket-key") {
+    | None =>
+      Http.socketDestroy(socket)
+      Promise.resolve()
+    | Some(key) =>
+      let accept = WsHandshake.computeAccept(key)
+      let response = WsHandshake.handshakeResponse(accept)
+      Http.socketWriteBuffer(socket, Buffer.fromString(response, "utf8"))
+      ->Promise.then(result => {
+        switch result {
+        | Ok() => WsHub.register(socket)
+        | Error(_) => Http.socketDestroy(socket)
+        }
+        Promise.resolve()
+      })
+    }
 
   let {server, closed} = Http.startServer(
     ~port=config.port,

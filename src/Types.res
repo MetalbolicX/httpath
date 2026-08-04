@@ -13,6 +13,13 @@ type request = {
   clientIp: string,
 }
 
+// ---------------------------------------------------------------------------
+// Header lookup helper (for WebSocket upgrade and general use)
+// ---------------------------------------------------------------------------
+
+let getHeader = (headers: array<(string, string)>, name: string): option<string> =>
+  Belt.Array.getBy(headers, ((k, _)) => k == name)->Belt.Option.map(((_, v)) => v)
+
 type bodyContent =
   | File(string)
   | Html(string)
