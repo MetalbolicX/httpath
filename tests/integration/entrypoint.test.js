@@ -292,42 +292,53 @@ start(wsHandler, configResult._0);
     // Since we can't easily introspect the child's WsHub, we verify the
     // WebSocket upgrade succeeds (101 response) and that the server doesn't crash.
 
-    // Act: send a WS upgrade request to the child.
-    await new Promise((resolve, reject) => {
-      const key = "dGhlIHNhbXBsZSBub25jZQ==";
-      const reqLines = [
-        "GET /livereload HTTP/1.1",
-        `Host: 127.0.0.1:${port}`,
-        "Upgrade: websocket",
-        "Connection: Upgrade",
-        "Sec-WebSocket-Key: " + key,
-        "Sec-WebSocket-Version: 13",
-        "",
-        "",
-      ];
-      const socket = net.createConnection({ host: "127.0.0.1", port });
-      socket.setTimeout(1000);
+    // Act: send a WS upgrade request to the child. Buffer all data so a 101 split across
+    // chunks is still recognized, and wrap with a hard 2-second timeout so the test
+    // can never hang (socket.setTimeout is IDLE-only; once a WebSocket is established
+    // the socket stays "active" and the idle timeout stops firing).
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        const key = "dGhlIHNhbXBsZSBub25jZQ==";
+        const reqLines = [
+          "GET /livereload HTTP/1.1",
+          `Host: 127.0.0.1:${port}`,
+          "Upgrade: websocket",
+          "Connection: Upgrade",
+          "Sec-WebSocket-Key: " + key,
+          "Sec-WebSocket-Version: 13",
+          "",
+          "",
+        ];
+        const socket = net.createConnection({ host: "127.0.0.1", port });
+        socket.setTimeout(1500);
 
-      socket.on("connect", () => socket.write(reqLines.join("\r\n")));
+        socket.on("connect", () => socket.write(reqLines.join("\r\n")));
 
-      socket.on("data", (chunk) => {
-        const str = chunk.toString("utf8");
-        if (str.includes("101")) {
-          // Upgrade accepted — WsHub.register was called inside the child.
+        let buf = "";
+        socket.on("data", (chunk) => {
+          buf += chunk.toString("utf8");
+        });
+
+        socket.on("end", () => {
+          if (buf.includes("101")) {
+            socket.destroy();
+            resolve();
+          } else {
+            socket.destroy();
+            reject(new Error("WS upgrade did not return 101; received: " + buf.slice(0, 200)));
+          }
+        });
+
+        socket.on("timeout", () => {
           socket.destroy();
-          resolve();
-        } else if (str.includes("200") || str.includes("501")) {
-          socket.destroy();
-          reject(new Error("Handler returned Respond instead of WsUpgrade"));
-        }
-      });
-
-      socket.on("timeout", () => {
-        socket.destroy();
-        reject(new Error("WS upgrade timeout"));
-      });
-      socket.on("error", reject);
-    });
+          reject(new Error("WS upgrade idle timeout"));
+        });
+        socket.on("error", reject);
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("WS upgrade hard 2s timeout")), 2000)
+      ),
+    ]);
 
     // Shutdown the child via SIGTERM and verify clean exit.
     const before = Date.now();
@@ -412,33 +423,45 @@ start(wsHandler, config);
     await waitForChildReady(child, port);
 
     // Establish a WS client so WsHub has a registered client to notify.
-    await new Promise((resolve, reject) => {
-      const key = "dGhlIHNhbXBsZSBub25jZQ==";
-      const reqLines = [
-        "GET /livereload HTTP/1.1",
-        `Host: 127.0.0.1:${port}`,
-        "Upgrade: websocket",
-        "Connection: Upgrade",
-        "Sec-WebSocket-Key: " + key,
-        "Sec-WebSocket-Version: 13",
-        "",
-        "",
-      ];
-      const socket = net.createConnection({ host: "127.0.0.1", port });
-      socket.setTimeout(1000);
-      socket.on("connect", () => socket.write(reqLines.join("\r\n")));
-      socket.on("data", (chunk) => {
-        if (chunk.toString("utf8").includes("101")) {
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        const key = "dGhlIHNhbXBsZSBub25jZQ==";
+        const reqLines = [
+          "GET /livereload HTTP/1.1",
+          `Host: 127.0.0.1:${port}`,
+          "Upgrade: websocket",
+          "Connection: Upgrade",
+          "Sec-WebSocket-Key: " + key,
+          "Sec-WebSocket-Version: 13",
+          "",
+          "",
+        ];
+        const socket = net.createConnection({ host: "127.0.0.1", port });
+        socket.setTimeout(1500);
+        socket.on("connect", () => socket.write(reqLines.join("\r\n")));
+        let buf = "";
+        socket.on("data", (chunk) => {
+          buf += chunk.toString("utf8");
+        });
+        socket.on("end", () => {
+          if (buf.includes("101")) {
+            socket.destroy();
+            resolve();
+          } else {
+            socket.destroy();
+            reject(new Error("WS client upgrade did not return 101; received: " + buf.slice(0, 200)));
+          }
+        });
+        socket.on("timeout", () => {
           socket.destroy();
-          resolve();
-        }
-      });
-      socket.on("timeout", () => {
-        socket.destroy();
-        reject(new Error("WS timeout"));
-      });
-      socket.on("error", reject);
-    });
+          reject(new Error("WS client idle timeout"));
+        });
+        socket.on("error", reject);
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("WS client upgrade hard 2s timeout")), 2000)
+      ),
+    ]);
 
     // Create a file and wait for Monitor's debounce to settle (500ms).
     const watchedFile = path.join(tmpDir, "watched.txt");
