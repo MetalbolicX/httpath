@@ -103,6 +103,34 @@ test("HelpRequested.toString returns Help requested", () => {
 })
 
 // ---------------------------------------------------------------------------
+// Test: InvalidRateLimit variant
+// ---------------------------------------------------------------------------
+
+test("InvalidRateLimit.toString formats correctly for max", () => {
+  let msg = ParseError.InvalidRateLimit("max", 0)
+  let s = ParseError.toString(msg)
+  assertion(
+    ~message="toString returns Invalid rate limit format for max",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(s, "Invalid rate limit"),
+    true,
+  )
+})
+
+test("InvalidRateLimit.toString formats correctly for window", () => {
+  let msg = ParseError.InvalidRateLimit("window", -1)
+  let s = ParseError.toString(msg)
+  assertion(
+    ~message="toString handles negative window value",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(s, "Invalid rate limit"),
+    true,
+  )
+})
+
+// ---------------------------------------------------------------------------
 // Test: all variants are distinguishable
 // ---------------------------------------------------------------------------
 
@@ -114,6 +142,7 @@ test("each variant produces a distinct string", () => {
   let s5 = ParseError.toString(ParseError.RemovedFlag("x"))
   let s6 = ParseError.toString(ParseError.InvalidPath("x"))
   let s7 = ParseError.toString(ParseError.HelpRequested)
+  let s8 = ParseError.toString(ParseError.InvalidRateLimit("max", 0))
   let allDistinct =
     s1 != s2 &&
     s1 != s3 &&
@@ -121,23 +150,30 @@ test("each variant produces a distinct string", () => {
     s1 != s5 &&
     s1 != s6 &&
     s1 != s7 &&
+    s1 != s8 &&
     s2 != s3 &&
     s2 != s4 &&
     s2 != s5 &&
     s2 != s6 &&
     s2 != s7 &&
+    s2 != s8 &&
     s3 != s4 &&
     s3 != s5 &&
     s3 != s6 &&
     s3 != s7 &&
+    s3 != s8 &&
     s4 != s5 &&
     s4 != s6 &&
     s4 != s7 &&
+    s4 != s8 &&
     s5 != s6 &&
     s5 != s7 &&
-    s6 != s7
+    s5 != s8 &&
+    s6 != s7 &&
+    s6 != s8 &&
+    s7 != s8
   assertion(
-    ~message="all 7 variants produce distinct strings",
+    ~message="all 8 variants produce distinct strings",
     ~operator="=",
     (a, b) => a == b,
     allDistinct,

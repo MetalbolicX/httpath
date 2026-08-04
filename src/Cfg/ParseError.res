@@ -8,6 +8,7 @@ type t =
   | RemovedFlag(string)
   | InvalidPath(string)
   | HelpRequested
+  | InvalidRateLimit(string, int)
 
 let toString = (e: t): string => {
   switch e {
@@ -18,5 +19,7 @@ let toString = (e: t): string => {
   | RemovedFlag(flag) => `Flag has been removed: ${flag}`
   | InvalidPath(path) => `Invalid path: ${path}`
   | HelpRequested => "Help requested"
+  | InvalidRateLimit(kind, val) =>
+    `Invalid rate limit ${kind}: ${Belt.Int.toString(val)}. Must be a positive integer.`
   }
 }

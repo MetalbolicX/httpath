@@ -12,6 +12,16 @@ type t = {
   restartOnChange: bool,
   lan: bool,
   allowProtectedDir: bool,
+  authFile: option<string>,
+  noAuth: bool,
+  tls: bool,
+  tlsCert: option<string>,
+  tlsKey: option<string>,
+  rateLimitMax: int,
+  rateLimitWindow: int,
+  rateLimitEnabled: bool,
+  accessLog: option<string>,
+  readOnly: bool,
 }
 
 // The default config — all flag defaults from the legacy parser.

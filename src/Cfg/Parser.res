@@ -24,6 +24,16 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let allowProtectedDir = ref(false)
   let helpRequested = ref(false)
   let parseError = ref((None: option<ParseError.t>))
+  // LAN security flags
+  let authFile = ref((None: option<string>))
+  let noAuth = ref(false)
+  let tls = ref(false)
+  let tlsCert = ref((None: option<string>))
+  let tlsKey = ref((None: option<string>))
+  let rateLimitMax = ref((None: option<int>))
+  let rateLimitWindow = ref((None: option<int>))
+  let accessLog = ref((None: option<string>))
+  let readOnly = ref(false)
 
   let i = ref(0)
   let argsLen = Array.length(args)
@@ -103,6 +113,78 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       i := i.contents + 1
     } else if arg == "--trust-proxy" {
       parseError := Some(ParseError.RemovedFlag("--trust-proxy"))
+    } else if arg == "--auth-file" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        authFile := Some(args[i.contents + 1]->Option.getOr(""))
+        i := i.contents + 2
+      }
+    } else if arg == "--no-auth" {
+      noAuth := true
+      i := i.contents + 1
+    } else if arg == "--tls" {
+      tls := true
+      i := i.contents + 1
+    } else if arg == "--tls-cert" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        tlsCert := Some(args[i.contents + 1]->Option.getOr(""))
+        i := i.contents + 2
+      }
+    } else if arg == "--tls-key" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        tlsKey := Some(args[i.contents + 1]->Option.getOr(""))
+        i := i.contents + 2
+      }
+    } else if arg == "--rate-limit-max" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        let maxStr = args[i.contents + 1]->Option.getOr("")
+        let maxNum = Belt.Int.fromString(maxStr)
+        switch maxNum {
+        | None => parseError := Some(ParseError.InvalidRateLimit("max", 0))
+        | Some(n) =>
+          if n <= 0 {
+            parseError := Some(ParseError.InvalidRateLimit("max", n))
+          } else {
+            rateLimitMax := Some(n)
+          }
+        }
+        i := i.contents + 2
+      }
+    } else if arg == "--rate-limit-window" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        let windowStr = args[i.contents + 1]->Option.getOr("")
+        let windowNum = Belt.Int.fromString(windowStr)
+        switch windowNum {
+        | None => parseError := Some(ParseError.InvalidRateLimit("window", 0))
+        | Some(n) =>
+          if n <= 0 {
+            parseError := Some(ParseError.InvalidRateLimit("window", n))
+          } else {
+            // Convert seconds to milliseconds
+            rateLimitWindow := Some(n * 1000)
+          }
+        }
+        i := i.contents + 2
+      }
+    } else if arg == "--access-log" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        accessLog := Some(args[i.contents + 1]->Option.getOr(""))
+        i := i.contents + 2
+      }
+    } else if arg == "--read-only" {
+      readOnly := true
+      i := i.contents + 1
     } else if String.length(arg) > 0 && String.getUnsafe(arg, 0) == "-" {
       parseError := Some(ParseError.UnknownFlag(arg))
     } else {
@@ -154,6 +236,20 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
         }
         let effectiveLiveReload = !noLiveReload.contents
 
+        // LAN security: effective values with LAN defaults
+        let effectiveReadOnly = readOnly.contents || lan.contents
+        let effectiveRateLimitMax = switch rateLimitMax.contents {
+        | Some(m) => m
+        | None =>
+          if lan.contents { 100 } else { 0 }
+        }
+        let effectiveRateLimitWindow = switch rateLimitWindow.contents {
+        | Some(w) => w
+        | None =>
+          if lan.contents { 60000 } else { 0 }
+        }
+        let effectiveRateLimitEnabled = lan.contents || rateLimitMax.contents != None || rateLimitWindow.contents != None
+
         Ok({
           directory: effectiveDir,
           hostname: effectiveHost,
@@ -165,6 +261,16 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
           restartOnChange: restartOnChange.contents,
           lan: lan.contents,
           allowProtectedDir: allowProtectedDir.contents,
+          authFile: authFile.contents,
+          noAuth: noAuth.contents,
+          tls: tls.contents,
+          tlsCert: tlsCert.contents,
+          tlsKey: tlsKey.contents,
+          rateLimitMax: effectiveRateLimitMax,
+          rateLimitWindow: effectiveRateLimitWindow,
+          rateLimitEnabled: effectiveRateLimitEnabled,
+          accessLog: accessLog.contents,
+          readOnly: effectiveReadOnly,
         })
       }
     }

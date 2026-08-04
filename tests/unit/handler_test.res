@@ -63,6 +63,16 @@ let testConfigBase: Config.t = {
   restartOnChange: false,
   lan: false,
   allowProtectedDir: false,
+  authFile: None,
+  noAuth: false,
+  tls: false,
+  tlsCert: None,
+  tlsKey: None,
+  rateLimitMax: 0,
+  rateLimitWindow: 0,
+  rateLimitEnabled: false,
+  accessLog: None,
+  readOnly: false,
 }
 
 // ---------------------------------------------------------------------------

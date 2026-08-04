@@ -607,3 +607,368 @@ test("non-flag arguments are skipped", () => {
     4000,
   )
 })
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --auth-file
+// ---------------------------------------------------------------------------
+
+test("--auth-file sets authFile to Some path", () => {
+  let c = unwrapConfig(Parser.parse(["--auth-file", "/etc/httpath/auth"]))
+  assertion(
+    ~message="authFile is Some after --auth-file",
+    ~operator="=",
+    (a, b) => a == b,
+    c.authFile,
+    Some("/etc/httpath/auth"),
+  )
+})
+
+test("--auth-file with no value returns MissingValue", () => {
+  let r = Parser.parse(["--auth-file"])
+  switch r {
+  | Ok(_) => assertion(~message="--auth-file alone should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.MissingValue(flag)) =>
+    assertion(~message="MissingValue for --auth-file", ~operator="=", (a, b) => a == b, flag, "--auth-file")
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected MissingValue, got: " ++ msg)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --no-auth
+// ---------------------------------------------------------------------------
+
+test("--no-auth sets noAuth to true", () => {
+  let c = unwrapConfig(Parser.parse(["--no-auth"]))
+  assertion(
+    ~message="noAuth is true with --no-auth",
+    ~operator="=",
+    (a, b) => a == b,
+    c.noAuth,
+    true,
+  )
+})
+
+test("--no-auth and --auth-file: no-auth wins (noAuth && !authFile)", () => {
+  let c = unwrapConfig(Parser.parse(["--no-auth", "--auth-file", "/path/to/auth"]))
+  assertion(~message="noAuth is true", ~operator="=", (a, b) => a == b, c.noAuth, true)
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --tls
+// ---------------------------------------------------------------------------
+
+test("--tls sets tls to true", () => {
+  let c = unwrapConfig(Parser.parse(["--tls"]))
+  assertion(
+    ~message="tls is true with --tls",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tls,
+    true,
+  )
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --tls-cert
+// ---------------------------------------------------------------------------
+
+test("--tls-cert sets tlsCert to Some path", () => {
+  let c = unwrapConfig(Parser.parse(["--tls-cert", "/etc/httpath/cert.pem"]))
+  assertion(
+    ~message="tlsCert is Some after --tls-cert",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tlsCert,
+    Some("/etc/httpath/cert.pem"),
+  )
+})
+
+test("--tls-cert with no value returns MissingValue", () => {
+  let r = Parser.parse(["--tls-cert"])
+  switch r {
+  | Ok(_) => assertion(~message="--tls-cert alone should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.MissingValue(flag)) =>
+    assertion(~message="MissingValue for --tls-cert", ~operator="=", (a, b) => a == b, flag, "--tls-cert")
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected MissingValue, got: " ++ msg)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --tls-key
+// ---------------------------------------------------------------------------
+
+test("--tls-key sets tlsKey to Some path", () => {
+  let c = unwrapConfig(Parser.parse(["--tls-key", "/etc/httpath/key.pem"]))
+  assertion(
+    ~message="tlsKey is Some after --tls-key",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tlsKey,
+    Some("/etc/httpath/key.pem"),
+  )
+})
+
+test("--tls-key with no value returns MissingValue", () => {
+  let r = Parser.parse(["--tls-key"])
+  switch r {
+  | Ok(_) => assertion(~message="--tls-key alone should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.MissingValue(flag)) =>
+    assertion(~message="MissingValue for --tls-key", ~operator="=", (a, b) => a == b, flag, "--tls-key")
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected MissingValue, got: " ++ msg)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --rate-limit-max (positive integer required)
+// ---------------------------------------------------------------------------
+
+test("--rate-limit-max 50 sets rateLimitMax to 50", () => {
+  let c = unwrapConfig(Parser.parse(["--rate-limit-max", "50"]))
+  assertion(
+    ~message="rateLimitMax is 50",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitMax,
+    50,
+  )
+})
+
+test("--rate-limit-max 0 returns InvalidRateLimit", () => {
+  let r = Parser.parse(["--rate-limit-max", "0"])
+  switch r {
+  | Ok(_) => assertion(~message="0 should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+    assertion(~message="InvalidRateLimit for max=0", ~operator="=", (a, b) => a == b, val, 0)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected InvalidRateLimit, got: " ++ msg)
+  }
+})
+
+test("--rate-limit-max negative returns InvalidRateLimit", () => {
+  let r = Parser.parse(["--rate-limit-max", "-5"])
+  switch r {
+  | Ok(_) => assertion(~message="-5 should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+    assertion(~message="InvalidRateLimit for negative", ~operator="=", (a, b) => a == b, val, -5)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected InvalidRateLimit, got: " ++ msg)
+  }
+})
+
+test("--rate-limit-max non-numeric returns InvalidRateLimit", () => {
+  let r = Parser.parse(["--rate-limit-max", "abc"])
+  switch r {
+  | Ok(_) => assertion(~message="abc should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.InvalidRateLimit(_, _)) =>
+    assertion(~message="InvalidRateLimit for non-numeric", ~operator="=", (a, b) => a == b, true, true)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected InvalidRateLimit, got: " ++ msg)
+  }
+})
+
+test("--rate-limit-max with no value returns MissingValue", () => {
+  let r = Parser.parse(["--rate-limit-max"])
+  switch r {
+  | Ok(_) => assertion(~message="--rate-limit-max alone should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.MissingValue(flag)) =>
+    assertion(~message="MissingValue for --rate-limit-max", ~operator="=", (a, b) => a == b, flag, "--rate-limit-max")
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected MissingValue, got: " ++ msg)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --rate-limit-window (seconds, converted to ms)
+// ---------------------------------------------------------------------------
+
+test("--rate-limit-window 60 sets rateLimitWindow to 60000 (ms)", () => {
+  let c = unwrapConfig(Parser.parse(["--rate-limit-window", "60"]))
+  assertion(
+    ~message="rateLimitWindow is 60000ms from 60s",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitWindow,
+    60000,
+  )
+})
+
+test("--rate-limit-window 1 sets rateLimitWindow to 1000 (ms)", () => {
+  let c = unwrapConfig(Parser.parse(["--rate-limit-window", "1"]))
+  assertion(
+    ~message="rateLimitWindow is 1000ms from 1s",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitWindow,
+    1000,
+  )
+})
+
+test("--rate-limit-window 0 returns InvalidRateLimit", () => {
+  let r = Parser.parse(["--rate-limit-window", "0"])
+  switch r {
+  | Ok(_) => assertion(~message="0 should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+    assertion(~message="InvalidRateLimit for window=0", ~operator="=", (a, b) => a == b, val, 0)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected InvalidRateLimit, got: " ++ msg)
+  }
+})
+
+test("--rate-limit-window negative returns InvalidRateLimit", () => {
+  let r = Parser.parse(["--rate-limit-window", "-10"])
+  switch r {
+  | Ok(_) => assertion(~message="-10 should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+    assertion(~message="InvalidRateLimit for negative window", ~operator="=", (a, b) => a == b, val, -10)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected InvalidRateLimit, got: " ++ msg)
+  }
+})
+
+test("--rate-limit-window non-numeric returns InvalidRateLimit", () => {
+  let r = Parser.parse(["--rate-limit-window", "abc"])
+  switch r {
+  | Ok(_) => assertion(~message="abc should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.InvalidRateLimit(_, _)) =>
+    assertion(~message="InvalidRateLimit for non-numeric window", ~operator="=", (a, b) => a == b, true, true)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected InvalidRateLimit, got: " ++ msg)
+  }
+})
+
+test("--rate-limit-window with no value returns MissingValue", () => {
+  let r = Parser.parse(["--rate-limit-window"])
+  switch r {
+  | Ok(_) => assertion(~message="--rate-limit-window alone should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.MissingValue(flag)) =>
+    assertion(~message="MissingValue for --rate-limit-window", ~operator="=", (a, b) => a == b, flag, "--rate-limit-window")
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected MissingValue, got: " ++ msg)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --access-log
+// ---------------------------------------------------------------------------
+
+test("--access-log sets accessLog to Some path", () => {
+  let c = unwrapConfig(Parser.parse(["--access-log", "/var/log/httpath/access.log"]))
+  assertion(
+    ~message="accessLog is Some after --access-log",
+    ~operator="=",
+    (a, b) => a == b,
+    c.accessLog,
+    Some("/var/log/httpath/access.log"),
+  )
+})
+
+test("--access-log with no value returns MissingValue", () => {
+  let r = Parser.parse(["--access-log"])
+  switch r {
+  | Ok(_) => assertion(~message="--access-log alone should be Error", ~operator="=", (a, b) => a == b, false, true)
+  | Error(ParseError.MissingValue(flag)) =>
+    assertion(~message="MissingValue for --access-log", ~operator="=", (a, b) => a == b, flag, "--access-log")
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected MissingValue, got: " ++ msg)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --read-only
+// ---------------------------------------------------------------------------
+
+test("--read-only sets readOnly to true", () => {
+  let c = unwrapConfig(Parser.parse(["--read-only"]))
+  assertion(
+    ~message="readOnly is true with --read-only",
+    ~operator="=",
+    (a, b) => a == b,
+    c.readOnly,
+    true,
+  )
+})
+
+// ---------------------------------------------------------------------------
+// LAN security flags: --lan sets LAN defaults (readOnly, rateLimitEnabled, rateLimitMax, rateLimitWindow)
+// ---------------------------------------------------------------------------
+
+test("--lan sets readOnly to true", () => {
+  let c = unwrapConfig(Parser.parse(["--lan"]))
+  assertion(
+    ~message="readOnly is true with --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.readOnly,
+    true,
+  )
+})
+
+test("--lan sets rateLimitEnabled to true", () => {
+  let c = unwrapConfig(Parser.parse(["--lan"]))
+  assertion(
+    ~message="rateLimitEnabled is true with --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitEnabled,
+    true,
+  )
+})
+
+test("--lan sets rateLimitMax to 100", () => {
+  let c = unwrapConfig(Parser.parse(["--lan"]))
+  assertion(
+    ~message="rateLimitMax is 100 with --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitMax,
+    100,
+  )
+})
+
+test("--lan sets rateLimitWindow to 60000", () => {
+  let c = unwrapConfig(Parser.parse(["--lan"]))
+  assertion(
+    ~message="rateLimitWindow is 60000ms with --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitWindow,
+    60000,
+  )
+})
+
+test("--lan plus explicit --rate-limit-max overrides LAN default", () => {
+  let c = unwrapConfig(Parser.parse(["--lan", "--rate-limit-max", "200"]))
+  assertion(
+    ~message="explicit --rate-limit-max overrides LAN default",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitMax,
+    200,
+  )
+})
+
+test("--lan plus explicit --rate-limit-window overrides LAN default", () => {
+  let c = unwrapConfig(Parser.parse(["--lan", "--rate-limit-window", "30"]))
+  assertion(
+    ~message="explicit --rate-limit-window overrides LAN default (30s = 30000ms)",
+    ~operator="=",
+    (a, b) => a == b,
+    c.rateLimitWindow,
+    30000,
+  )
+})

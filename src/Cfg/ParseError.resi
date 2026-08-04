@@ -8,5 +8,6 @@ type t =
   | RemovedFlag(string)
   | InvalidPath(string)
   | HelpRequested
+  | InvalidRateLimit(string, int)
 
 let toString: t => string
