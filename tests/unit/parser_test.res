@@ -383,28 +383,20 @@ test("unknown short flag -z returns UnknownFlag", () => {
 // REQ-CLI-3: Removed flags
 // ---------------------------------------------------------------------------
 
-test("--trust-proxy returns RemovedFlag error", () => {
+test("--trust-proxy sets trustProxy=true in config", () => {
   let r = Parser.parse(["--trust-proxy"])
   switch r {
-  | Ok(_) =>
+  | Ok(config) =>
     assertion(
-      ~message="--trust-proxy should be Error",
+      ~message="trustProxy is true when --trust-proxy passed",
       ~operator="=",
       (a, b) => a == b,
-      false,
+      config.trustProxy,
       true,
-    )
-  | Error(ParseError.RemovedFlag(flag)) =>
-    assertion(
-      ~message="RemovedFlag for --trust-proxy",
-      ~operator="=",
-      (a, b) => a == b,
-      flag,
-      "--trust-proxy",
     )
   | Error(e) =>
     let msg = ParseError.toString(e)
-    JsError.throwWithMessage("Expected RemovedFlag, got: " ++ msg)
+    JsError.throwWithMessage("Expected Ok, got error: " ++ msg)
   }
 })
 

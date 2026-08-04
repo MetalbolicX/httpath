@@ -21,6 +21,10 @@ type serverHandle = {
 // arrays, but we never read those headers. Bound as Dict.t<string> (honest type).
 @get external incomingHeaders: incomingMessage => Dict.t<string> = "headers"
 
+// Socket for client IP resolution
+@get external incomingSocket: incomingMessage => serverSocket = "socket"
+@get external socketRemoteAddress: serverSocket => string = "remoteAddress"
+
 // ServerResponse methods (@send — instance methods)
 @send external responseSetHeader: (serverResponse, string, string) => unit = "setHeader"
 @send external responseWriteHead: (serverResponse, int) => serverResponse = "writeHead"
@@ -94,8 +98,49 @@ external _onUpgrade: (
 type handlerCb = Types.request => promise<Types.outcome>
 type upgradeCb = (Types.request, serverSocket, Nullable.t<upgradeHead>) => promise<unit>
 
+// resolveClientIp — pure IP resolution logic.
+// Honors X-Forwarded-For only when trustProxy is true.
+// Takes socket IP as fallback; returns "unknown" when socket IP is absent.
+let resolveClientIp = (
+  ~trustProxy: bool,
+  ~socketIp: string,
+  ~headers: array<(string, string)>,
+): string => {
+  let ip = if trustProxy {
+    let rec findXff = (i: int): string => {
+      if i >= Array.length(headers) {
+        socketIp
+      } else {
+        switch Array.get(headers, i) {
+        | Some((k, v)) =>
+          if k == "x-forwarded-for" {
+            if v == "" {
+              socketIp
+            } else {
+              let parts = Js.String.split(",", v)
+              let first = Array.get(parts, 0)->Belt.Option.getWithDefault(v)
+              String.trim(first)
+            }
+          } else {
+            findXff(i + 1)
+          }
+        | None => socketIp
+        }
+      }
+    }
+    findXff(0)
+  } else {
+    socketIp
+  }
+  if ip == "" || ip == "::" || ip == "::1" {
+    "unknown"
+  } else {
+    ip
+  }
+}
+
 // Build Types.request from an IncomingMessage (path strips query string).
-let buildRequest = (req: incomingMessage): Types.request => {
+let buildRequest = (~trustProxy: bool, ~socketIp: string, req: incomingMessage): Types.request => {
   let method = incomingMethod(req)
   let url = incomingUrl(req)
   let rawHeaders = incomingHeaders(req)
@@ -109,7 +154,8 @@ let buildRequest = (req: incomingMessage): Types.request => {
     i.contents = i.contents + 1
   }
   let path = Js.String.split("?", url)->Array.get(0)->Option.getOr(url)
-  {method, path, headers, clientIp: "127.0.0.1"}
+  let clientIp = resolveClientIp(~trustProxy, ~socketIp, ~headers)
+  {method, path, headers, clientIp}
 }
 
 // Write a Types.response to a ServerResponse (status + headers + body).
@@ -153,10 +199,23 @@ let startServer = (
   ~handler: handlerCb,
   ~onWsUpgrade: upgradeCb,
   ~signal: Signals.abortSignal,
+  ~trustProxy: bool,
+  ~accessLog: option<string>,
 ): serverHandle => {
+  // Access log destination — None means no access logging
+  let accessLogDest: option<AccessLog.dest> = switch accessLog {
+  | Some(path) => Some(AccessLog.File(path))
+  | None => None
+  }
+
   // 'request' event — normal HTTP. Build request, call handler, write response.
   let server = _createServer(async (req, res) => {
-    let request = buildRequest(req)
+    let socketIp = try {
+      incomingSocket(req)->socketRemoteAddress
+    } catch {
+    | _ => "unknown"
+    }
+    let request = buildRequest(~trustProxy, ~socketIp, req)
     let outcome = try {
       await handler(request)
     } catch {
@@ -166,6 +225,25 @@ let startServer = (
         headers: [("content-type", "text/plain; charset=utf-8")],
         body: Types.Empty,
       })
+    }
+    // Emit access log after response is written
+    switch (outcome, accessLogDest) {
+    | (Types.Respond(r), Some(dest)) =>
+      let ts = Date.make()->Date.toISOString
+      let line = AccessLog.format({
+        timestamp: ts,
+        ip: request.clientIp,
+        method: request.method,
+        path: request.path,
+        status: r.status,
+        bytes: 0, // TODO: track actual bytes written
+      })
+      try {
+        AccessLog.writeLine(dest, line)
+      } catch {
+      | _ => ()
+      }
+    | _ => ()
     }
     switch outcome {
     | Types.Respond(r) => {
@@ -177,7 +255,12 @@ let startServer = (
 
   // 'upgrade' event — WS upgrades. Build request, call handler, delegate to onWsUpgrade.
   let _ = _onUpgrade(server, "upgrade", async (req, socket, head) => {
-    let request = buildRequest(req)
+    let socketIp = try {
+      socketRemoteAddress(socket)
+    } catch {
+    | _ => "unknown"
+    }
+    let request = buildRequest(~trustProxy, ~socketIp, req)
     let outcome = try {
       await handler(request)
     } catch {

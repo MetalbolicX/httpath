@@ -25,6 +25,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let helpRequested = ref(false)
   let parseError = ref((None: option<ParseError.t>))
   // LAN security flags
+  let trustProxy = ref(false)
   let authFile = ref((None: option<string>))
   let noAuth = ref(false)
   let tls = ref(false)
@@ -112,7 +113,8 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       allowProtectedDir := true
       i := i.contents + 1
     } else if arg == "--trust-proxy" {
-      parseError := Some(ParseError.RemovedFlag("--trust-proxy"))
+      trustProxy := true
+      i := i.contents + 1
     } else if arg == "--auth-file" {
       if i.contents + 1 >= argsLen {
         parseError := Some(ParseError.MissingValue(arg))
@@ -261,6 +263,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
           restartOnChange: restartOnChange.contents,
           lan: lan.contents,
           allowProtectedDir: allowProtectedDir.contents,
+          trustProxy: trustProxy.contents,
           authFile: authFile.contents,
           noAuth: noAuth.contents,
           tls: tls.contents,

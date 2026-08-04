@@ -12,6 +12,7 @@ type t = {
   restartOnChange: bool,
   lan: bool,
   allowProtectedDir: bool,
+  trustProxy: bool,
   authFile: option<string>,
   noAuth: bool,
   tls: bool,

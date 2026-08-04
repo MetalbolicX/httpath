@@ -35,6 +35,8 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
     ~handler,
     ~onWsUpgrade,
     ~signal=sig,
+    ~trustProxy=config.trustProxy,
+    ~accessLog=config.accessLog,
   )
 
   // Allocate the monitor handle first so the onRestart closure can reference

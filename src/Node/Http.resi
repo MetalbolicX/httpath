@@ -13,6 +13,7 @@ let socketWrite: (serverSocket, string) => unit
 let socketWriteBuffer: (serverSocket, Buffer.t) => promise<result<unit, JsExn.t>>
 let socketDestroy: serverSocket => unit
 let closeServer: server => promise<unit>
+let resolveClientIp: (~trustProxy: bool, ~socketIp: string, ~headers: array<(string, string)>) => string
 
 type serverHandle = {
   server: server,
@@ -26,4 +27,6 @@ let startServer: (
   ~handler: handlerCb,
   ~onWsUpgrade: upgradeCb,
   ~signal: Signals.abortSignal,
+  ~trustProxy: bool,
+  ~accessLog: option<string>,
 ) => serverHandle

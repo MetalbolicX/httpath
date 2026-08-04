@@ -10,4 +10,6 @@ type t =
   | HelpRequested
   | InvalidRateLimit(string, int)
 
+exception UnwritableAccessLog(string)
+
 let toString: t => string

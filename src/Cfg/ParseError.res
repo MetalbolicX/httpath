@@ -1,4 +1,5 @@
 // ParseError.res — typed CLI parse error variants.
+// UnwritableAccessLog is an exception (raise-able); others are returned as result types.
 
 type t =
   | UnknownFlag(string)
@@ -9,6 +10,9 @@ type t =
   | InvalidPath(string)
   | HelpRequested
   | InvalidRateLimit(string, int)
+
+// UnwritableAccessLog is a raise-able exception (separate from the result variant)
+exception UnwritableAccessLog(string)
 
 let toString = (e: t): string => {
   switch e {
