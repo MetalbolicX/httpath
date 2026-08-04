@@ -10,22 +10,22 @@
 **Important commands (exact)**
 
 - Dev:
-  - `npm run dev` — runs `rescript build -watch` (ReScript compilation in watch
-    mode). Rolldown bundling is done via `npm run build`.
+  - `pnpm dev` — runs `rescript build -watch` (ReScript compilation in watch
+    mode). Rolldown bundling is done via `pnpm run build`.
 - Build (one-shot):
-  - `npm run build` — runs `rescript && rolldown`. Produces `dist/httpath.mjs`.
+  - `pnpm run build` — runs `rescript && rolldown`. Produces `dist/httpath.mjs`.
 - Test:
-  - `npm test` — runs `npm run build && npm run test:unit && npm run test:integration`.
-  - `npm run test:unit` — unit tests (ReScript test runner via retest).
-  - `npm run test:integration` — integration tests (`node --test`).
-  - Run a single test file: `npm run test:unit -- tests/parser.test.js` (or `.mjs`).
-- Format / lint: `npm run fmt`, `npm run lint`.
-- Pass runtime args to dev: `npm run dev -- -d demo -p 8080` (the `--` is
+  - `pnpm test` — runs `pnpm run build && pnpm run test:unit && pnpm run test:integration`.
+  - `pnpm run test:unit` — unit tests (ReScript test runner via retest).
+  - `pnpm run test:integration` — integration tests (`node --test`).
+  - Run a single test file: `pnpm run test:unit -- tests/parser.test.js` (or `.mjs`).
+- Format / lint: `pnpm run fmt`, `pnpm run lint`.
+- Pass runtime args to dev: `pnpm dev -- -d demo -p 8080` (the `--` is
   required to forward args to the ReScript watch process).
 
 **Node — no permission system**
 
-Node.js has no permission model like Deno's `--allow-*` flags. The `npm run dev`
+Node.js has no permission model like Deno's `--allow-*` flags. The `pnpm dev`
 command does not need any special permissions; the watcher uses `node:child_process`
 to restart itself.
 
@@ -39,9 +39,9 @@ to restart itself.
 
 **Tests & environment**
 
-- Unit tests: `npm run test:unit`. Uses ReScript's `rescript test` internally
+- Unit tests: `pnpm run test:unit`. Uses ReScript's `rescript test` internally
   (backed by `retest`).
-- Integration tests: `npm run test:integration`. Uses Node's built-in
+- Integration tests: `pnpm run test:integration`. Uses Node's built-in
   `node --test` runner.
 - Many tests inspect file-extension-based reload logic; running tests from a
   different CWD may change expectations because defaults use `process.cwd()`.
@@ -66,10 +66,10 @@ to restart itself.
 
 **Common gotchas**
 
-- Don't run `deno task ...` — there is no `deno.json`. Use `npm run ...`.
-- `npm run build` triggers both `rescript` (ReScript → `.res.mjs`) and `rolldown`
+- Don't run `deno task ...` — there is no `deno.json`. Use `pnpm run ...`.
+- `pnpm run build` triggers both `rescript` (ReScript → `.res.mjs`) and `rolldown`
   (bundling `bin.mjs` → `dist/httpath.mjs`). Both steps are required.
-- The `prepare` and `prepublishOnly` scripts in `package.json` run `npm run build`,
+- The `prepare` and `prepublishOnly` scripts in `package.json` run `pnpm run build`,
   so the bundle is always up-to-date before publishing or installing locally.
 - The watcher (`src/Watcher/Monitor.res`) spawns child Node processes using
   `process.argv[1]` as the entrypoint — at runtime this is `dist/httpath.mjs`.

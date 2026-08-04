@@ -37,14 +37,14 @@ published package (`dist/httpath.mjs`) has zero runtime dependencies.
 ## Install
 
 ```sh
-# Run via npx (no install)
-npx @metalbolicx/httpath
+# Run via pnpm (no install)
+pnpm @metalbolicx/httpath
 
 # Install globally
-npm install -g @metalbolicx/httpath
+pnpm install -g @metalbolicx/httpath
 
 # From source (this repo)
-git clone https://github.com/metalbolicx/httpath.git && cd httpath && npm install && npm run build
+git clone https://github.com/metalbolicx/httpath.git && cd httpath && pnpm install && pnpm run build
 node dist/httpath.mjs
 ```
 
@@ -54,13 +54,13 @@ node dist/httpath.mjs
 
 ```sh
 # Serve current directory on default port 8080
-npx @metalbolicx/httpath
+pnpm @metalbolicx/httpath
 
 # Specific directory and port
-npx @metalbolicx/httpath -d ./my-project -p 3000
+pnpm @metalbolicx/httpath -d ./my-project -p 3000
 
 # Disable live reload and directory listing
-npx @metalbolicx/httpath --no-live-reload --no-listing
+pnpm @metalbolicx/httpath --no-live-reload --no-listing
 ```
 
 ---
@@ -156,11 +156,11 @@ concurrency model, and all design decisions with rationale — see:
 ## Development
 
 ```sh
-npm run dev          # Watch ReScript compilation
-npm run build        # One-shot build (rescript + rolldown)
-npm test             # Build + unit + integration tests
-npm run fmt          # Format code
-npm run lint         # Lint code
+pnpm dev          # Watch ReScript compilation
+pnpm run build        # One-shot build (rescript + rolldown)
+pnpm test             # Build + unit + integration tests
+pnpm run fmt          # Format code
+pnpm run lint         # Lint code
 ```
 
 ---

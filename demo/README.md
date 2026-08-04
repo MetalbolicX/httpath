@@ -7,7 +7,7 @@ with live-reload capabilities.
 
 1. **Build httpath** (if not already built):
    ```bash
-   npm run build
+   pnpm run build
    ```
 
 2. **Start the demo server**:
@@ -18,8 +18,8 @@ with live-reload capabilities.
    # Disable live reload
    node ../dist/httpath.mjs -d . -p 8080 --no-live-reload
 
-   # Or via npx (from the repo root, after npm install)
-   npx httpath -d demo -p 8080
+   # Or via pnpm (from the repo root, after pnpm install)
+   pnpm httpath -d demo -p 8080
    ```
 
 3. **Open your browser** and navigate to:

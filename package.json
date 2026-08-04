@@ -21,11 +21,11 @@
     "build": "rescript && rolldown -c rolldown.config.mjs",
     "dev": "rescript build -watch",
     "start": "node bin.mjs",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run build && npm test",
-    "test:unit": "npm run build && node_modules/.bin/retest tests/unit/node_buffer_test.res.mjs tests/unit/node_events_test.res.mjs tests/unit/ws_hub_test.res.mjs tests/unit/process_test.res.mjs tests/unit/timers_test.res.mjs tests/unit/monitor_test.res.mjs tests/unit/monitor_ignore_test.res.mjs tests/unit/abort_controller_test.res.mjs tests/unit/parse_error_test.res.mjs tests/unit/config_test.res.mjs tests/unit/parser_test.res.mjs tests/unit/node_fs_test.res.mjs tests/unit/node_path_test.res.mjs tests/unit/path_test.res.mjs tests/unit/mime_test.res.mjs tests/unit/headers_test.res.mjs tests/unit/types_test.res.mjs tests/unit/templates_test.res.mjs tests/unit/injector_test.res.mjs tests/unit/handler_test.res.mjs tests/unit/ws_handshake_test.res.mjs && node --env-file=retest.env.js tests/unit/restart_test.mjs",
+    "prepare": "pnpm run build",
+    "prepublishOnly": "pnpm run build && pnpm test",
+    "test:unit": "pnpm run build && node_modules/.bin/retest tests/unit/node_buffer_test.res.mjs tests/unit/node_events_test.res.mjs tests/unit/ws_hub_test.res.mjs tests/unit/process_test.res.mjs tests/unit/timers_test.res.mjs tests/unit/monitor_test.res.mjs tests/unit/monitor_ignore_test.res.mjs tests/unit/abort_controller_test.res.mjs tests/unit/parse_error_test.res.mjs tests/unit/config_test.res.mjs tests/unit/parser_test.res.mjs tests/unit/node_fs_test.res.mjs tests/unit/node_path_test.res.mjs tests/unit/path_test.res.mjs tests/unit/mime_test.res.mjs tests/unit/headers_test.res.mjs tests/unit/types_test.res.mjs tests/unit/templates_test.res.mjs tests/unit/injector_test.res.mjs tests/unit/handler_test.res.mjs tests/unit/ws_handshake_test.res.mjs && node --env-file=retest.env.js tests/unit/restart_test.mjs",
     "test:integration": "node --test tests/integration/ws_hub.test.js tests/integration/entrypoint.test.js",
-    "test": "npm run build && npm run test:unit && npm run test:integration"
+    "test": "pnpm run build && pnpm run test:unit && pnpm run test:integration"
   },
   "devDependencies": {
     "rescript": "^12.3.0",
