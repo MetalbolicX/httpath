@@ -14,16 +14,16 @@ type t = {
   allowProtectedDir: bool,
 }
 
-// Mirrors DEFAULT_CONFIG in src/cli/parser.mts:
-//   directory: Deno.cwd()  → absolute at parse time
+// Default Config values. Directory is resolved to absolute at parse time.
+//   directory: Process.cwd()  → absolute at parse time
 //   hostname: "127.0.0.1"
 //   port: 8080
 //   ignorePatterns: [".git", "node_modules", ".DS_Store"]
 //   enableDirectoryListing: false
-//   logLevel: "info"
+//   logLevel: Logger.Info
 //   enableLiveReload: true
 //   restartOnChange: false
-//   trustProxy: false         ← removed from Config
+//   trustProxy: removed (--trust-proxy flag emits ParseError.RemovedFlag)
 //   allowProtectedDir: false
 //   lan: false
 let default: t = {

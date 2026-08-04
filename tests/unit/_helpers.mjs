@@ -1,8 +1,8 @@
 // _helpers.mjs — spawn stubs for Restart.reload behavioral tests.
 // NOTE: process_fake.mjs (loaded via --env-file=retest.env.js) intercepts
-// process.exit before this file or Process.res.js loads.
+// process.exit before this file or Process.res.mjs loads.
 
-import * as Process_spawn from "../../src/Node/Process_spawn.res.js";
+import * as Process_spawn from "../../src/Node/Process_spawn.res.mjs";
 
 export const originalSpawnContents = Process_spawn.spawn.contents;
 

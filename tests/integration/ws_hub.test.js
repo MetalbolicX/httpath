@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import net from "node:net";
 
-const WsHub = await import("../../src/Hub/WsHub.res.js");
+const WsHub = await import("../../src/Hub/WsHub.res.mjs");
 
 // ---------------------------------------------------------------------------
 // Tests

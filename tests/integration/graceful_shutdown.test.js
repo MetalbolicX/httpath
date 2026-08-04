@@ -17,7 +17,7 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
-// Global fs bootstrap for FsWatch.res.js module scope evaluation.
+// Global fs bootstrap for FsWatch.res.mjs module scope evaluation.
 // ---------------------------------------------------------------------------
 
 globalThis.fs = fs;
@@ -26,9 +26,9 @@ globalThis.fs = fs;
 // Imports — compiled ReScript modules (loaded after global fs is set).
 // ---------------------------------------------------------------------------
 
-const Httpath = await import("../../src/Httpath.res.js");
-const Handler = await import("../../src/Server/Handler.res.js");
-const Parser = await import("../../src/Cfg/Parser.res.js");
+const Httpath = await import("../../src/Httpath.res.mjs");
+const Handler = await import("../../src/Server/Handler.res.mjs");
+const Parser = await import("../../src/Cfg/Parser.res.mjs");
 
 // ---------------------------------------------------------------------------
 // Port base — each test uses BASE + index to avoid EADDRINUSE conflicts.
@@ -47,13 +47,13 @@ function makeChildScript(port, tmpDir, extraConfig) {
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const fs = require("node:fs");
-// Fs.res.js uses globalThis.createReadStream (Deno global) — provide it for Node.js.
+// Fs.res.mjs uses globalThis.createReadStream (Deno global) — provide it for Node.js.
 globalThis.fs = fs;
 globalThis.createReadStream = fs.createReadStream.bind(fs);
 
-import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.js")}";
-import { make as makeHandler } from "${path.resolve(process.cwd(), "src/Server/Handler.res.js")}";
-import { parse as parseArgs } from "${path.resolve(process.cwd(), "src/Cfg/Parser.res.js")}";
+import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.mjs")}";
+import { make as makeHandler } from "${path.resolve(process.cwd(), "src/Server/Handler.res.mjs")}";
+import { parse as parseArgs } from "${path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs")}";
 
 // Build config via Parser.parse same way Httpath.main does.
 const parseResult = parseArgs([

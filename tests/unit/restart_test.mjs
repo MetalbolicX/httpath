@@ -19,7 +19,7 @@ import {
   restoreError,
 } from "./_helpers.mjs";
 
-const Restart = await import("../../src/Watcher/Restart.res.js");
+const Restart = await import("../../src/Watcher/Restart.res.mjs");
 
 let passed = 0;
 let failed = 0;

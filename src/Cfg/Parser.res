@@ -101,10 +101,6 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
     } else if arg == "--allow-protected-dir" {
       allowProtectedDir := true
       i := i.contents + 1
-    } else if arg == "--rate-limit-max-requests" {
-      parseError := Some(ParseError.RemovedFlag("--rate-limit-max-requests"))
-    } else if arg == "--rate-limit-window-ms" {
-      parseError := Some(ParseError.RemovedFlag("--rate-limit-window-ms"))
     } else if arg == "--trust-proxy" {
       parseError := Some(ParseError.RemovedFlag("--trust-proxy"))
     } else if String.length(arg) > 0 && String.getUnsafe(arg, 0) == "-" {

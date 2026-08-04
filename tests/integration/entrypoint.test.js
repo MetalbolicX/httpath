@@ -17,7 +17,7 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
-// Inject Deno-era global `fs` that FsWatch.res.js relies on.
+// Inject Deno-era global `fs` that FsWatch.res.mjs relies on.
 // FsWatch.res uses `@scope("fs")` which compiles to bare `fs.watch(...)`.
 // In Node.js, `fs` is not a global — provide it before any module loads.
 // ---------------------------------------------------------------------------
@@ -50,18 +50,18 @@ function spawnHttpathChild(port) {
   // The child script creates its own config rather than importing Config.default
   // to avoid the module-exports issue.
   // Use createRequire so fs is available SYNCHRONOUSLY before any
-  // dynamic import runs (FSWatch.res.js calls fs.watch at module scope).
+  // dynamic import runs (FSWatch.res.mjs calls fs.watch at module scope).
   const childScript = `
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
-// Set global fs BEFORE any dynamic import — FsWatch.res.js calls fs.watch()
+// Set global fs BEFORE any dynamic import — FsWatch.res.mjs calls fs.watch()
 // at module-evaluation time (top-level scope), not inside an async function.
 globalThis.fs = require("node:fs");
 
-import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.js")}";
+import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.mjs")}";
 import { parse as parseArgs } from "${
-    path.resolve(process.cwd(), "src/Cfg/Parser.res.js")
+    path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs")
   }";
 
 console.error("CHILD DEBUG: modules loaded, about to parse config");
@@ -188,7 +188,7 @@ test("Httpath.start boots HTTP server and fake handler responds 200", async () =
                 "text/plain; charset=utf-8",
               );
               // Note: response body is empty due to a pre-existing bug in
-              // writeResponse (Http.res.js) — string bodies are accessed via
+              // writeResponse (Http.res.mjs) — string bodies are accessed via
               // path._0 which is undefined for non-variant strings.
               // Status + content-type verify the handler was invoked correctly.
               resolve();
@@ -253,9 +253,9 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 globalThis.fs = require("node:fs");
 
-import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.js")}";
+import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.mjs")}";
 import { parse as parseArgs } from "${
-    path.resolve(process.cwd(), "src/Cfg/Parser.res.js")
+    path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs")
   }";
 
 // Return WsUpgrade so Http.startServer calls onWsUpgrade → WsHub.register.
@@ -386,9 +386,9 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 globalThis.fs = require("node:fs");
 
-import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.js")}";
+import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.mjs")}";
 import { parse as parseArgs } from "${
-    path.resolve(process.cwd(), "src/Cfg/Parser.res.js")
+    path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs")
   }";
 
 const wsHandler = (_req) => Promise.resolve("WsUpgrade");
