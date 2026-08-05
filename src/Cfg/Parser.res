@@ -187,6 +187,12 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
     } else if arg == "--read-only" {
       readOnly := true
       i := i.contents + 1
+    } else if (
+      arg == "--rate-limit-max-requests" ||
+      arg == "--rate-limit-window-ms"
+    ) {
+      parseError := Some(ParseError.RemovedFlag(arg))
+      i := i.contents + 1
     } else if String.length(arg) > 0 && String.getUnsafe(arg, 0) == "-" {
       parseError := Some(ParseError.UnknownFlag(arg))
     } else {
