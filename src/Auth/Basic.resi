@@ -19,4 +19,4 @@ let parseAuthFile: string => result<array<entry>, string>
 let verify: (entry, string) => bool
 let findUser: (array<entry>, string) => option<entry>
 let loadAuthFile: string => result<array<entry>, string>
-let searchAuthFile: string => option<array<entry>>
+let searchAuthFile: (~explicitPath: option<string>, ~directory: string) => option<array<entry>>

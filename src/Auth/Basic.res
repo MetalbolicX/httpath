@@ -41,7 +41,7 @@ external timingSafeEqual: (Buffer.t, Buffer.t) => bool = "timingSafeEqual"
 // ScryptParams helpers — file format uses uppercase N, lowercase internal
 // ---------------------------------------------------------------------------
 
-let defaultScryptParams: scryptParams = {n: 16384, r: 8, p: 1}
+let _defaultScryptParams: scryptParams = {n: 16384, r: 8, p: 1}
 
 let parseScryptParams = (s: string): option<scryptParams> => {
   // Expected format: "N=16384,r=8,p=1"
@@ -97,31 +97,31 @@ let parseAuthFile = (content: string): result<array<entry>, string> => {
         // Expected format: username:params$salt$hash
         let colonPos = Js.String.indexOf(":", line)
         if colonPos < 0 {
-          raise(InvalidAuthFile("Missing colon in line: " ++ line))
+          throw(InvalidAuthFile("Missing colon in line: " ++ line))
         } else {
           let username = String.substring(line, ~start=0, ~end=colonPos)
           let afterColon = String.substring(line, ~start=colonPos + 1, ~end=String.length(line))
           let dollarPos = Js.String.indexOf("$", afterColon)
           if dollarPos < 0 {
-            raise(InvalidAuthFile("Missing $ in hash spec for user: " ++ username))
+            throw(InvalidAuthFile("Missing $ in hash spec for user: " ++ username))
           } else {
             let paramsStr = String.substring(afterColon, ~start=0, ~end=dollarPos)
             let afterDollar = String.substring(afterColon, ~start=dollarPos + 1, ~end=String.length(afterColon))
             let dollar2Pos = Js.String.indexOf("$", afterDollar)
             if dollar2Pos < 0 {
-              raise(InvalidAuthFile("Missing second $ in hash spec for user: " ++ username))
+              throw(InvalidAuthFile("Missing second $ in hash spec for user: " ++ username))
             } else {
               let saltB64 = String.substring(afterDollar, ~start=0, ~end=dollar2Pos)
               let hashB64 = String.substring(afterDollar, ~start=dollar2Pos + 1, ~end=String.length(afterDollar))
               let params = switch parseScryptParams(paramsStr) {
               | Some(p) => p
               | None =>
-                raise(InvalidAuthFile("Invalid scrypt params for user " ++ username ++ ": " ++ paramsStr))
+                throw(InvalidAuthFile("Invalid scrypt params for user " ++ username ++ ": " ++ paramsStr))
               }
               // Reject bcrypt and MD5 prefixes
               let firstChar = Js.String.substring(paramsStr, ~from=0, ~to_=1)
               if firstChar == "$" && (Js.String.substring(paramsStr, ~from=1, ~to_=2) == "2" || Js.String.substring(paramsStr, ~from=1, ~to_=2) == "$" && Js.String.substring(paramsStr, ~from=2, ~to_=3) == "a") {
-                raise(InvalidAuthFile("Hash scheme not supported for user: " ++ username ++ " (bcrypt/MD5 not allowed)"))
+                throw(InvalidAuthFile("Hash scheme not supported for user: " ++ username ++ " (bcrypt/MD5 not allowed)"))
               } else {
                 ()
               }
@@ -152,8 +152,7 @@ let parseAuthFile = (content: string): result<array<entry>, string> => {
 // ---------------------------------------------------------------------------
 
 let verify = (entry: entry, password: string): bool => {
-  // Reconstruct params string for hashing
-  let paramsStr = "N=" ++ Int.toString(entry.params.n) ++ ",r=" ++ Int.toString(entry.params.r) ++ ",p=" ++ Int.toString(entry.params.p)
+  let _paramsStr = "N=" ++ Int.toString(entry.params.n) ++ ",r=" ++ Int.toString(entry.params.r) ++ ",p=" ++ Int.toString(entry.params.p)
   let hash = scryptSyncFromHelper(password, entry.saltBase64, 64, (entry.params :> scryptOpts))
   let storedBuf = Buffer.fromString(entry.hashBase64, "base64")
   // Length check before timing-safe compare to avoid short-circuit on length mismatch
@@ -202,12 +201,13 @@ let loadAuthFile = (path: string): result<array<entry>, string> => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// searchAuthFile — search given directory, then fall back to ~/.config/httpath/auth
+// searchAuthFile — search explicit path first, then fall back to directory search.
+// Search order: explicitPath → <directory>/.httpath-auth → ~/.config/httpath/auth
 // ---------------------------------------------------------------------------
 
-let searchAuthFile = (directory: string): option<array<entry>> => {
-  let cwdPath = Node_Path.join(directory, ".httpath-auth")
+let searchAuthFile = (~explicitPath: option<string>, ~directory: string): option<array<entry>> => {
   let homePath = Node_Path.join(Node_Path.join(Node_Path.join(Node_Os.homedir(), ".config"), "httpath"), "auth")
+  let cwdPath = Node_Path.join(directory, ".httpath-auth")
   let tryPath = (p: string): option<array<entry>> => {
     try {
       switch loadAuthFile(p) {
@@ -218,8 +218,14 @@ let searchAuthFile = (directory: string): option<array<entry>> => {
     | _ => None
     }
   }
-  switch tryPath(cwdPath) {
-  | Some(_) as r => r
-  | None => tryPath(homePath)
+  let paths = switch explicitPath {
+  | Some(p) => [p, cwdPath, homePath]
+  | None => [cwdPath, homePath]
   }
+  Belt.Array.reduce(paths, None, (acc, p) =>
+    switch acc {
+    | Some(_) => acc
+    | None => tryPath(p)
+    }
+  )
 }

@@ -109,7 +109,7 @@ const config = ${extraConfig ? `Object.assign({}, parseResult._0, ${extraConfig}
 // Load auth entries the same way Httpath.main does — see Httpath.res:191
 let authEntries = null;
 if (config.lan && !config.noAuth) {
-  const entries = searchAuth(config.directory);
+  const entries = searchAuth(config.authFile, config.directory);
   if (entries === null) {
     console.error("CHILD: --lan requires auth file, none found at", config.directory);
     process.exit(1);
@@ -353,6 +353,63 @@ test("--lan: GET without credentials → 401; with valid credentials → 200", a
       if (child.exitCode === null) { child.kill("SIGTERM"); }
       await new Promise((r) => setTimeout(r, 100));
       rmSync(scriptPath, { force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test: --auth-file <path> is honored even when --dir points elsewhere.
+// ---------------------------------------------------------------------------
+
+test("--auth-file <path> is used even when --dir points elsewhere", async () => {
+  const port = PORT_BASE + 5;
+  await withAuthFile([buildAuthLine("alice", "secret")], async (authPath, tmpDir) => {
+    // tmpDir contains the auth file.
+    // Create a DIFFERENT temp dir as --dir so default search wouldn't find it.
+    const serveDir = mkdtempSync(path.join("/tmp", "httpath-serve-"));
+    writeFileSync(path.join(serveDir, "index.html"), "<h1>test</h1>", "utf8");
+
+    const { scriptPath } = makeChildScript(port, serveDir, JSON.stringify({
+      lan: true,
+      authFile: authPath,  // explicit path, NOT in serveDir
+      noAuth: false,
+    }));
+    let stderr = "";
+    const child = spawn(process.execPath, [scriptPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      cwd: process.cwd(),
+    });
+    child.stderr.on("data", (d) => (stderr += d.toString()));
+
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      await waitForChildReady(child, port, 2000);
+
+      // --- Request without credentials → 401 ---
+      const resNoAuth = await httpGet(port, "/index.html", {});
+      assert.strictEqual(
+        resNoAuth.statusCode,
+        401,
+        `Request without auth should be 401, got ${resNoAuth.statusCode}`,
+      );
+
+      // --- Request with valid credentials → 200 ---
+      const resValid = await httpGet(port, "/index.html", {
+        headers: { Authorization: "Basic " + Buffer.from("alice:secret").toString("base64") },
+      });
+      assert.strictEqual(
+        resValid.statusCode,
+        200,
+        `Request with valid auth should be 200, got ${resValid.statusCode}`,
+      );
+
+      child.kill("SIGTERM");
+      await new Promise((r) => child.on("exit", r));
+    } finally {
+      if (child.exitCode === null) { child.kill("SIGTERM"); }
+      await new Promise((r) => setTimeout(r, 100));
+      rmSync(scriptPath, { force: true });
+      rmSync(serveDir, { recursive: true, force: true });
     }
   });
 });

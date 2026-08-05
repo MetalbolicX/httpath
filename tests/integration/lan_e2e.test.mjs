@@ -100,7 +100,7 @@ const config = ${extraConfig ? `Object.assign({}, parseResult._0, ${extraConfig}
 // Load auth entries the same way Httpath.main does — see Httpath.res:191
 let authEntries = null;
 if (config.lan && !config.noAuth) {
-  const entries = searchAuth(config.directory);
+  const entries = searchAuth(config.authFile, config.directory);
   if (entries === null) {
     console.error("CHILD: --lan requires auth file, none found at", config.directory);
     process.exit(1);
