@@ -169,18 +169,22 @@ let verify = (entry: entry, password: string): bool => {
 // ---------------------------------------------------------------------------
 
 let findUser = (entries: array<entry>, username: string): option<entry> => {
-  let rec loop = (entries: array<entry>): option<entry> => {
-    switch Array.shift(entries) {
-    | None => None
-    | Some(e) =>
-      if e.username == username {
-        Some(e)
-      } else {
-        loop(entries)
+  let rec loop = (i: int): option<entry> => {
+    if i >= Array.length(entries) {
+      None
+    } else {
+      switch Array.get(entries, i) {
+      | None => None
+      | Some(e) =>
+        if e.username == username {
+          Some(e)
+        } else {
+          loop(i + 1)
+        }
       }
     }
   }
-  loop(entries)
+  loop(0)
 }
 
 // ---------------------------------------------------------------------------

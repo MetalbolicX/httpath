@@ -14,7 +14,8 @@ import { Buffer } from "node:buffer";
  * @returns {Buffer} derived key
  */
 export function scryptSync(password, saltBase64, keylen, opts) {
-  return nodeScryptSync(password, saltBase64, keylen, {
+  const salt = Buffer.from(saltBase64, "base64");
+  return nodeScryptSync(password, salt, keylen, {
     N: opts.n,
     r: opts.r,
     p: opts.p,
