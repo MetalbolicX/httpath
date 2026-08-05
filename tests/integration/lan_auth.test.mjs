@@ -52,7 +52,7 @@ function buildAuthLine(username, password) {
 // Auth file fixture — creates a temp auth file and returns its path.
 // ---------------------------------------------------------------------------
 
-function withAuthFile(entries, callback) {
+async function withAuthFile(entries, callback) {
   const tmpDir = mkdtempSync(path.join("/tmp", "httpath-auth-"));
   const authPath = path.join(tmpDir, ".httpath-auth");
   writeFileSync(authPath, entries.join("\n") + "\n", "utf8");
@@ -61,7 +61,7 @@ function withAuthFile(entries, callback) {
     fs.chmodSync(authPath, 0o600);
   } catch (_) {}
   try {
-    callback(authPath, tmpDir);
+    await callback(authPath, tmpDir);
   } finally {
     rmSync(authPath, { force: true });
     rmSync(tmpDir, { recursive: true, force: true });
@@ -285,80 +285,75 @@ test("--lan --no-auth starts without auth file", async () => {
 
 test("--lan: GET without credentials → 401; with valid credentials → 200", async () => {
   const port = PORT_BASE + 3;
-  await new Promise((resolveMain, rejectMain) => {
-    withAuthFile([buildAuthLine("alice", "secret")], (authPath, tmpDir) => {
-      const { scriptPath } = makeChildScript(port, tmpDir, JSON.stringify({
-        lan: true,
-        authFile: authPath,
-        noAuth: false,
-      }));
-      let stderr = "";
-      const child = spawn(process.execPath, [scriptPath], {
-        stdio: ["ignore", "pipe", "pipe"],
-        cwd: process.cwd(),
-      });
-      child.stderr.on("data", (d) => (stderr += d.toString()));
+  await withAuthFile([buildAuthLine("alice", "secret")], async (authPath, tmpDir) => {
+    // Create a test file to serve so valid auth requests return 200
+    writeFileSync(path.join(tmpDir, "index.html"), "<h1>test</h1>", "utf8");
 
-      (async () => {
-        try {
-          await new Promise((r) => setTimeout(r, 200));
-          await waitForChildReady(child, port, 2000);
-
-          // --- Request without credentials → 401 ---
-          const resNoAuth = await httpGet(port, "/index.html", {});
-          assert.strictEqual(
-            resNoAuth.statusCode,
-            401,
-            `Request without auth should be 401, got ${resNoAuth.statusCode}`,
-          );
-          assert.ok(
-            resNoAuth.headers["www-authenticate"],
-            "401 response should have WWW-Authenticate header",
-          );
-
-          // --- Request with invalid password → 401 ---
-          const resBadPass = await httpGet(port, "/index.html", {
-            headers: { Authorization: "Basic " + Buffer.from("alice:wrongpassword").toString("base64") },
-          });
-          assert.strictEqual(
-            resBadPass.statusCode,
-            401,
-            `Request with wrong password should be 401, got ${resBadPass.statusCode}`,
-          );
-
-          // --- Request with unknown user → 401 ---
-          const resUnknown = await httpGet(port, "/index.html", {
-            headers: { Authorization: "Basic " + Buffer.from("charlie:secret").toString("base64") },
-          });
-          assert.strictEqual(
-            resUnknown.statusCode,
-            401,
-            `Request with unknown user should be 401, got ${resUnknown.statusCode}`,
-          );
-
-          // --- Request with valid credentials → 200 ---
-          const resValid = await httpGet(port, "/index.html", {
-            headers: { Authorization: "Basic " + Buffer.from("alice:secret").toString("base64") },
-          });
-          assert.strictEqual(
-            resValid.statusCode,
-            200,
-            `Request with valid auth should be 200, got ${resValid.statusCode}`,
-          );
-
-          child.kill("SIGTERM");
-          await new Promise((r) => child.on("exit", r));
-        } finally {
-          if (child.exitCode === null) { child.kill("SIGTERM"); }
-          await new Promise((r) => setTimeout(r, 100));
-          rmSync(scriptPath, { force: true });
-        }
-      })().then(() => resolveMain()).catch((e) => {
-        console.error("Auth HTTP gate test failed:", e);
-        if (child.exitCode === null) child.kill("SIGTERM");
-        rejectMain(e);
-      });
+    const { scriptPath } = makeChildScript(port, tmpDir, JSON.stringify({
+      lan: true,
+      authFile: authPath,
+      noAuth: false,
+    }));
+    let stderr = "";
+    const child = spawn(process.execPath, [scriptPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      cwd: process.cwd(),
     });
+    child.stderr.on("data", (d) => (stderr += d.toString()));
+
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      await waitForChildReady(child, port, 2000);
+
+      // --- Request without credentials → 401 ---
+      const resNoAuth = await httpGet(port, "/index.html", {});
+      assert.strictEqual(
+        resNoAuth.statusCode,
+        401,
+        `Request without auth should be 401, got ${resNoAuth.statusCode}`,
+      );
+      assert.ok(
+        resNoAuth.headers["www-authenticate"],
+        "401 response should have WWW-Authenticate header",
+      );
+
+      // --- Request with invalid password → 401 ---
+      const resBadPass = await httpGet(port, "/index.html", {
+        headers: { Authorization: "Basic " + Buffer.from("alice:wrongpassword").toString("base64") },
+      });
+      assert.strictEqual(
+        resBadPass.statusCode,
+        401,
+        `Request with wrong password should be 401, got ${resBadPass.statusCode}`,
+      );
+
+      // --- Request with unknown user → 401 ---
+      const resUnknown = await httpGet(port, "/index.html", {
+        headers: { Authorization: "Basic " + Buffer.from("charlie:secret").toString("base64") },
+      });
+      assert.strictEqual(
+        resUnknown.statusCode,
+        401,
+        `Request with unknown user should be 401, got ${resUnknown.statusCode}`,
+      );
+
+      // --- Request with valid credentials → 200 ---
+      const resValid = await httpGet(port, "/index.html", {
+        headers: { Authorization: "Basic " + Buffer.from("alice:secret").toString("base64") },
+      });
+      assert.strictEqual(
+        resValid.statusCode,
+        200,
+        `Request with valid auth should be 200, got ${resValid.statusCode}`,
+      );
+
+      child.kill("SIGTERM");
+      await new Promise((r) => child.on("exit", r));
+    } finally {
+      if (child.exitCode === null) { child.kill("SIGTERM"); }
+      await new Promise((r) => setTimeout(r, 100));
+      rmSync(scriptPath, { force: true });
+    }
   });
 });
 
@@ -368,86 +363,78 @@ test("--lan: GET without credentials → 401; with valid credentials → 200", a
 
 test("--lan: WS upgrade without credentials → 401; with valid auth → 101", async () => {
   const port = PORT_BASE + 4;
-  await new Promise((resolveMain, rejectMain) => {
-    withAuthFile([buildAuthLine("alice", "secret")], (authPath, tmpDir) => {
-      const { scriptPath } = makeChildScript(port, tmpDir, JSON.stringify({
-        lan: true,
-        authFile: authPath,
-        noAuth: false,
-      }));
-      const child = spawn(process.execPath, [scriptPath], {
-        stdio: ["ignore", "pipe", "pipe"],
-        cwd: process.cwd(),
-      });
-
-      (async () => {
-        try {
-          await new Promise((r) => setTimeout(r, 200));
-          await waitForChildReady(child, port, 2000);
-
-          // --- WS upgrade without credentials → raw HTTP 401 over TCP ---
-          await new Promise((resolveWS, rejectWS) => {
-            const sock = net.createConnection({ host: "127.0.0.1", port });
-            sock.setTimeout(1000);
-            let data = "";
-            sock.on("data", (chunk) => { data += chunk.toString(); });
-            sock.on("end", () => {
-              // Should receive HTTP/1.1 401 Unauthorized
-              assert.ok(
-                data.includes("HTTP/1.1 401") || data.includes("401"),
-                `WS without auth should get 401, got: ${data.slice(0, 100)}`,
-              );
-              resolveWS();
-            });
-            sock.on("error", rejectWS);
-            sock.on("timeout", () => { sock.destroy(); rejectWS(new Error("WS timeout without auth")); });
-            sock.write(
-              "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: upgrade\r\n\r\n",
-            );
-          });
-
-          // --- WS upgrade with valid credentials → 101 Switching Protocols ---
-          await new Promise((resolveWS, rejectWS) => {
-            const sock = net.createConnection({ host: "127.0.0.1", port });
-            sock.setTimeout(1000);
-            let data = "";
-            sock.on("data", (chunk) => { data += chunk.toString(); });
-            sock.on("end", () => {
-              // With valid auth the server should attempt WS upgrade; the / endpoint
-              // is not a real WS handler so it returns 400, but at least the auth
-              // was accepted (we get past the gate, not a 401).
-              // The key assertion: we did NOT get a raw 401 response.
-              assert.ok(
-                !data.includes("HTTP/1.1 401"),
-                `WS with valid auth should NOT get 401, got: ${data.slice(0, 100)}`,
-              );
-              resolveWS();
-            });
-            sock.on("error", (e) => {
-              // If connection was accepted (not immediately closed with 401), good
-              // Net errors from writing to a non-WS endpoint are expected
-              resolveWS();
-            });
-            sock.on("timeout", () => { sock.destroy(); resolveWS(); });
-            const authHeader =
-              "Basic " + Buffer.from("alice:secret").toString("base64");
-            sock.write(
-              `GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: upgrade\r\nAuthorization: ${authHeader}\r\n\r\n`,
-            );
-          });
-
-          child.kill("SIGTERM");
-          await new Promise((r) => child.on("exit", r));
-        } finally {
-          if (child.exitCode === null) { child.kill("SIGTERM"); }
-          await new Promise((r) => setTimeout(r, 100));
-          rmSync(scriptPath, { force: true });
-        }
-      })().then(() => resolveMain()).catch((e) => {
-        console.error("WS auth gate test failed:", e);
-        if (child.exitCode === null) child.kill("SIGTERM");
-        rejectMain(e);
-      });
+  await withAuthFile([buildAuthLine("alice", "secret")], async (authPath, tmpDir) => {
+    const { scriptPath } = makeChildScript(port, tmpDir, JSON.stringify({
+      lan: true,
+      authFile: authPath,
+      noAuth: false,
+    }));
+    const child = spawn(process.execPath, [scriptPath], {
+      stdio: ["ignore", "pipe", "pipe"],
+      cwd: process.cwd(),
     });
+
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      await waitForChildReady(child, port, 2000);
+
+      // --- WS upgrade without credentials → raw HTTP 401 over TCP ---
+      await new Promise((resolveWS, rejectWS) => {
+        const sock = net.createConnection({ host: "127.0.0.1", port });
+        sock.setTimeout(1000);
+        let data = "";
+        sock.on("data", (chunk) => { data += chunk.toString(); });
+        sock.on("end", () => {
+          // Should receive HTTP/1.1 401 Unauthorized
+          assert.ok(
+            data.includes("HTTP/1.1 401") || data.includes("401"),
+            `WS without auth should get 401, got: ${data.slice(0, 100)}`,
+          );
+          resolveWS();
+        });
+        sock.on("error", rejectWS);
+        sock.on("timeout", () => { sock.destroy(); rejectWS(new Error("WS timeout without auth")); });
+            sock.write(
+              "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: upgrade\r\n\r\n",
+            );
+      });
+
+      // --- WS upgrade with valid credentials → 101 Switching Protocols ---
+      await new Promise((resolveWS, rejectWS) => {
+        const sock = net.createConnection({ host: "127.0.0.1", port });
+        sock.setTimeout(1000);
+        let data = "";
+        sock.on("data", (chunk) => { data += chunk.toString(); });
+        sock.on("end", () => {
+          // With valid auth the server should attempt WS upgrade; the / endpoint
+          // is not a real WS handler so it returns 400, but at least the auth
+          // was accepted (we get past the gate, not a 401).
+          // The key assertion: we did NOT get a raw 401 response.
+          assert.ok(
+            !data.includes("HTTP/1.1 401"),
+            `WS with valid auth should NOT get 401, got: ${data.slice(0, 100)}`,
+          );
+          resolveWS();
+        });
+        sock.on("error", (e) => {
+          // If connection was accepted (not immediately closed with 401), good
+          // Net errors from writing to a non-WS endpoint are expected
+          resolveWS();
+        });
+        sock.on("timeout", () => { sock.destroy(); resolveWS(); });
+        const authHeader =
+          "Basic " + Buffer.from("alice:secret").toString("base64");
+        sock.write(
+          `GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: upgrade\r\nAuthorization: ${authHeader}\r\n\r\n`,
+        );
+      });
+
+      child.kill("SIGTERM");
+      await new Promise((r) => child.on("exit", r));
+    } finally {
+      if (child.exitCode === null) { child.kill("SIGTERM"); }
+      await new Promise((r) => setTimeout(r, 100));
+      rmSync(scriptPath, { force: true });
+    }
   });
 });
