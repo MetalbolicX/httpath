@@ -88,6 +88,7 @@ external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => 
 @send external _listen: (server, int, string, unit => unit) => unit = "listen"
 @send external _close: (server, Nullable.t<JsExn.t> => unit) => unit = "close"
 @send external closeAllConnections: server => unit = "closeAllConnections"
+@send external closeIdleConnections: server => unit = "closeIdleConnections"
 
 // HTTPS server type and creators
 type httpsOptions = {cert: Buffer.t, key: Buffer.t}
@@ -96,6 +97,7 @@ external _createHttpsServer: (httpsOptions, (incomingMessage, serverResponse) =>
 @send external _httpsListen: (httpsServer, int, string, unit => unit) => unit = "listen"
 @send external _httpsClose: (httpsServer, Nullable.t<JsExn.t> => unit) => unit = "close"
 @send external httpsCloseAllConnections: httpsServer => unit = "closeAllConnections"
+@send external httpsCloseIdleConnections: httpsServer => unit = "closeIdleConnections"
 
 // EventEmitter .on — used to register the 'upgrade' listener (the 'request'
 // listener is registered via createServer's callback).
@@ -614,12 +616,11 @@ let startServer = (
 
   // Close on abort signal; resolve closed after closeServer completes.
   let _ = setOnAbort(signal, () => {
-    // Force-close all connections first so closeServer unblocks immediately.
-    // This handles the case where a keep-alive or WS connection is holding
-    // the server open. closeAllConnections is Node ≥22.
+    // Close only idle sockets so in-flight requests can drain before shutdown.
+    // closeIdleConnections is Node ≥22.
     switch serverVariant {
-    | HttpServer(s) => closeAllConnections(s)
-    | HttpsServer(s) => httpsCloseAllConnections(s)
+    | HttpServer(s) => closeIdleConnections(s)
+    | HttpsServer(s) => httpsCloseIdleConnections(s)
     }
     let _ = closeServerVariant(serverVariant)->Promise.then(() => {
       switch closedResolve.contents {

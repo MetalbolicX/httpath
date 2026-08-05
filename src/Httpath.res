@@ -142,14 +142,22 @@ let start = (
     | Some(h) => Monitor.cancel(h)
     | None => ()
     }
-    // Note: WsHub.closeAll() is intentionally omitted here — calling it before
-    // server.close() races against in-flight WS upgrades (WsHub.register is called
-    // before the upgrade handshake completes, so the socket would be closed mid-flight).
-    // The hard-exit timer below handles cleanup instead.
+    // Destroy established WS sockets so server.close() can complete when no HTTP
+    // requests are in-flight. Safe here because we only destroy sockets that
+    // finished the upgrade handshake (WsHub.register was awaited). WsHub.closeAll
+    // is skipped during a restart to avoid racing in-flight upgrades (see onRestart).
+    WsHub.closeAll()
     AbortController.abort(controller)
-    // Hard-exit fallback: bound the shutdown so the process ALWAYS exits within 500ms,
-    // even if the closed->Promise.then chain stalls on lingering connections.
-    let _ = Timers.setTimeout(() => Process.exit(0), 500)
+    let exitTimer = ref((None: option<Timers.timeoutId>))
+    // 30s lets in-flight HTTP requests drain via closeIdleConnections + server.close().
+    exitTimer := Some(Timers.setTimeout(() => Process.exit(0), 30000))
+    closed->Promise.then(() => {
+      switch exitTimer.contents {
+      | Some(id) => Timers.clearTimeout(id)
+      | None => ()
+      }
+      Promise.resolve()
+    })->ignore
   }
 
   let sigintHandler = () => {shutdown()}

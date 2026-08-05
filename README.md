@@ -5,8 +5,8 @@
 > single zero-dependency bundle.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/node->=18-brightgreen?logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/rescript-11-blue?logo=rescript&logoColor=white" alt="ReScript">
+  <img src="https://img.shields.io/badge/node->=22-brightgreen?logo=node.js&logoColor=white" alt="Node.js">
+  <img src="https://img.shields.io/badge/rescript-12-blue?logo=rescript&logoColor=white" alt="ReScript">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
   <img src="https://img.shields.io/badge/dependencies-none-brightgreen" alt="Dependencies">
 </p>
@@ -38,7 +38,7 @@ published package (`dist/httpath.mjs`) has zero runtime dependencies.
 
 ```sh
 # Run via pnpm (no install)
-pnpm @metalbolicx/httpath
+npx @metalbolicx/httpath
 
 # Install globally
 pnpm install -g @metalbolicx/httpath
@@ -54,13 +54,13 @@ node dist/httpath.mjs
 
 ```sh
 # Serve current directory on default port 8080
-pnpm @metalbolicx/httpath
+npx @metalbolicx/httpath
 
 # Specific directory and port
-pnpm @metalbolicx/httpath -d ./my-project -p 3000
+npx @metalbolicx/httpath -d ./my-project -p 3000
 
 # Disable live reload and directory listing
-pnpm @metalbolicx/httpath --no-live-reload --no-listing
+npx @metalbolicx/httpath --no-live-reload --no-listing
 ```
 
 ---
@@ -217,9 +217,12 @@ The script appends an entry to `.httpath-auth` in the current directory. It uses
 
 **Auth file search order:**
 
-1. Path specified by `--auth-file` if given.
-2. `./.httpath-auth` in the served directory.
-3. `~/.config/httpath/auth` as a fallback.
+1. The path given to `--auth-file <path>` if provided.
+2. `<served-directory>/.httpath-auth`.
+3. `~/.config/httpath/auth`.
+
+The first existing, parseable file wins. If none is found and `--lan` is on
+without `--no-auth`, startup refuses and points at `scripts/gen-auth.mjs`.
 
 ### TLS / HTTPS
 

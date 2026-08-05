@@ -106,7 +106,7 @@ let ensureOpenssl = (): unit => {
 // generateSelfSigned — generate a self-signed cert in targetDir.
 // Creates cert.pem and key.pem in targetDir.
 // Uses fixed argv, shell:false; throws MissingOpenssl or TlsGenerationFailed.
-// Overwrites existing files without warning (documented behavior).
+// Reuses an existing cert/key pair at the default location if present; only generates a new self-signed cert when none is found (see below).
 // ---------------------------------------------------------------------------
 
 let generateSelfSigned = (~targetDir: string): certKeyPair => {

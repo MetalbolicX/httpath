@@ -11,8 +11,6 @@
   },
   "files": [
     "dist/",
-    "bin.mjs",
-    "rescript.json",
     "package.json",
     "README.md",
     "LICENSE"
@@ -24,7 +22,7 @@
     "prepare": "pnpm run build",
     "prepublishOnly": "pnpm run build && pnpm test",
     "test:unit": "pnpm run build && node_modules/.bin/retest 'tests/unit/**/*.res.mjs' && node --env-file=retest.env.js tests/unit/restart_test.mjs",
-    "test:integration": "node --test tests/integration/ws_hub.test.js tests/integration/entrypoint.test.js tests/integration/lan_auth.test.mjs tests/integration/lan_read_only.test.mjs tests/integration/lan_tls.test.mjs tests/integration/lan_e2e.test.mjs",
+    "test:integration": "node --test tests/integration/ws_hub.test.js tests/integration/entrypoint.test.js tests/integration/lan_auth.test.mjs tests/integration/lan_read_only.test.mjs tests/integration/lan_tls.test.mjs tests/integration/lan_e2e.test.mjs tests/integration/graceful_shutdown.test.js tests/integration/static_handler.test.js",
     "test": "pnpm run build && pnpm run test:unit && pnpm run test:integration"
   },
   "devDependencies": {

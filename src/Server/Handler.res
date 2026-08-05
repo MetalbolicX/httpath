@@ -323,12 +323,8 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
     // REQ-HANDLER-3: method check (GET/HEAD only)
     let upperMethod = String.toUpperCase(request.method)
     if upperMethod != "GET" && upperMethod != "HEAD" {
-      // When readOnly=true (--lan mode), include Allow header per spec
-      let headers = if config.readOnly {
-        [("content-type", "text/plain; charset=utf-8"), ("allow", "GET, HEAD")]
-      } else {
-        [("content-type", "text/plain; charset=utf-8")]
-      }
+      // RFC 7231 §6.5.5: 405 responses include Allow with the permitted methods
+      let headers = [("content-type", "text/plain; charset=utf-8"), ("allow", "GET, HEAD")]
       Promise.resolve(
         respond(
           ~status=405,
