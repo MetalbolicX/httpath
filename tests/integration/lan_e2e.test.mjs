@@ -71,6 +71,7 @@ function withAuthFile(entries, callback) {
 
 function makeChildScript(port, tmpDir, extraConfig) {
   const scriptPath = path.join(tmpDir, "child.mjs");
+  const ABS_BASIC = path.resolve(process.cwd(), "src/Auth/Basic.res.mjs");
   const childScript = `
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -81,6 +82,7 @@ globalThis.createReadStream = fs.createReadStream.bind(fs);
 import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.mjs")}";
 import { make as makeHandler } from "${path.resolve(process.cwd(), "src/Server/Handler.res.mjs")}";
 import { parse as parseArgs } from "${path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs")}";
+import { searchAuthFile as searchAuth } from "${ABS_BASIC}";
 
 const parseResult = parseArgs([
   "--port", "${port}",
@@ -95,8 +97,19 @@ if (parseResult.TAG !== "Ok") {
 
 const config = ${extraConfig ? `Object.assign({}, parseResult._0, ${extraConfig})` : "parseResult._0"};
 
+// Load auth entries the same way Httpath.main does — see Httpath.res:191
+let authEntries = null;
+if (config.lan && !config.noAuth) {
+  const entries = searchAuth(config.directory);
+  if (entries === null) {
+    console.error("CHILD: --lan requires auth file, none found at", config.directory);
+    process.exit(1);
+  }
+  authEntries = entries;
+}
+
 const handler = makeHandler(config);
-start(handler, config, undefined);
+start(handler, config, authEntries);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };

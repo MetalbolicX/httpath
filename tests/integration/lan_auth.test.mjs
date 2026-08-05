@@ -75,6 +75,10 @@ function withAuthFile(entries, callback) {
 
 function makeChildScript(port, tmpDir, extraConfig) {
   const scriptPath = path.join(tmpDir, "child.mjs");
+  const ABS_HTTPATH = path.resolve(process.cwd(), "src/Httpath.res.mjs");
+  const ABS_HANDLER = path.resolve(process.cwd(), "src/Server/Handler.res.mjs");
+  const ABS_PARSER = path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs");
+  const ABS_BASIC = path.resolve(process.cwd(), "src/Auth/Basic.res.mjs");
   const childScript = `
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -83,9 +87,10 @@ const fs = require("node:fs");
 globalThis.fs = fs;
 globalThis.createReadStream = fs.createReadStream.bind(fs);
 
-import { start } from "${path.resolve(process.cwd(), "src/Httpath.res.mjs")}";
-import { make as makeHandler } from "${path.resolve(process.cwd(), "src/Server/Handler.res.mjs")}";
-import { parse as parseArgs } from "${path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs")}";
+import { start } from "${ABS_HTTPATH}";
+import { make as makeHandler } from "${ABS_HANDLER}";
+import { parse as parseArgs } from "${ABS_PARSER}";
+import { searchAuthFile as searchAuth } from "${ABS_BASIC}";
 
 // Build config via Parser.parse same way Httpath.main does.
 const parseResult = parseArgs([
@@ -101,10 +106,21 @@ if (parseResult.TAG !== "Ok") {
 
 const config = ${extraConfig ? `Object.assign({}, parseResult._0, ${extraConfig})` : "parseResult._0"};
 
+// Load auth entries the same way Httpath.main does — see Httpath.res:191
+let authEntries = null;
+if (config.lan && !config.noAuth) {
+  const entries = searchAuth(config.directory);
+  if (entries === null) {
+    console.error("CHILD: --lan requires auth file, none found at", config.directory);
+    process.exit(1);
+  }
+  authEntries = entries;
+}
+
 // Wire real Handler.make instead of fake handler.
 const handler = makeHandler(config);
 
-start(handler, config, undefined);
+start(handler, config, authEntries);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };
@@ -271,7 +287,11 @@ test("--lan: GET without credentials → 401; with valid credentials → 200", a
   const port = PORT_BASE + 3;
   await new Promise((resolveMain, rejectMain) => {
     withAuthFile([buildAuthLine("alice", "secret")], (authPath, tmpDir) => {
-      const { scriptPath } = makeChildScript(port, tmpDir, "{ noAuth: false }");
+      const { scriptPath } = makeChildScript(port, tmpDir, JSON.stringify({
+        lan: true,
+        authFile: authPath,
+        noAuth: false,
+      }));
       let stderr = "";
       const child = spawn(process.execPath, [scriptPath], {
         stdio: ["ignore", "pipe", "pipe"],
@@ -350,7 +370,11 @@ test("--lan: WS upgrade without credentials → 401; with valid auth → 101", a
   const port = PORT_BASE + 4;
   await new Promise((resolveMain, rejectMain) => {
     withAuthFile([buildAuthLine("alice", "secret")], (authPath, tmpDir) => {
-      const { scriptPath } = makeChildScript(port, tmpDir, "{ noAuth: false }");
+      const { scriptPath } = makeChildScript(port, tmpDir, JSON.stringify({
+        lan: true,
+        authFile: authPath,
+        noAuth: false,
+      }));
       const child = spawn(process.execPath, [scriptPath], {
         stdio: ["ignore", "pipe", "pipe"],
         cwd: process.cwd(),

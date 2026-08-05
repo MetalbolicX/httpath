@@ -8,6 +8,7 @@ import path from "node:path";
 const ABS_HTTPATH = path.resolve(process.cwd(), "src/Httpath.res.mjs");
 const ABS_HANDLER = path.resolve(process.cwd(), "src/Server/Handler.res.mjs");
 const ABS_PARSER = path.resolve(process.cwd(), "src/Cfg/Parser.res.mjs");
+const ABS_BASIC = path.resolve(process.cwd(), "src/Auth/Basic.res.mjs");
 
 // ---------------------------------------------------------------------------
 // makeChildScript — writes a child-process script that starts Httpath.start
@@ -27,6 +28,7 @@ globalThis.createReadStream = fs.createReadStream.bind(fs);
 import { start } from "${ABS_HTTPATH}";
 import { make as makeHandler } from "${ABS_HANDLER}";
 import { parse as parseArgs } from "${ABS_PARSER}";
+import { searchAuthFile as searchAuth } from "${ABS_BASIC}";
 
 // Build config via Parser.parse same way Httpath.main does.
 const parseResult = parseArgs([
@@ -43,10 +45,21 @@ if (parseResult.TAG !== "Ok") {
 const extraObj = ${extraConfig ? extraConfig : "undefined"};
 const config = Object.assign({}, parseResult._0, extraObj);
 
+// Load auth entries the same way Httpath.main does — see Httpath.res:191
+let authEntries = null;
+if (config.lan && !config.noAuth) {
+  const entries = searchAuth(config.directory);
+  if (entries === null) {
+    console.error("CHILD: --lan requires auth file, none found at", config.directory);
+    process.exit(1);
+  }
+  authEntries = entries;
+}
+
 // Wire real Handler.make instead of 501 stub.
 const handler = makeHandler(config);
 
-start(handler, config, undefined);
+start(handler, config, authEntries);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };
