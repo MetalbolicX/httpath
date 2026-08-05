@@ -3,13 +3,20 @@
 // then writes Types.response (or delegates WS upgrade) to Node ServerResponse / Socket.
 
 type server
+type httpsServer
 type incomingMessage
 type serverResponse
 type serverSocket
 type upgradeHead
 
+// serverHandle — unified handle for both HTTP and HTTPS servers.
+// The server field is a variant so Httpath.closeServer can call the right _close.
+type serverVariant =
+  | HttpServer(server)
+  | HttpsServer(httpsServer)
+
 type serverHandle = {
-  server: server,
+  server: serverVariant,
   closed: promise<unit>,
   listening: promise<unit>,
 }
@@ -74,13 +81,21 @@ let socketWriteBuffer = (socket: serverSocket, buf: Buffer.t): promise<result<un
 // Pipe a Node/Fs readStream into a ServerResponse (cross-module opaques).
 @send external pipeStream: (Fs.readStream, serverResponse) => unit = "pipe"
 
-// createServer / listen / close
+// createServer / listen / close — HTTP
 @module("node:http")
 external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => server =
   "createServer"
 @send external _listen: (server, int, string, unit => unit) => unit = "listen"
 @send external _close: (server, Nullable.t<JsExn.t> => unit) => unit = "close"
 @send external closeAllConnections: server => unit = "closeAllConnections"
+
+// HTTPS server type and creators
+type httpsOptions = {cert: Buffer.t, key: Buffer.t}
+@module("node:https")
+external _createHttpsServer: (httpsOptions, (incomingMessage, serverResponse) => promise<unit>) => httpsServer = "createServer"
+@send external _httpsListen: (httpsServer, int, string, unit => unit) => unit = "listen"
+@send external _httpsClose: (httpsServer, Nullable.t<JsExn.t> => unit) => unit = "close"
+@send external httpsCloseAllConnections: httpsServer => unit = "closeAllConnections"
 
 // EventEmitter .on — used to register the 'upgrade' listener (the 'request'
 // listener is registered via createServer's callback).
@@ -90,6 +105,14 @@ external _onUpgrade: (
   string,
   (incomingMessage, serverSocket, Nullable.t<upgradeHead>) => promise<unit>,
 ) => server = "on"
+
+// HTTPS upgrade event registration
+@send
+external _onUpgradeHttps: (
+  httpsServer,
+  string,
+  (incomingMessage, serverSocket, Nullable.t<upgradeHead>) => promise<unit>,
+) => httpsServer = "on"
 
 // AbortSignal.onabort setter.
 @set external setOnAbort: (Signals.abortSignal, unit => unit) => unit = "onabort"
@@ -193,6 +216,178 @@ let closeServer = (s: server): promise<unit> => {
   })
 }
 
+// closeServerVariant — close the appropriate server type based on variant.
+let closeServerVariant = (sv: serverVariant): promise<unit> => {
+  switch sv {
+  | HttpServer(s) => closeServer(s)
+  | HttpsServer(s) =>
+    Promise.make((resolve, _reject) => {
+      let _ = _httpsClose(s, _err => resolve())
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// extractCredentials — parse Basic auth header, find user, verify password.
+// Local definition in Http.res to avoid cross-module tree-shaking elimination.
+// ---------------------------------------------------------------------------
+
+@module("./BufferImpl.mjs")
+external bufferToString: (Buffer.t, string) => string = "toString"
+
+let extractCredentials = (
+  ~authHeader: option<string>,
+  ~entries: array<Basic.entry>,
+): option<string> => {
+  switch authHeader {
+  | None => None
+  | Some(header) =>
+    if !String.startsWith(header, "Basic ") {
+      None
+    } else {
+      let encoded = String.substring(header, ~start=6, ~end=String.length(header))
+      let decodedBuf: Buffer.t = try {
+        Buffer.fromString(encoded, "base64")
+      } catch {
+      | _ => Buffer.fromString("", "utf8")
+      }
+      let decoded = bufferToString(decodedBuf, "utf8")
+      let colonPos = Js.String.indexOf(":", decoded)
+      if colonPos < 0 {
+        None
+      } else {
+        let username = String.substring(decoded, ~start=0, ~end=colonPos)
+        let password = String.substring(decoded, ~start=colonPos + 1, ~end=String.length(decoded))
+        switch Basic.findUser(entries, username) {
+        | None => None
+        | Some(entry) =>
+          if Basic.verify(entry, password) {
+            Some(username)
+          } else {
+            None
+          }
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// gate — rate-limit first, then auth (unless noAuth), then call continue.
+// Gate runs ONLY when config.lan is true.
+// Rate limit is checked only when config.rateLimitEnabled is true.
+// Auth is checked only when config.noAuth is false.
+// Writes 429/401 directly to res/socket on rejection.
+// ---------------------------------------------------------------------------
+
+let gate = (
+  ~config: Config.t,
+  ~authEntries: option<array<Basic.entry>>,
+  ~rateLimiter: option<RateLimit.t>,
+  ~clientIp: string,
+  ~req: Types.request,
+  ~res: serverResponse,
+  ~continue: unit => unit,
+): unit => {
+  // Rate limit first (cheaper, prevents brute-force on auth)
+  if config.rateLimitEnabled {
+    switch rateLimiter {
+    | Some(limiter) =>
+      switch RateLimit.tick(limiter, clientIp) {
+      | RateLimit.Reject({retryAfterSeconds}) => {
+          let _ = responseSetHeader(res, "Retry-After", Int.toString(retryAfterSeconds))
+          let _ = responseWriteHead(res, 429)
+          let _ = responseEnd(res, Nullable.make(`{"error":"Too many requests"}`))
+        }
+      | RateLimit.Allow => ()
+      }
+    | None => ()
+    }
+  }
+  // Auth check (skip if noAuth is set)
+  if !config.noAuth {
+    // Extract credentials from Authorization header
+    let authHeader = Types.getHeader(req.headers, "authorization")
+    switch authEntries {
+    | None =>
+      // No auth file entries available — reject
+      {
+        let _ = responseSetHeader(res, "WWW-Authenticate", `Basic realm="httpath"`)
+        let _ = responseWriteHead(res, 401)
+        let _ = responseEnd(res, Nullable.make(`{"error":"Authentication required"}`))
+      }
+    | Some(entries) =>
+      switch extractCredentials(~authHeader, ~entries) {
+      | Some(_) => continue()
+      | None => {
+          let _ = responseSetHeader(res, "WWW-Authenticate", `Basic realm="httpath"`)
+          let _ = responseWriteHead(res, 401)
+          let _ = responseEnd(res, Nullable.make(`{"error":"Authentication required"}`))
+        }
+      }
+    }
+  } else {
+    continue()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// gateWs — WS upgrade gate. Writes HTTP rejection directly to socket.
+// ---------------------------------------------------------------------------
+
+let gateWs = (
+  ~config: Config.t,
+  ~authEntries: option<array<Basic.entry>>,
+  ~rateLimiter: option<RateLimit.t>,
+  ~clientIp: string,
+  ~req: Types.request,
+  ~socket: serverSocket,
+  ~continue: unit => unit,
+): unit => {
+  // Rate limit check first
+  if config.rateLimitEnabled {
+    switch rateLimiter {
+    | Some(limiter) =>
+      switch RateLimit.tick(limiter, clientIp) {
+      | RateLimit.Reject({retryAfterSeconds}) => {
+          let body = `{"error":"Too many requests"}`
+          let response = `HTTP/1.1 429 Too Many Requests\r\nRetry-After: ${Int.toString(retryAfterSeconds)}\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
+          socketWrite(socket, response)
+          socketDestroy(socket)
+        }
+      | RateLimit.Allow => ()
+      }
+    | None => ()
+    }
+  }
+  // Auth check
+  if !config.noAuth {
+    let authHeader = Types.getHeader(req.headers, "authorization")
+    switch authEntries {
+    | None =>
+      // No auth entries — reject
+      {
+        let body = `{"error":"Authentication required"}`
+        let response = `HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="httpath"\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
+        socketWrite(socket, response)
+        socketDestroy(socket)
+      }
+    | Some(entries) =>
+      switch extractCredentials(~authHeader, ~entries) {
+      | Some(_) => continue()
+      | None => {
+          let body = `{"error":"Authentication required"}`
+          let response = `HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="httpath"\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
+          socketWrite(socket, response)
+          socketDestroy(socket)
+        }
+      }
+    }
+  } else {
+    continue()
+  }
+}
+
 let startServer = (
   ~port: int,
   ~hostname: string,
@@ -201,6 +396,10 @@ let startServer = (
   ~signal: Signals.abortSignal,
   ~trustProxy: bool,
   ~accessLog: option<string>,
+  ~config: Config.t,
+  ~rateLimiter: option<RateLimit.t>,
+  ~authEntries: option<array<Basic.entry>>,
+  ~tlsCertKey: option<Tls.certKeyPair>,
 ): serverHandle => {
   // Access log destination — None means no access logging
   let accessLogDest: option<AccessLog.dest> = switch accessLog {
@@ -208,23 +407,53 @@ let startServer = (
   | None => None
   }
 
-  // 'request' event — normal HTTP. Build request, call handler, write response.
-  let server = _createServer(async (req, res) => {
+  // 'request' event — normal HTTP/HTTPS. Build request, apply gate, call handler, write response.
+  let requestHandler = async (req, res) => {
     let socketIp = try {
       incomingSocket(req)->socketRemoteAddress
     } catch {
     | _ => "unknown"
     }
     let request = buildRequest(~trustProxy, ~socketIp, req)
-    let outcome = try {
-      await handler(request)
-    } catch {
-    | _ =>
-      Types.Respond({
-        status: 500,
-        headers: [("content-type", "text/plain; charset=utf-8")],
-        body: Types.Empty,
-      })
+    // Apply gate before handler — gate writes rejection directly if denied
+    let outcome = if config.lan {
+      let gateAllowed = ref(false)
+      gate(
+        ~config,
+        ~authEntries,
+        ~rateLimiter,
+        ~clientIp=request.clientIp,
+        ~req=request,
+        ~res,
+        ~continue=() => { gateAllowed := true },
+      )
+      if !gateAllowed.contents {
+        // Gate wrote the rejection response; outcome is discarded but
+        // we still need a valid outcome to satisfy the switch below.
+        Types.Respond({status: 0, headers: [], body: Types.Empty})
+      } else {
+        try {
+          await handler(request)
+        } catch {
+        | _ =>
+          Types.Respond({
+            status: 500,
+            headers: [("content-type", "text/plain; charset=utf-8")],
+            body: Types.Empty,
+          })
+        }
+      }
+    } else {
+      try {
+        await handler(request)
+      } catch {
+      | _ =>
+        Types.Respond({
+          status: 500,
+          headers: [("content-type", "text/plain; charset=utf-8")],
+          body: Types.Empty,
+        })
+      }
     }
     // Emit access log after response is written
     switch (outcome, accessLogDest) {
@@ -251,25 +480,54 @@ let startServer = (
       }
     | Types.WsUpgrade => ()
     }
-  })
+  }
 
-  // 'upgrade' event — WS upgrades. Build request, call handler, delegate to onWsUpgrade.
-  let _ = _onUpgrade(server, "upgrade", async (req, socket, head) => {
+  // 'upgrade' event — WS upgrades. Build request, apply gate, call handler, delegate to onWsUpgrade.
+  let upgradeHandler = async (req, socket, head) => {
     let socketIp = try {
       socketRemoteAddress(socket)
     } catch {
     | _ => "unknown"
     }
     let request = buildRequest(~trustProxy, ~socketIp, req)
-    let outcome = try {
-      await handler(request)
-    } catch {
-    | _ =>
-      Types.Respond({
-        status: 500,
-        headers: [("content-type", "text/plain; charset=utf-8")],
-        body: Types.Empty,
-      })
+    // Apply gate before handler — gate writes rejection directly to socket if denied
+    let outcome = if config.lan {
+      let gateAllowed = ref(false)
+      gateWs(
+        ~config,
+        ~authEntries,
+        ~rateLimiter,
+        ~clientIp=request.clientIp,
+        ~req=request,
+        ~socket,
+        ~continue=() => { gateAllowed := true },
+      )
+      if !gateAllowed.contents {
+        // Gate wrote the rejection to socket; still need a valid outcome to satisfy switch.
+        Types.Respond({status: 0, headers: [], body: Types.Empty})
+      } else {
+        try {
+          await handler(request)
+        } catch {
+        | _ =>
+          Types.Respond({
+            status: 500,
+            headers: [("content-type", "text/plain; charset=utf-8")],
+            body: Types.Empty,
+          })
+        }
+      }
+    } else {
+      try {
+        await handler(request)
+      } catch {
+      | _ =>
+        Types.Respond({
+          status: 500,
+          headers: [("content-type", "text/plain; charset=utf-8")],
+          body: Types.Empty,
+        })
+      }
     }
     switch outcome {
     | Types.WsUpgrade => {
@@ -279,10 +537,23 @@ let startServer = (
         let _ = socketDestroy(socket)
       }
     }
-  })
+  }
+
+  // Create HTTP or HTTPS server based on tlsCertKey.
+  // Both server types register the same handlers; only the createServer call differs.
+  let serverVariant: serverVariant = switch tlsCertKey {
+  | Some({cert, key}) =>
+    let httpsServ = _createHttpsServer({cert: cert, key: key}, requestHandler)
+    let _ = _onUpgradeHttps(httpsServ, "upgrade", upgradeHandler)
+    HttpsServer(httpsServ)
+  | None =>
+    let httpServ = _createServer(requestHandler)
+    let _ = _onUpgrade(httpServ, "upgrade", upgradeHandler)
+    HttpServer(httpServ)
+  }
 
   // closed — resolved by the abort handler after the server is closed.
-  // This is the promise Httpath.await)s before calling Process.exit.
+  // This is the promise Httpath awaits before calling Process.exit.
   let closedResolve = ref((None: option<unit => unit>))
   let closed: promise<unit> = Promise.make((resolve, _reject) => {
     closedResolve := Some(resolve)
@@ -293,8 +564,11 @@ let startServer = (
     // Force-close all connections first so closeServer unblocks immediately.
     // This handles the case where a keep-alive or WS connection is holding
     // the server open. closeAllConnections is Node ≥22.
-    closeAllConnections(server)
-    let _ = closeServer(server)->Promise.then(() => {
+    switch serverVariant {
+    | HttpServer(s) => closeAllConnections(s)
+    | HttpsServer(s) => httpsCloseAllConnections(s)
+    }
+    let _ = closeServerVariant(serverVariant)->Promise.then(() => {
       switch closedResolve.contents {
       | Some(r) => r()
       | None => ()
@@ -307,8 +581,11 @@ let startServer = (
   // The listen promise is fire-and-forget (listen happens async);
   // the server is usable immediately. closed resolves on abort.
   let _listenPromise = Promise.make((resolve, _reject) => {
-    let _ = _listen(server, port, hostname, () => resolve())
+    switch serverVariant {
+    | HttpServer(s) => ignore(_listen(s, port, hostname, () => resolve()))
+    | HttpsServer(s) => ignore(_httpsListen(s, port, hostname, () => resolve()))
+    }
   })
 
-  {server, closed, listening: _listenPromise}
+  {server: serverVariant, closed, listening: _listenPromise}
 }

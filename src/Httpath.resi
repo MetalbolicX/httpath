@@ -6,8 +6,7 @@
 /// Exits 0 on help, exits 1 on parse error.
 let main: unit => promise<unit>
 
-/// Start the HTTP server + Monitor with the given handler and config.
+/// Start the HTTP/HTTPS server + Monitor with the given handler and config.
+/// TLS is activated automatically when config.tls is true.
 /// Returns only after shutdown (signal received or abort triggered).
-/// The handler is typically a static-file handler; until that lands,
-/// a 501 fallback is used internally.
-let start: (~handler: Http.handlerCb, ~config: Config.t) => promise<unit>
+let start: (~handler: Http.handlerCb, ~config: Config.t, ~authEntries: option<array<Basic.entry>>) => promise<unit>

@@ -1,11 +1,30 @@
-// Httpath.res — lifecycle coordinator: CLI parse → HTTP server → Monitor → signals.
+// Httpath.res — lifecycle coordinator: CLI parse → HTTP/HTTPS server → Monitor → signals.
 // Signal ownership: Httpath is the SOLE signal owner (per design Q3a).
 // Monitor does NOT register SIGINT/SIGTERM handlers.
 
-/// Start the HTTP server + Monitor with the given handler and config.
-let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
+/// Start the HTTP/HTTPS server + Monitor with the given handler and config.
+/// authEntries: auth file entries, if found (None if no file or --no-auth).
+/// TLS is activated automatically when config.tls is true.
+let start = (
+  ~handler: Http.handlerCb,
+  ~config: Config.t,
+  ~authEntries: option<array<Basic.entry>>,
+): promise<unit> => {
   let controller = AbortController.make()
   let sig = AbortController.signal(controller)
+
+  // Rate limiter — only active when rateLimitEnabled is true
+  let rateLimiter: option<RateLimit.t> = if config.rateLimitEnabled {
+    Some(
+      RateLimit.make(
+        ~maxReq=config.rateLimitMax,
+        ~windowMs=config.rateLimitWindow,
+        ~now=() => Date.now(),
+      ),
+    )
+  } else {
+    None
+  }
 
   let onWsUpgrade = (
     req: Types.request,
@@ -29,6 +48,43 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
       })
     }
 
+  // ---------------------------------------------------------------------------
+  // TLS cert/key — computed here for two reasons:
+  // 1. main() calls start() with tlsCertKey already resolved
+  // 2. Tests call start() directly; TLS must be computed here too.
+  // ---------------------------------------------------------------------------
+  let tlsKey: option<Tls.certKeyPair> = if config.tls {
+    try {
+      let hasCert = Belt.Option.isSome(config.tlsCert)
+      let hasKey = Belt.Option.isSome(config.tlsKey)
+      if hasCert && hasKey {
+        Some(Tls.loadExplicitCert(~certPath=Belt.Option.getExn(config.tlsCert), ~keyPath=Belt.Option.getExn(config.tlsKey)))
+      } else {
+        let targetDir = Node_Path.join(Node_Os.homedir(), ".httpath")
+        Some(Tls.generateSelfSigned(~targetDir))
+      }
+    } catch {
+    | Tls.MissingTlsCert(path) =>
+      Console.error(`Error: TLS certificate not found: ${path}`)
+      let _ = Process.exit(1)
+      None
+    | Tls.MissingTlsKey(path) =>
+      Console.error(`Error: TLS private key not found: ${path}`)
+      let _ = Process.exit(1)
+      None
+    | Tls.MissingOpenssl(msg) =>
+      Console.error(`Error: ${msg}`)
+      let _ = Process.exit(1)
+      None
+    | Tls.TlsGenerationFailed(msg) =>
+      Console.error(`Error: TLS certificate generation failed: ${msg}`)
+      let _ = Process.exit(1)
+      None
+    }
+  } else {
+    None
+  }
+
   let {server, closed, listening} = Http.startServer(
     ~port=config.port,
     ~hostname=config.hostname,
@@ -37,6 +93,10 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
     ~signal=sig,
     ~trustProxy=config.trustProxy,
     ~accessLog=config.accessLog,
+    ~config,
+    ~rateLimiter,
+    ~authEntries,
+    ~tlsCertKey=tlsKey,
   )
 
   // Allocate the monitor handle first so the onRestart closure can reference
@@ -47,13 +107,14 @@ let start = (~handler: Http.handlerCb, ~config: Config.t): promise<unit> => {
   // Print startup banner after the server is listening.
   listening->Promise.then(() => {
     let addr = config.hostname == "0.0.0.0" ? "127.0.0.1" : config.hostname
-    let url = `http://${addr}:${Int.toString(config.port)}`
+    let protocol = switch tlsKey { | Some(_) => "https" | None => "http" }
+    let url = `${protocol}://${addr}:${Int.toString(config.port)}`
     Logger.log(Logger.Info, `Serving ${config.directory} at ${url}`)
     Promise.resolve()
   })->ignore
 
   let onRestart = () => {
-    let _ = Http.closeServer(server)
+    let _ = Http.closeServerVariant(server)
     switch monitorHandle.contents {
     | Some(h) => Monitor.cancel(h)
     | None => ()
@@ -114,8 +175,26 @@ let main = (): promise<unit> => {
   let args = Array.slice(argv, ~start=2, ~end=Array.length(argv))
   switch Parser.parse(args) {
   | Ok(config) =>
-    let handler = Handler.make(config)
-    start(~handler, ~config)
+    // Preflight auth file check: --lan requires auth unless --no-auth is set.
+    let preflightAuth = config.lan && !config.noAuth
+    let authEntries = Basic.searchAuthFile()
+    if preflightAuth {
+      switch authEntries {
+      | None =>
+        Console.error(
+          "Error: --lan mode requires an auth file but none was found.\n" ++
+          "To create one, run: node scripts/gen-auth.mjs <username>",
+        )
+        let _ = Process.exit(1)
+        Promise.resolve()
+      | Some(_) =>
+        let handler = Handler.make(config)
+        start(~handler, ~config, ~authEntries)
+      }
+    } else {
+      let handler = Handler.make(config)
+      start(~handler, ~config, ~authEntries)
+    }
   | Error(ParseError.HelpRequested) =>
     Console.log(
       "Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]",
