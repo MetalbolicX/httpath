@@ -14,6 +14,11 @@ open Test
 @module("node:fs") external rmdirSync: string => unit = "rmdirSync"
 @module("node:fs") external mkdirSync: string => unit = "mkdirSync"
 @module("node:fs") external writeFileSync: (string, string) => unit = "writeFileSync"
+@module("node:fs") external unlinkSync: string => unit = "unlinkSync"
+
+// Buffer.toString via BufferImpl.mjs to avoid @send cross-module inlining issue
+@module("./BufferImpl.mjs")
+external bufferToString: (Buffer.t, string) => string = "toString"
 
 // spawnSync binding for test setup
 type spawnSyncResult = {
@@ -205,5 +210,114 @@ test("Tls.generateSelfSigned overwrites existing cert and key files", () => {
         keyPlaceholderLen,
       )
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tls.generateSelfSigned — reuse path: second call returns identical cert
+// ---------------------------------------------------------------------------
+
+test("Tls.generateSelfSigned reuses existing cert on second call", () => {
+  withTempDir(tempDir => {
+    // First call: generate cert and key
+    let { cert: cert1, key: key1 } = switch Tls.generateSelfSigned(~targetDir=tempDir) {
+    | exception e =>
+      JsError.throwWithMessage("first generateSelfSigned should not throw: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"))
+    | pair => pair
+    }
+    // Second call: should reuse existing files, not regenerate
+    let { cert: cert2, key: key2 } = switch Tls.generateSelfSigned(~targetDir=tempDir) {
+    | exception e =>
+      JsError.throwWithMessage("second generateSelfSigned should not throw: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"))
+    | pair => pair
+    }
+    // If reuse path is taken, cert bytes must be identical.
+    // If openssl ran twice, the cert would differ (new key each time).
+    let cert1B64 = bufferToString(cert1, "base64")
+    let cert2B64 = bufferToString(cert2, "base64")
+    assertion(
+      ~message="cert is identical on second call (proves reuse path taken)",
+      ~operator="==",
+      (a, b) => a == b,
+      cert1B64,
+      cert2B64,
+    )
+    let key1B64 = bufferToString(key1, "base64")
+    let key2B64 = bufferToString(key2, "base64")
+    assertion(
+      ~message="key is identical on second call (proves reuse path taken)",
+      ~operator="==",
+      (a, b) => a == b,
+      key1B64,
+      key2B64,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tls.generateSelfSigned — missing key triggers regeneration (not reuse)
+// ---------------------------------------------------------------------------
+
+test("Tls.generateSelfSigned regenerates when key.pem is missing", () => {
+  withTempDir(tempDir => {
+    // First call: generate cert and key
+    let { cert: cert1 } = switch Tls.generateSelfSigned(~targetDir=tempDir) {
+    | exception e =>
+      JsError.throwWithMessage("first generateSelfSigned should not throw: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"))
+    | pair => pair
+    }
+    // Delete key.pem but leave cert.pem
+    let keyPath = join(tempDir, "key.pem")
+    unlinkSync(keyPath)
+    // Second call: key is gone, so reuse path fails → openssl regenerates
+    let { cert: cert2 } = switch Tls.generateSelfSigned(~targetDir=tempDir) {
+    | exception e =>
+      JsError.throwWithMessage("generateSelfSigned should regenerate after key deletion: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"))
+    | pair => pair
+    }
+    // The new cert must differ from the old one because a new key was generated.
+    let cert1B64 = bufferToString(cert1, "base64")
+    let cert2B64 = bufferToString(cert2, "base64")
+    assertion(
+      ~message="cert differs after key deletion (proves new key was generated)",
+      ~operator="!=",
+      (a, b) => a != b,
+      cert1B64,
+      cert2B64,
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tls.generateSelfSigned — missing cert triggers regeneration (not reuse)
+// ---------------------------------------------------------------------------
+
+test("Tls.generateSelfSigned regenerates when cert.pem is missing", () => {
+  withTempDir(tempDir => {
+    // First call: generate cert and key
+    let { cert: cert1 } = switch Tls.generateSelfSigned(~targetDir=tempDir) {
+    | exception e =>
+      JsError.throwWithMessage("first generateSelfSigned should not throw: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"))
+    | pair => pair
+    }
+    // Delete cert.pem but leave key.pem
+    let certPath = join(tempDir, "cert.pem")
+    unlinkSync(certPath)
+    // Second call: cert is gone, so reuse path fails → openssl regenerates
+    let { cert: cert2 } = switch Tls.generateSelfSigned(~targetDir=tempDir) {
+    | exception e =>
+      JsError.throwWithMessage("generateSelfSigned should regenerate after cert deletion: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"))
+    | pair => pair
+    }
+    // The new cert must differ from the old one because a new key was generated.
+    let cert1B64 = bufferToString(cert1, "base64")
+    let cert2B64 = bufferToString(cert2, "base64")
+    assertion(
+      ~message="cert differs after cert deletion (proves new cert+key were generated)",
+      ~operator="!=",
+      (a, b) => a != b,
+      cert1B64,
+      cert2B64,
+    )
   })
 })
