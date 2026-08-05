@@ -177,7 +177,19 @@ let main = (): promise<unit> => {
   | Ok(config) =>
     // Preflight auth file check: --lan requires auth unless --no-auth is set.
     let preflightAuth = config.lan && !config.noAuth
-    let authEntries = Basic.searchAuthFile()
+    // Priority: explicit --auth-file path (if provided), then search defaults.
+    let authEntries: option<array<Basic.entry>> = switch config.authFile {
+    | Some(path) =>
+      try {
+        switch Basic.loadAuthFile(path) {
+        | Ok(entries) => Some(entries)
+        | Error(_) => None
+        }
+      } catch {
+      | _ => None
+      }
+    | None => Basic.searchAuthFile(config.directory)
+    }
     if preflightAuth {
       switch authEntries {
       | None =>

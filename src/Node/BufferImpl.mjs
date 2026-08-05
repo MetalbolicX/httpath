@@ -8,3 +8,4 @@ export const fromString = Nodebuffer.Buffer.from.bind(Nodebuffer.Buffer);
 export const fromArray = Nodebuffer.Buffer.from.bind(Nodebuffer.Buffer);
 export const concat = Nodebuffer.Buffer.concat.bind(Nodebuffer.Buffer);
 export const Buffer = Nodebuffer.Buffer;
+export const toString = (buf, encoding) => buf.toString(encoding);

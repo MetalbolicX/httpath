@@ -273,12 +273,22 @@ let extractCredentials = (
 }
 
 // ---------------------------------------------------------------------------
-// gate — rate-limit first, then auth (unless noAuth), then call continue.
+// gate — rate-limit first, then auth (unless noAuth).
 // Gate runs ONLY when config.lan is true.
 // Rate limit is checked only when config.rateLimitEnabled is true.
 // Auth is checked only when config.noAuth is false.
-// Writes 429/401 directly to res/socket on rejection.
+// Returns a gateDecision — the caller (requestHandler) writes the response.
+// This avoids double-writeHead that caused ERR_HTTP_HEADERS_SENT.
 // ---------------------------------------------------------------------------
+
+type gateDecision =
+  | Allowed
+  | Rejected({
+      status: int,
+      headers: array<(string, string)>,
+      body: string,
+      reason: string, // for access log
+    })
 
 let gate = (
   ~config: Config.t,
@@ -286,48 +296,57 @@ let gate = (
   ~rateLimiter: option<RateLimit.t>,
   ~clientIp: string,
   ~req: Types.request,
-  ~res: serverResponse,
-  ~continue: unit => unit,
-): unit => {
+): gateDecision => {
   // Rate limit first (cheaper, prevents brute-force on auth)
-  if config.rateLimitEnabled {
+  let rateDecision: gateDecision = if config.rateLimitEnabled {
     switch rateLimiter {
     | Some(limiter) =>
       switch RateLimit.tick(limiter, clientIp) {
-      | RateLimit.Reject({retryAfterSeconds}) => {
-          let _ = responseSetHeader(res, "Retry-After", Int.toString(retryAfterSeconds))
-          let _ = responseWriteHead(res, 429)
-          let _ = responseEnd(res, Nullable.make(`{"error":"Too many requests"}`))
-        }
-      | RateLimit.Allow => ()
+      | RateLimit.Reject({retryAfterSeconds}) =>
+        Rejected({
+          status: 429,
+          headers: [("Retry-After", Int.toString(retryAfterSeconds))],
+          body: `{"error":"Too many requests"}`,
+          reason: "rate_limit",
+        })
+      | RateLimit.Allow => Allowed
       }
-    | None => ()
-    }
-  }
-  // Auth check (skip if noAuth is set)
-  if !config.noAuth {
-    // Extract credentials from Authorization header
-    let authHeader = Types.getHeader(req.headers, "authorization")
-    switch authEntries {
-    | None =>
-      // No auth file entries available — reject
-      {
-        let _ = responseSetHeader(res, "WWW-Authenticate", `Basic realm="httpath"`)
-        let _ = responseWriteHead(res, 401)
-        let _ = responseEnd(res, Nullable.make(`{"error":"Authentication required"}`))
-      }
-    | Some(entries) =>
-      switch extractCredentials(~authHeader, ~entries) {
-      | Some(_) => continue()
-      | None => {
-          let _ = responseSetHeader(res, "WWW-Authenticate", `Basic realm="httpath"`)
-          let _ = responseWriteHead(res, 401)
-          let _ = responseEnd(res, Nullable.make(`{"error":"Authentication required"}`))
-        }
-      }
+    | None => Allowed
     }
   } else {
-    continue()
+    Allowed
+  }
+  // Auth check (skip if noAuth is set) — only reached if rate-limit allowed
+  switch rateDecision {
+  | Rejected(_) => rateDecision // already rejected by rate-limit
+  | Allowed =>
+    if !config.noAuth {
+      // Extract credentials from Authorization header
+      let authHeader = Types.getHeader(req.headers, "authorization")
+      switch authEntries {
+      | None =>
+        // No auth file entries available — reject
+        Rejected({
+          status: 401,
+          headers: [("WWW-Authenticate", `Basic realm="httpath"`)],
+          body: `{"error":"Authentication required"}`,
+          reason: "auth_required",
+        })
+      | Some(entries) =>
+        switch extractCredentials(~authHeader, ~entries) {
+        | Some(_) => Allowed
+        | None =>
+          Rejected({
+            status: 401,
+            headers: [("WWW-Authenticate", `Basic realm="httpath"`)],
+            body: `{"error":"Authentication required"}`,
+            reason: "invalid_credentials",
+          })
+        }
+      }
+    } else {
+      Allowed
+    }
   }
 }
 
@@ -415,36 +434,89 @@ let startServer = (
     | _ => "unknown"
     }
     let request = buildRequest(~trustProxy, ~socketIp, req)
-    // Apply gate before handler — gate writes rejection directly if denied
-    let outcome = if config.lan {
-      let gateAllowed = ref(false)
-      gate(
+    // Apply gate before handler — gate returns decision; we write once.
+    if config.lan {
+      let decision = gate(
         ~config,
         ~authEntries,
         ~rateLimiter,
         ~clientIp=request.clientIp,
         ~req=request,
-        ~res,
-        ~continue=() => { gateAllowed := true },
       )
-      if !gateAllowed.contents {
-        // Gate wrote the rejection response; outcome is discarded but
-        // we still need a valid outcome to satisfy the switch below.
-        Types.Respond({status: 0, headers: [], body: Types.Empty})
-      } else {
-        try {
-          await handler(request)
-        } catch {
-        | _ =>
-          Types.Respond({
-            status: 500,
-            headers: [("content-type", "text/plain; charset=utf-8")],
-            body: Types.Empty,
-          })
+      switch decision {
+      | Rejected({status, headers, body, reason}) => {
+          // Write the rejection response (single writeHead — no double-write)
+          let r: Types.response = {
+            status,
+            headers,
+            body: Types.Html(body),
+          }
+          // Emit access log with the real rejection status
+          switch accessLogDest {
+          | Some(dest) =>
+            let ts = Date.make()->Date.toISOString
+            let line = AccessLog.format({
+              timestamp: ts,
+              ip: request.clientIp,
+              method: request.method,
+              path: request.path,
+              status,
+              bytes: String.length(body),
+            })
+            try {
+              AccessLog.writeLine(dest, line)
+            } catch {
+            | _ => ()
+            }
+          | None => ()
+          }
+          let _ = await writeResponse(r, res)
+        }
+      | Allowed => {
+          let outcome = try {
+            await handler(request)
+          } catch {
+          | _ =>
+            Types.Respond({
+              status: 500,
+              headers: [("content-type", "text/plain; charset=utf-8")],
+              body: Types.Empty,
+            })
+          }
+          // Emit access log
+          switch (outcome, accessLogDest) {
+          | (Types.Respond(r), Some(dest)) =>
+            let ts = Date.make()->Date.toISOString
+            let bytes = switch r.body {
+            | Types.Html(s) => String.length(s)
+            | Types.Empty => 0
+            | Types.File(_) => 0 // File streaming — accurate length would require async
+            }
+            let line = AccessLog.format({
+              timestamp: ts,
+              ip: request.clientIp,
+              method: request.method,
+              path: request.path,
+              status: r.status,
+              bytes,
+            })
+            try {
+              AccessLog.writeLine(dest, line)
+            } catch {
+            | _ => ()
+            }
+          | _ => ()
+          }
+          switch outcome {
+          | Types.Respond(r) => {
+              let _ = await writeResponse(r, res)
+            }
+          | Types.WsUpgrade => ()
+          }
         }
       }
     } else {
-      try {
+      let outcome = try {
         await handler(request)
       } catch {
       | _ =>
@@ -454,31 +526,12 @@ let startServer = (
           body: Types.Empty,
         })
       }
-    }
-    // Emit access log after response is written
-    switch (outcome, accessLogDest) {
-    | (Types.Respond(r), Some(dest)) =>
-      let ts = Date.make()->Date.toISOString
-      let line = AccessLog.format({
-        timestamp: ts,
-        ip: request.clientIp,
-        method: request.method,
-        path: request.path,
-        status: r.status,
-        bytes: 0, // TODO: track actual bytes written
-      })
-      try {
-        AccessLog.writeLine(dest, line)
-      } catch {
-      | _ => ()
+      switch outcome {
+      | Types.Respond(r) => {
+          let _ = await writeResponse(r, res)
+        }
+      | Types.WsUpgrade => ()
       }
-    | _ => ()
-    }
-    switch outcome {
-    | Types.Respond(r) => {
-        let _ = await writeResponse(r, res)
-      }
-    | Types.WsUpgrade => ()
     }
   }
 

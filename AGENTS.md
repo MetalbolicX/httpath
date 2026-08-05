@@ -64,6 +64,18 @@ to restart itself.
 - `src/Httpath.res` — main entry (signal handling, startup orchestration).
 - `src/Cfg/Parser.res` — CLI options and defaults.
 
+---
+
+## Contributing notes
+
+- `pnpm run fmt` and `pnpm run lint` scripts are listed in `README.md` but are **not yet
+  implemented** in `package.json`. Flag for future work.
+- `.httpath-auth` file format: `username:scryptParams$saltB64$hashB64`, e.g.
+  `alice:N=16384,r=8,p=1$YWJjZGVm$YWJjZGVmZ2hpamtsbW5vcHFycXVzdHdxeg==`. See
+  `scripts/gen-auth.mjs` for credential generation.
+
+---
+
 **Common gotchas**
 
 - Don't run `deno task ...` — there is no `deno.json`. Use `pnpm run ...`.

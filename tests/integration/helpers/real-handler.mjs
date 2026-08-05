@@ -40,12 +40,13 @@ if (parseResult.TAG !== "Ok") {
   process.exit(1);
 }
 
-const config = ${extraConfig ? `Object.assign({}, parseResult._0, ${extraConfig})` : "parseResult._0"};
+const extraObj = ${extraConfig ? extraConfig : "undefined"};
+const config = Object.assign({}, parseResult._0, extraObj);
 
 // Wire real Handler.make instead of 501 stub.
 const handler = makeHandler(config);
 
-start(handler, config);
+start(handler, config, undefined);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };

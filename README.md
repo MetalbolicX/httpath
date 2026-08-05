@@ -132,6 +132,132 @@ httpath protects you at three levels:
 
 ---
 
+## LAN Security
+
+When `--lan` is enabled, httpath applies additional hardening for hostile network
+environments. These features are **opt-in** via flags; localhost is unaffected.
+
+### Threat model
+
+**What's protected:**
+
+- LAN machines are prompted for HTTP Basic Auth before any file is served.
+- Write methods (POST, PUT, DELETE, PATCH) are rejected with `405 Method Not Allowed`.
+- The server is rate-limited to prevent brute-force and DoS attacks.
+- All requests (including rejected ones) are written to a structured access log.
+- TLS/HTTPS is available for encrypted transport on LANs.
+
+**What's NOT protected (know your boundary):**
+
+- Traffic between the server and clients is **unencrypted by default**. Use `--tls`
+  to enable HTTPS.
+- Authentication is HTTP Basic Auth over TLS — do not use weak passwords.
+- The `.httpath-auth` file format uses scrypt but is not a full user management
+  system. Rotate credentials if compromised.
+- Rate limiting is per-process; restarted servers reset state.
+- The access log grows indefinitely; rotate or truncate the file externally.
+
+### Enabling LAN mode
+
+```sh
+# Minimal LAN server — requires auth credentials
+httpath --lan
+
+# LAN server without authentication (not recommended on untrusted LANs)
+httpath --lan --no-auth
+```
+
+### LAN Security CLI flags
+
+| Flag                        | Default              | Description                                                    |
+| --------------------------- | -------------------- | -------------------------------------------------------------- |
+| `--lan`                     | `false`              | Enable LAN security hardening (auth, rate-limit, read-only)     |
+| `--no-auth`                 | `false`              | Skip authentication requirement under `--lan`                   |
+| `--auth-file <path>`        | `.httpath-auth`      | Path to scrypt-auth credential file (see below)                 |
+| `--tls`                     | `false`              | Enable HTTPS with auto-generated self-signed certificate        |
+| `--tls-cert <path>`         | auto-generate        | Path to PEM X.509 certificate for HTTPS                         |
+| `--tls-key <path>`          | auto-generate        | Path to PEM private key for HTTPS                              |
+| `--rate-limit`              | `false` (LAN default) | Enable per-IP request rate limiting                             |
+| `--rate-limit-max <n>`      | `100` (LAN default)  | Maximum requests per IP per window                              |
+| `--rate-limit-window <n>`   | `60000` (LAN default)| Rate limit window in milliseconds                              |
+| `--access-log <path>`       | stdout (LAN default) | Append access log to a file                                    |
+| `--read-only`               | `true` (LAN default) | Reject write methods (POST/PUT/DELETE/PATCH) with `405`        |
+
+> **Note:** `--rate-limit`, `--rate-limit-max`, `--rate-limit-window`, and
+> `--read-only` are automatically set to secure defaults when `--lan` is used.
+> Pass explicit values to override.
+
+### Auth file format
+
+httpath uses an `.httpath-auth` file with scrypt-hashed credentials. One entry
+per line:
+
+```
+# Format: username:scryptParams$saltBase64$hashBase64
+# Example:
+alice:N=16384,r=8,p=1$YWJjZGVmZ2hpamtsbW5vcA==$YWJjZGVmZ2hpamtsbW5vcHFycXVzdHdxeg==
+```
+
+Lines starting with `#` and blank lines are ignored. The file must be readable
+by the httpath process.
+
+**Generating credentials:**
+
+```sh
+# Interactive (prompts for password securely)
+node scripts/gen-auth.mjs alice
+
+# Non-interactive (password as argument — less secure, for testing only)
+node scripts/gen-auth.mjs alice mypassword
+```
+
+The script appends an entry to `.httpath-auth` in the current directory. It uses
+`N=16384, r=8, p=1` scrypt parameters (CPU/memory hard) and generates a random
+16-byte salt and 64-byte hash.
+
+**Auth file search order:**
+
+1. Path specified by `--auth-file` if given.
+2. `./.httpath-auth` in the served directory.
+3. `~/.config/httpath/auth` as a fallback.
+
+### TLS / HTTPS
+
+Generate a self-signed certificate on first run (requires `openssl` in PATH):
+
+```sh
+httpath --lan --tls
+# Server listens on https:// instead of http://
+# Certificate is auto-generated in ~/.httpath/
+```
+
+Or provide explicit certificate and key files:
+
+```sh
+httpath --lan --tls --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem
+```
+
+> **openssl required for auto-TLS.** If `openssl` is not available in the
+> server's `PATH`, you must provide `--tls-cert` and `--tls-key` explicitly.
+
+### Access log format
+
+Each line records one request in the format:
+
+```
+ISO8601 | ip | method | path | status | bytes
+2026-08-04T07:44:10.000Z | 192.168.1.42 | GET | /index.html | 200 | 1234
+```
+
+Log format features:
+
+- **ISO 8601 timestamps** for easy parsing.
+- **CR/LF sanitization** — embedded newlines in request paths are replaced with `?`.
+- **Rejections logged** — 401, 405, and 429 responses are also written to the log.
+- **Per-process state** — rate limit counters reset when the server restarts.
+
+---
+
 ## Project Status
 
 **Stable.** Distributed as a single ESM bundle via npm. Supports Linux, macOS,
@@ -172,9 +298,8 @@ pnpm run lint         # Lint code
 - [x] Smart live reload (browser vs server restart)
 - [x] HEAD request support
 - [x] Protected system directory guard
+- [x] LAN security (auth, rate-limit, read-only, TLS, access log)
 - [ ] Range request support (partial content)
-- [ ] Request logging to file
-- [ ] HTTPS / TLS support
 
 ---
 

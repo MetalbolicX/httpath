@@ -90,7 +90,7 @@ const handler = (req) => Promise.resolve({
 
 console.error("CHILD DEBUG: calling start()...");
 // start() only returns after SIGTERM/SIGINT.
-start(handler, configResult._0);
+start(handler, configResult._0, undefined);
 
 console.error("CHILD DEBUG: start() returned (should not happen before SIGTERM)");
 `;
@@ -599,7 +599,7 @@ const configResult = parseArgs([
 ]);
 if (configResult.TAG !== "Ok") { process.exit(1); }
 
-start(handler, configResult._0);
+start(handler, configResult._0, undefined);
 `;
 
   writeFileSync(scriptPath, childScript);
