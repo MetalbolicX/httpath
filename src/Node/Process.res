@@ -31,16 +31,4 @@ let onError = (child: childProcess, callback: JsExn.t => unit): unit => {
   })
 }
 
-// ---------------------------------------------------------------------------
-// spawnSync — synchronous subprocess invocation (fixed argv, shell:false).
-// Used for openssl version check and cert generation.
-// ---------------------------------------------------------------------------
 
-type spawnSyncResult = {
-  status: int,
-  stdout: Buffer.t,
-  stderr: Buffer.t,
-}
-
-@module("node:child_process")
-external spawnSync: (string, array<string>) => spawnSyncResult = "spawnSync"

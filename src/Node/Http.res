@@ -444,7 +444,7 @@ let startServer = (
         ~req=request,
       )
       switch decision {
-      | Rejected({status, headers, body, reason}) => {
+      | Rejected({status, headers, body}) => {
           // Write the rejection response (single writeHead — no double-write)
           let r: Types.response = {
             status,

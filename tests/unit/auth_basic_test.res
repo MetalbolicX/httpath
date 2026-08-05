@@ -47,7 +47,7 @@ test("parseAuthFile skips # comment lines and blank lines", () => {
       ~message="parseAuthFile returns 2 entries after skipping comments/blanks",
       ~operator="=",
       (a, b) => a == b,
-      Js.Array.length(entries),
+      Array.length(entries),
       2,
     )
   | Error(_) => assertion(~message="should be Ok", ~operator="=", (a, b) => a == b, false, true)

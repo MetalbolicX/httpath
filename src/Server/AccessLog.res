@@ -58,6 +58,6 @@ let validateFile = (path: string): unit => {
     unlinkSync(path)
   } catch {
   | _ =>
-    raise(ParseError.UnwritableAccessLog(path))
+    throw(ParseError.UnwritableAccessLog(path))
   }
 }

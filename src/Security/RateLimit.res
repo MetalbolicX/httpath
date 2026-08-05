@@ -50,20 +50,20 @@ let tick = (limiter: t, ip: string): decision => {
   | Some({count, windowStart}) =>
     // Check if window has expired: currentTime - windowStart > windowMs
     let elapsed = currentTime -. windowStart
-    if elapsed > float(limiter.windowMs) {
+    if elapsed > Int.toFloat(limiter.windowMs) {
       // Window expired: reset with a fresh window
       let newState: ipState = {count: 1, windowStart: currentTime}
       limiter.state = Map.set(limiter.state, ip, newState)
       Allow
     } else if count >= limiter.maxReq {
       // Over threshold: reject with Retry-After
-      let remainingMs = float(limiter.windowMs) -. elapsed
+      let remainingMs = Int.toFloat(limiter.windowMs) -. elapsed
       // ceil(remainingMs / 1000.0) for seconds, minimum 1
       let retryAfter = {
         let s = remainingMs /. 1000.0
         // ceil for positive floats: floor + 1 if not already integer
-        let asInt = int_of_float(s)
-        if float(asInt) == s {
+        let asInt = Float.toInt(s)
+        if Int.toFloat(asInt) == s {
           if asInt < 1 { 1 } else { asInt }
         } else {
           if asInt + 1 < 1 { 1 } else { asInt + 1 }

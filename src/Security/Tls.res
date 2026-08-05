@@ -55,9 +55,9 @@ let loadExplicitCert = (~certPath: string, ~keyPath: string): certKeyPair => {
     | None => ""
     }
     if String.includes(msg, "ENOENT") || String.includes(msg, "no such file") {
-      raise(MissingTlsCert(certPath))
+      throw(MissingTlsCert(certPath))
     } else {
-      raise(MissingTlsCert(certPath ++ ": " ++ msg))
+      throw(MissingTlsCert(certPath ++ ": " ++ msg))
     }
   }
   let key = try {
@@ -69,9 +69,9 @@ let loadExplicitCert = (~certPath: string, ~keyPath: string): certKeyPair => {
     | None => ""
     }
     if String.includes(msg, "ENOENT") || String.includes(msg, "no such file") {
-      raise(MissingTlsKey(keyPath))
+      throw(MissingTlsKey(keyPath))
     } else {
-      raise(MissingTlsKey(keyPath ++ ": " ++ msg))
+      throw(MissingTlsKey(keyPath ++ ": " ++ msg))
     }
   }
   { cert, key }
@@ -94,7 +94,7 @@ let opensslAvailable = (): bool => {
 
 let ensureOpenssl = (): unit => {
   if !opensslAvailable() {
-    raise(
+    throw(
       MissingOpenssl(
         "openssl not found in PATH. Provide explicit --tls-cert and --tls-key files, or install openssl.",
       ),
@@ -151,7 +151,7 @@ let generateSelfSigned = (~targetDir: string): certKeyPair => {
       if result.status !== 0 {
         // Cannot easily convert stderr Buffer to string due to cross-module inlining
         // limitation — include exit code only.
-        raise(
+        throw(
           TlsGenerationFailed(
             "openssl req failed with exit code " ++ Belt.Int.toString(result.status),
           ),

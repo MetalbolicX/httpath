@@ -735,7 +735,7 @@ test("--rate-limit-max 0 returns InvalidRateLimit", () => {
   let r = Parser.parse(["--rate-limit-max", "0"])
   switch r {
   | Ok(_) => assertion(~message="0 should be Error", ~operator="=", (a, b) => a == b, false, true)
-  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+  | Error(ParseError.InvalidRateLimit(_kind, val)) =>
     assertion(~message="InvalidRateLimit for max=0", ~operator="=", (a, b) => a == b, val, 0)
   | Error(e) =>
     let msg = ParseError.toString(e)
@@ -747,7 +747,7 @@ test("--rate-limit-max negative returns InvalidRateLimit", () => {
   let r = Parser.parse(["--rate-limit-max", "-5"])
   switch r {
   | Ok(_) => assertion(~message="-5 should be Error", ~operator="=", (a, b) => a == b, false, true)
-  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+  | Error(ParseError.InvalidRateLimit(_kind, val)) =>
     assertion(~message="InvalidRateLimit for negative", ~operator="=", (a, b) => a == b, val, -5)
   | Error(e) =>
     let msg = ParseError.toString(e)
@@ -809,7 +809,7 @@ test("--rate-limit-window 0 returns InvalidRateLimit", () => {
   let r = Parser.parse(["--rate-limit-window", "0"])
   switch r {
   | Ok(_) => assertion(~message="0 should be Error", ~operator="=", (a, b) => a == b, false, true)
-  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+  | Error(ParseError.InvalidRateLimit(_kind, val)) =>
     assertion(~message="InvalidRateLimit for window=0", ~operator="=", (a, b) => a == b, val, 0)
   | Error(e) =>
     let msg = ParseError.toString(e)
@@ -821,7 +821,7 @@ test("--rate-limit-window negative returns InvalidRateLimit", () => {
   let r = Parser.parse(["--rate-limit-window", "-10"])
   switch r {
   | Ok(_) => assertion(~message="-10 should be Error", ~operator="=", (a, b) => a == b, false, true)
-  | Error(ParseError.InvalidRateLimit(kind, val)) =>
+  | Error(ParseError.InvalidRateLimit(_kind, val)) =>
     assertion(~message="InvalidRateLimit for negative window", ~operator="=", (a, b) => a == b, val, -10)
   | Error(e) =>
     let msg = ParseError.toString(e)
