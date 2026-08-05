@@ -17,7 +17,7 @@ open Test
 @module("node:fs") external unlinkSync: string => unit = "unlinkSync"
 
 // Buffer.toString via BufferImpl.mjs to avoid @send cross-module inlining issue
-@module("./BufferImpl.mjs")
+@module("../../../src/Node/BufferImpl.mjs")
 external bufferToString: (Buffer.t, string) => string = "toString"
 
 // spawnSync binding for test setup
@@ -177,37 +177,34 @@ test("Tls.generateSelfSigned creates cert.pem and key.pem in targetDir", () => {
 // Tls.generateSelfSigned — overwrites existing files (documented behavior)
 // ---------------------------------------------------------------------------
 
-test("Tls.generateSelfSigned overwrites existing cert and key files", () => {
+test("Tls.generateSelfSigned reuses existing cert and key files", () => {
   withTempDir(tempDir => {
-    // Write placeholder files
+    // Write placeholder files. When both files exist and load successfully,
+    // generateSelfSigned should return them as-is (reuse path), not overwrite.
     writeFileSync(join(tempDir, "cert.pem"), "placeholder cert")
     writeFileSync(join(tempDir, "key.pem"), "placeholder key")
-    // generateSelfSigned should overwrite without error
     switch Tls.generateSelfSigned(~targetDir=tempDir) {
     | exception e =>
       JsError.throwWithMessage(
-        "generateSelfSigned should overwrite existing files: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"),
+        "generateSelfSigned should reuse existing files: " ++ Belt.Option.getWithDefault(JsExn.message(Obj.magic(e)), "unknown"),
       )
     | { cert, key } =>
-      // Should have real PEM content, not "placeholder cert"
-      // We can't use Buffer.toString due to cross-module inlining limitations,
-      // but we can check that the buffer lengths are non-zero and different
-      // from what "placeholder" would produce
-      let placeholderLen = String.length("placeholder cert")
+      // Reuse path: returned buffers are exactly the placeholder bytes.
+      let certStr = bufferToString(cert, "utf8")
       assertion(
-        ~message="generated cert is not the placeholder (length check)",
-        ~operator="!=",
-        (a, b) => a != b,
-        Buffer.length(cert),
-        placeholderLen,
+        ~message="reuse: cert is the placeholder",
+        ~operator="=",
+        (a, b) => a == b,
+        certStr,
+        "placeholder cert",
       )
-      let keyPlaceholderLen = String.length("placeholder key")
+      let keyStr = bufferToString(key, "utf8")
       assertion(
-        ~message="generated key is not the placeholder (length check)",
-        ~operator="!=",
-        (a, b) => a != b,
-        Buffer.length(key),
-        keyPlaceholderLen,
+        ~message="reuse: key is the placeholder",
+        ~operator="=",
+        (a, b) => a == b,
+        keyStr,
+        "placeholder key",
       )
     }
   })
