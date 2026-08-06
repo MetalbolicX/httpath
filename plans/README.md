@@ -105,6 +105,9 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 012  | Enforce TLS under `--lan` | P1 | L | 011 | DONE |
 | 013  | `/healthz` + `/readyz` probes | P2 | M | 007 | DONE |
 | 014  | Structured + correlated logging | P2 | L | 013 | DONE |
+| 015  | Refuse non-loopback bind without `--lan` | P1 | L | — | DONE |
+| 016  | Short-circuit WS rate-limit rejection in `gateWs` | P1 | M | — | DONE |
+| 017  | Apply configured log level at startup | P2 | S | — | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
