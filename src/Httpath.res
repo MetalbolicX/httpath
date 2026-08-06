@@ -27,11 +27,13 @@ let start = (
   }
 
   // Rate limiter — only active when rateLimitEnabled is true
+  // maxIps=10000 caps the in-memory map to prevent memory DoS from large LANs.
   let rateLimiter: option<RateLimit.t> = if config.rateLimitEnabled {
     Some(
       RateLimit.make(
         ~maxReq=config.rateLimitMax,
         ~windowMs=config.rateLimitWindow,
+        ~maxIps=10000,
         ~now=() => Date.now(),
       ),
     )

@@ -55,8 +55,8 @@ from Phase 1.
 | Plan | Title | Methodology | Effort | Risk | Depends on |
 |------|-------|-------------|--------|------|------------|
 | 007 | Configure HTTP server timeouts & connection limits | `[TDD]` | M | MED | Phase 1 | DONE |
-| 008 | Add rate-limiter eviction and map-size cap | `[TDD]` | M | MED | Phase 1 |
-| 009 | Emit real `bytes` in the access log for streamed files | `[TDD]` | M | MED | Phase 1 |
+| 008 | Add rate-limiter eviction and map-size cap | `[TDD]` | M | MED | Phase 1 | DONE |
+| 009 | Emit real `bytes` in the access log for streamed files | `[TDD]` | M | MED | Phase 1 | DONE |
 | 010 | Replace 500 ms hard-exit with drained graceful shutdown | `[TDD]` | M | MED | 007 |
 
 **Deliverable & Success Criteria:** New unit/integration tests cover slowloris
@@ -98,8 +98,8 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 005  | CI release gate | P1 | M | 004 | DONE |
 | 006  | Document `--auth-file` order | P2 | S | — | DONE |
 | 007  | Server timeouts & connection limits | P1 | M | Phase 1 | DONE |
-| 008  | Rate-limiter eviction + cap | P1 | M | Phase 1 | TODO |
-| 009  | Access-log real file bytes | P2 | M | Phase 1 | TODO |
+| 008  | Rate-limiter eviction + cap | P1 | M | Phase 1 | DONE |
+| 009  | Access-log real file bytes | P2 | M | Phase 1 | DONE |
 | 010  | Drained graceful shutdown | P1 | M | 007 | DONE |
 | 011  | Protected-directory guard (edge case) | P1 | L | Phase 1 | TODO |
 | 012  | Enforce TLS under `--lan` | P1 | L | 011 | TODO |

@@ -335,6 +335,25 @@ test("Full LAN security E2E: auth + rate limit + read-only + access log", async 
         `Expected 429+405 = 2, got ${(statusCounts["429"] || 0) + (statusCounts["405"] || 0)}`
       );
 
+      // --- Phase 6: Verify bytes field for file GETs ---
+      // The test fixture creates index.html with "<h1>test</h1>" (14 bytes).
+      const indexFileSize = fs.statSync(path.join(tmpDir, "index.html")).size;
+      assert.ok(indexFileSize > 0, "index.html fixture should be non-empty");
+
+      const fileGetLines = logLines.filter((l) => {
+        const parts = l.split(" | ");
+        return parts[2] === "GET" && parts[3] === "/index.html" && parts[4] === "200";
+      });
+      assert.ok(fileGetLines.length >= 1, `Expected at least 1 GET /index.html 200 line, got ${fileGetLines.length}`);
+
+      for (const line of fileGetLines) {
+        const bytes = parseInt(line.split(" | ")[5], 10);
+        assert.ok(
+          bytes === indexFileSize,
+          `GET /index.html bytes should be ${indexFileSize}, got ${bytes} in line: ${line}`,
+        );
+      }
+
       // Clean up
       child.kill("SIGTERM");
       await new Promise((r) => child.on("exit", r));

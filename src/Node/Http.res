@@ -524,10 +524,29 @@ let startServer = (
           switch (outcome, accessLogDest) {
           | (Types.Respond(r), Some(dest)) =>
             let ts = Date.make()->Date.toISOString
+            // File bytes: Handler.serveFile already sets Content-Length for non-HTML files.
+            // We read it from the response headers here. This is exact for non-range responses.
+            // TODO (range roadmap): if range support is added, Content-Length will be the
+            // remaining range length, not the full file — revisit this branch at that time.
             let bytes = switch r.body {
             | Types.Html(s) => String.length(s)
             | Types.Empty => 0
-            | Types.File(_) => 0 // File streaming — accurate length would require async
+            | Types.File(_) =>
+              let rec findContentLength = (i: int): int => {
+                if i >= Array.length(r.headers) {
+                  0
+                } else {
+                  switch r.headers[i] {
+                  | Some(("content-length", v)) =>
+                    switch Belt.Int.fromString(v) {
+                    | Some(n) => n
+                    | None => 0
+                    }
+                  | _ => findContentLength(i + 1)
+                  }
+                }
+              }
+              findContentLength(0)
             }
             let line = AccessLog.format({
               timestamp: ts,
