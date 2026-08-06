@@ -28,6 +28,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let trustProxy = ref(false)
   let authFile = ref((None: option<string>))
   let noAuth = ref(false)
+  let noTls = ref(false)
   let tls = ref(false)
   let tlsCert = ref((None: option<string>))
   let tlsKey = ref((None: option<string>))
@@ -124,6 +125,9 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       }
     } else if arg == "--no-auth" {
       noAuth := true
+      i := i.contents + 1
+    } else if arg == "--no-tls" {
+      noTls := true
       i := i.contents + 1
     } else if arg == "--tls" {
       tls := true
@@ -237,50 +241,67 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
         | None => [".git", "node_modules", ".DS_Store"]
         }
 
-        let effectiveListing = listing.contents && !noListing.contents
-        let effectiveLogLevel = switch logLevel.contents {
-        | Some(l) => l
-        | None => Logger.Info
-        }
-        let effectiveLiveReload = !noLiveReload.contents
+        // Conflict: --no-tls is meaningless when explicit TLS material is provided.
+        if noTls.contents && (tlsCert.contents != None || tlsKey.contents != None) {
+          let conflicting = switch (tlsCert.contents, tlsKey.contents) {
+          | (Some(c), Some(k)) => ["--tls-cert", c, "--tls-key", k]
+          | (Some(c), None) => ["--tls-cert", c]
+          | (None, Some(k)) => ["--tls-key", k]
+          | (None, None) => []
+          }
+          Error(ParseError.ConflictingTlsFlags(conflicting))
+        } else {
+          let effectiveListing = listing.contents && !noListing.contents
+          let effectiveLogLevel = switch logLevel.contents {
+          | Some(l) => l
+          | None => Logger.Info
+          }
+          let effectiveLiveReload = !noLiveReload.contents
 
-        // LAN security: effective values with LAN defaults
-        let effectiveReadOnly = readOnly.contents || lan.contents
-        let effectiveRateLimitMax = switch rateLimitMax.contents {
-        | Some(m) => m
-        | None =>
-          if lan.contents { 100 } else { 0 }
-        }
-        let effectiveRateLimitWindow = switch rateLimitWindow.contents {
-        | Some(w) => w
-        | None =>
-          if lan.contents { 60000 } else { 0 }
-        }
-        let effectiveRateLimitEnabled = lan.contents || rateLimitMax.contents != None || rateLimitWindow.contents != None
+          // LAN security: effective values with LAN defaults
+          // --tls flag is explicit on loopback; LAN default when no --tls but lan=true;
+          // explicit cert+key (without --tls flag) also implies TLS on loopback.
+          let effectiveTls = tls.contents ||
+            (tlsCert.contents != None && tlsKey.contents != None) ||
+            (lan.contents && !noTls.contents)
+          let effectiveReadOnly = readOnly.contents || lan.contents
+          let effectiveRateLimitMax = switch rateLimitMax.contents {
+          | Some(m) => m
+          | None =>
+            if lan.contents { 100 } else { 0 }
+          }
+          let effectiveRateLimitWindow = switch rateLimitWindow.contents {
+          | Some(w) => w
+          | None =>
+            if lan.contents { 60000 } else { 0 }
+          }
+          let effectiveRateLimitEnabled = lan.contents || rateLimitMax.contents != None || rateLimitWindow.contents != None
 
-        Ok({
-          directory: effectiveDir,
-          hostname: effectiveHost,
-          port: effectivePort,
-          ignorePatterns: effectiveIgnorePatterns,
-          enableDirectoryListing: effectiveListing,
-          logLevel: effectiveLogLevel,
-          enableLiveReload: effectiveLiveReload,
-          restartOnChange: restartOnChange.contents,
-          lan: lan.contents,
-          allowProtectedDir: allowProtectedDir.contents,
-          trustProxy: trustProxy.contents,
-          authFile: authFile.contents,
-          noAuth: noAuth.contents,
-          tls: tls.contents,
-          tlsCert: tlsCert.contents,
-          tlsKey: tlsKey.contents,
-          rateLimitMax: effectiveRateLimitMax,
-          rateLimitWindow: effectiveRateLimitWindow,
-          rateLimitEnabled: effectiveRateLimitEnabled,
-          accessLog: accessLog.contents,
-          readOnly: effectiveReadOnly,
-        })
+          Ok({
+            directory: effectiveDir,
+            hostname: effectiveHost,
+            port: effectivePort,
+            ignorePatterns: effectiveIgnorePatterns,
+            enableDirectoryListing: effectiveListing,
+            logLevel: effectiveLogLevel,
+            enableLiveReload: effectiveLiveReload,
+            restartOnChange: restartOnChange.contents,
+            lan: lan.contents,
+            allowProtectedDir: allowProtectedDir.contents,
+            trustProxy: trustProxy.contents,
+            authFile: authFile.contents,
+            noAuth: noAuth.contents,
+            noTls: noTls.contents,
+            tls: effectiveTls,
+            tlsCert: tlsCert.contents,
+            tlsKey: tlsKey.contents,
+            rateLimitMax: effectiveRateLimitMax,
+            rateLimitWindow: effectiveRateLimitWindow,
+            rateLimitEnabled: effectiveRateLimitEnabled,
+            accessLog: accessLog.contents,
+            readOnly: effectiveReadOnly,
+          })
+        }
       }
     }
   }

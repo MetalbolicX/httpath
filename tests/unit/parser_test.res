@@ -964,3 +964,127 @@ test("--lan plus explicit --rate-limit-window overrides LAN default", () => {
     30000,
   )
 })
+
+// ---------------------------------------------------------------------------
+// REQ-TLS-001: --lan alone → tls=true, noTls=false (LAN implies TLS)
+// ---------------------------------------------------------------------------
+
+test("--lan alone sets tls=true (LAN implies TLS)", () => {
+  let c = unwrapConfig(Parser.parse(["--lan"]))
+  assertion(
+    ~message="tls is true when --lan is set",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tls,
+    true,
+  )
+})
+
+// ---------------------------------------------------------------------------
+// REQ-TLS-002: --lan --no-tls → tls=false, noTls=true
+// ---------------------------------------------------------------------------
+
+test("--lan --no-tls sets noTls=true and tls=false", () => {
+  let r = Parser.parse(["--lan", "--no-tls"])
+  switch r {
+  | Ok(c) =>
+    assertion(~message="noTls is true with --lan --no-tls", ~operator="=", (a, b) => a == b, c.noTls, true)
+    assertion(~message="tls is false when --no-tls is set alongside --lan", ~operator="=", (a, b) => a == b, c.tls, false)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected Ok, got Error: " ++ msg)
+  }
+})
+
+test("--no-tls flag sets noTls to true (loopback)", () => {
+  let c = unwrapConfig(Parser.parse(["--no-tls"]))
+  assertion(
+    ~message="noTls is true with --no-tls",
+    ~operator="=",
+    (a, b) => a == b,
+    c.noTls,
+    true,
+  )
+  assertion(
+    ~message="tls is false with --no-tls (no LAN to imply TLS)",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tls,
+    false,
+  )
+})
+
+// ---------------------------------------------------------------------------
+// REQ-TLS-001: --lan --tls-cert X --tls-key Y → tls=true, noTls=false
+// ---------------------------------------------------------------------------
+
+test("--lan --tls-cert X --tls-key Y sets tls=true with explicit cert/key", () => {
+  let c = unwrapConfig(Parser.parse(["--lan", "--tls-cert", "/certs/cert.pem", "--tls-key", "/certs/key.pem"]))
+  assertion(
+    ~message="tls is true with explicit cert under --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tls,
+    true,
+  )
+  assertion(
+    ~message="tlsCert is set",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tlsCert,
+    Some("/certs/cert.pem"),
+  )
+  assertion(
+    ~message="tlsKey is set",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tlsKey,
+    Some("/certs/key.pem"),
+  )
+})
+
+// ---------------------------------------------------------------------------
+// REQ-TLS-002: --lan --no-tls --tls-cert X → ConflictingTlsFlags (parse-time refusal)
+// ---------------------------------------------------------------------------
+
+test("--lan --no-tls --tls-cert X returns ConflictingTlsFlags", () => {
+  let r = Parser.parse(["--lan", "--no-tls", "--tls-cert", "/certs/cert.pem"])
+  switch r {
+  | Ok(_) =>
+    JsError.throwWithMessage("Expected ConflictingTlsFlags error, got Ok")
+  | Error(ParseError.ConflictingTlsFlags(_)) =>
+    assertion(~message="ConflictingTlsFlags raised for --no-tls with --tls-cert", ~operator="=", (a, b) => a == b, true, true)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected ConflictingTlsFlags, got: " ++ msg)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// REQ-TLS-003: Loopback (no --lan) with --tls-cert → no conflict
+// ---------------------------------------------------------------------------
+
+test("loopback (no --lan) with --tls-cert sets tls=true, no conflict", () => {
+  let c = unwrapConfig(Parser.parse(["--tls-cert", "/certs/cert.pem", "--tls-key", "/certs/key.pem"]))
+  assertion(
+    ~message="tls is true with explicit cert on loopback",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tls,
+    true,
+  )
+  assertion(
+    ~message="noTls is false (not set)",
+    ~operator="=",
+    (a, b) => a == b,
+    c.noTls,
+    false,
+  )
+  assertion(
+    ~message="tlsCert is set",
+    ~operator="=",
+    (a, b) => a == b,
+    c.tlsCert,
+    Some("/certs/cert.pem"),
+  )
+})

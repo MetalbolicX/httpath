@@ -15,6 +15,7 @@ type t = {
   trustProxy: bool,
   authFile: option<string>,
   noAuth: bool,
+  noTls: bool,
   tls: bool,
   tlsCert: option<string>,
   tlsKey: option<string>,

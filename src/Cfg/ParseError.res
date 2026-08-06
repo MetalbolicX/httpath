@@ -10,6 +10,7 @@ type t =
   | InvalidPath(string)
   | HelpRequested
   | InvalidRateLimit(string, int)
+  | ConflictingTlsFlags(array<string>)  // conflicting args: typically ["--no-tls", "--tls-cert", path] etc.
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
 
 // UnwritableAccessLog is a raise-able exception (separate from the result variant)
@@ -26,6 +27,9 @@ let toString = (e: t): string => {
   | HelpRequested => "Help requested"
   | InvalidRateLimit(kind, val) =>
     `Invalid rate limit ${kind}: ${Belt.Int.toString(val)}. Must be a positive integer.`
+  | ConflictingTlsFlags(conflicting) =>
+    let flagList = Js.Array.joinWith(" ", conflicting)
+    `Conflicting TLS flags: --no-tls cannot be used together with TLS certificate/key options (${flagList}).`
   | ProtectedDirRefused(requested, rule, resolved) =>
     `httpath: refusing to serve a protected system directory.\n\n  Requested:  ${requested}\n  Resolved:   ${resolved}\n  Matched:    ${ProtectedDir.ruleToString(rule)}\n\n  Serving this directory exposes admin-privilege files over the network.\n  If this is intentional and you accept the risk, re-run with:\n\n      --allow-protected-dir\n\n  (Consider also --tls when exposing over --lan.)`
   }

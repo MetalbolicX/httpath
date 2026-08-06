@@ -9,6 +9,7 @@ type t =
   | InvalidPath(string)
   | HelpRequested
   | InvalidRateLimit(string, int)
+  | ConflictingTlsFlags(array<string>)  // conflicting args
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
 
 exception UnwritableAccessLog(string)
