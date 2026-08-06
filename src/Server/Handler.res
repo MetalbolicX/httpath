@@ -2,6 +2,11 @@
 // Faithful port of src/server/http.mts:256-490 per REQ-HANDLER-1..13.
 
 module NodePath = Node_Path
+module Probes = Probes
+
+// Slice 1: hardcoded ref(false) — the real draining ref is wired from
+// Httpath.res in T-HP-005 (slice 2).
+let probes = Probes.make(~draining=ref(false))
 
 // ---------------------------------------------------------------------------
 // respond helper: wraps every response with security headers + logs
@@ -352,12 +357,13 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
       }
       switch decodedOr400 {
       | Error(r) => Promise.resolve(r)
-      | Ok(decodedPath) => // REQ-HANDLER-5: WS upgrade on /livereload
-        if (
-          config.enableLiveReload &&
-          decodedPath == Types.liveReloadEndpoint &&
-          getUpgradeHeader(request.headers) == Some("websocket")
-        ) {
+      | Ok(decodedPath) =>
+        // Probe intercept: /healthz and /readyz checked before liveReload or safe-path.
+        if decodedPath == "/healthz" {
+          probes.healthz(request)
+        } else if decodedPath == "/readyz" {
+          probes.readyz(request)
+        } else if config.enableLiveReload && decodedPath == Types.liveReloadEndpoint && getUpgradeHeader(request.headers) == Some("websocket") {
           // NO origin check per design Q3a
           Promise.resolve(Types.WsUpgrade)
         } else {
