@@ -212,12 +212,54 @@ let main = (): promise<unit> => {
         let _ = Process.exit(1)
         Promise.resolve()
       | Some(_) =>
-        let handler = Handler.make(config)
-        start(~handler, ~config, ~authEntries)
+        // Preflight: protected-directory guard (before start).
+        // REF: plans/011-protected-directory-guard.md § "The three behaviors at the boundary".
+        switch (ProtectedDir.classify(~directory=config.directory)) {
+        | ProtectedDir.Allowed =>
+          let handler = Handler.make(config)
+          start(~handler, ~config, ~authEntries)
+        | ProtectedDir.Protected(rule, resolved) =>
+          if config.allowProtectedDir {
+            // Loud warning: user opted in but should still see the risk.
+            Console.error(
+              `WARNING: serving a protected system directory with --allow-protected-dir.\n` ++
+              `  Resolved:  ${resolved}\n` ++
+              `  Matched:   ${ProtectedDir.ruleToString(rule)}\n` ++
+              `  Consider using --tls when exposing over --lan.`,
+            )
+            let handler = Handler.make(config)
+            start(~handler, ~config, ~authEntries)
+          } else {
+            // Refuse with actionable escape-hatch message.
+            Console.error("Error: " ++ ParseError.toString(ProtectedDirRefused(config.directory, rule, resolved)))
+            let _ = Process.exit(1)
+            Promise.resolve()
+          }
+        }
       }
     } else {
-      let handler = Handler.make(config)
-      start(~handler, ~config, ~authEntries)
+      // Preflight: protected-directory guard (before start).
+      // REF: plans/011-protected-directory-guard.md § "The three behaviors at the boundary".
+      switch (ProtectedDir.classify(~directory=config.directory)) {
+      | ProtectedDir.Allowed =>
+        let handler = Handler.make(config)
+        start(~handler, ~config, ~authEntries)
+      | ProtectedDir.Protected(rule, resolved) =>
+        if config.allowProtectedDir {
+          Console.error(
+            `WARNING: serving a protected system directory with --allow-protected-dir.\n` ++
+            `  Resolved:  ${resolved}\n` ++
+            `  Matched:   ${ProtectedDir.ruleToString(rule)}\n` ++
+            `  Consider using --tls when exposing over --lan.`,
+          )
+          let handler = Handler.make(config)
+          start(~handler, ~config, ~authEntries)
+        } else {
+          Console.error("Error: " ++ ParseError.toString(ProtectedDirRefused(config.directory, rule, resolved)))
+          let _ = Process.exit(1)
+          Promise.resolve()
+        }
+      }
     }
   | Error(ParseError.HelpRequested) =>
     Console.log(
