@@ -35,6 +35,9 @@ type reader = {
 // The deny-list constant (OS-specific).
 let denyList: denyList
 
+// checkPrivilegeAncestors — runtime privilege-escape ancestor walk (plan 019).
+let checkPrivilegeAncestors: (~reader: reader, ~resolved: string) => option<matchedRule>
+
 // classifyWith — pure aside from the reader; used by unit tests.
 let classifyWith: (reader, ~directory: string) => verdict
 

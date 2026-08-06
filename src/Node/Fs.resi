@@ -14,6 +14,10 @@ type stats = {
   isFile: bool,
   isDirectory: bool,
   isSymlink: bool,
+  size: int,
+  mode: int,
+  uid: int,
+  gid: int,
 }
 
 // Accessor externals for Node.js Stats/Dirent method calls.
@@ -24,6 +28,9 @@ let statIsFile: stats => bool
 let statIsDirectory: stats => bool
 let statIsSymlink: stats => bool
 let statSize: stats => int
+let statMode: stats => int
+let statUid: stats => int
+let statGid: stats => int
 let direntName: dirent => string
 let direntIsDirectory: dirent => bool
 
