@@ -14,6 +14,12 @@ type serverVariant =
 
 type handlerCb = Types.request => promise<Types.outcome>
 type upgradeCb = (Types.request, serverSocket, Nullable.t<upgradeHead>) => promise<unit>
+type serverTimeouts = {
+  requestTimeout: int,
+  headersTimeout: int,
+  keepAliveTimeout: int,
+  maxConnections: int,
+}
 
 let socketWrite: (serverSocket, string) => unit
 let socketWriteBuffer: (serverSocket, Buffer.t) => promise<result<unit, JsExn.t>>
@@ -41,4 +47,5 @@ let startServer: (
   ~rateLimiter: option<RateLimit.t>,
   ~authEntries: option<array<Basic.entry>>,
   ~tlsCertKey: option<Tls.certKeyPair>,
+  ~serverTimeouts: serverTimeouts,
 ) => serverHandle

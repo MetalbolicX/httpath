@@ -87,7 +87,6 @@ external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => 
   "createServer"
 @send external _listen: (server, int, string, unit => unit) => unit = "listen"
 @send external _close: (server, Nullable.t<JsExn.t> => unit) => unit = "close"
-@send external closeAllConnections: server => unit = "closeAllConnections"
 @send external closeIdleConnections: server => unit = "closeIdleConnections"
 
 // HTTPS server type and creators
@@ -96,7 +95,6 @@ type httpsOptions = {cert: Buffer.t, key: Buffer.t}
 external _createHttpsServer: (httpsOptions, (incomingMessage, serverResponse) => promise<unit>) => httpsServer = "createServer"
 @send external _httpsListen: (httpsServer, int, string, unit => unit) => unit = "listen"
 @send external _httpsClose: (httpsServer, Nullable.t<JsExn.t> => unit) => unit = "close"
-@send external httpsCloseAllConnections: httpsServer => unit = "closeAllConnections"
 @send external httpsCloseIdleConnections: httpsServer => unit = "closeIdleConnections"
 
 // EventEmitter .on — used to register the 'upgrade' listener (the 'request'
@@ -119,9 +117,45 @@ external _onUpgradeHttps: (
 // AbortSignal.onabort setter.
 @set external setOnAbort: (Signals.abortSignal, unit => unit) => unit = "onabort"
 
+// Server timeout and connection-limit setters (Node server properties).
+// Wrapped in functions to prevent tree-shaking; called via ignore() at call sites.
+@set external _setRequestTimeout: (server, int) => unit = "requestTimeout"
+@set external _setHeadersTimeout: (server, int) => unit = "headersTimeout"
+@set external _setKeepAliveTimeout: (server, int) => unit = "keepAliveTimeout"
+@set external _setMaxConnections: (server, int) => unit = "maxConnections"
+
+@set external _setHttpsRequestTimeout: (httpsServer, int) => unit = "requestTimeout"
+@set external _setHttpsHeadersTimeout: (httpsServer, int) => unit = "headersTimeout"
+@set external _setHttpsKeepAliveTimeout: (httpsServer, int) => unit = "keepAliveTimeout"
+@set external _setHttpsMaxConnections: (httpsServer, int) => unit = "maxConnections"
+
 // Public callback types (used by Httpath)
 type handlerCb = Types.request => promise<Types.outcome>
 type upgradeCb = (Types.request, serverSocket, Nullable.t<upgradeHead>) => promise<unit>
+
+// Server timeout/connection config — passed from Httpath.startServer.
+type serverTimeouts = {
+  requestTimeout: int,
+  headersTimeout: int,
+  keepAliveTimeout: int,
+  maxConnections: int,
+}
+
+// Wrapper functions — force tree-shaking to keep the @set externals.
+// Each calls the @set external and returns unit (no meaningful return value).
+let applyServerTimeouts = (s: server, t: serverTimeouts): unit => {
+  ignore(_setRequestTimeout(s, t.requestTimeout))
+  ignore(_setHeadersTimeout(s, t.headersTimeout))
+  ignore(_setKeepAliveTimeout(s, t.keepAliveTimeout))
+  ignore(_setMaxConnections(s, t.maxConnections))
+}
+
+let applyHttpsServerTimeouts = (s: httpsServer, t: serverTimeouts): unit => {
+  ignore(_setHttpsRequestTimeout(s, t.requestTimeout))
+  ignore(_setHttpsHeadersTimeout(s, t.headersTimeout))
+  ignore(_setHttpsKeepAliveTimeout(s, t.keepAliveTimeout))
+  ignore(_setHttpsMaxConnections(s, t.maxConnections))
+}
 
 // resolveClientIp — pure IP resolution logic.
 // Honors X-Forwarded-For only when trustProxy is true.
@@ -421,6 +455,7 @@ let startServer = (
   ~rateLimiter: option<RateLimit.t>,
   ~authEntries: option<array<Basic.entry>>,
   ~tlsCertKey: option<Tls.certKeyPair>,
+  ~serverTimeouts: serverTimeouts,
 ): serverHandle => {
   // Access log destination — None means no access logging
   let accessLogDest: option<AccessLog.dest> = switch accessLog {
@@ -600,10 +635,12 @@ let startServer = (
   | Some({cert, key}) =>
     let httpsServ = _createHttpsServer({cert: cert, key: key}, requestHandler)
     let _ = _onUpgradeHttps(httpsServ, "upgrade", upgradeHandler)
+    let _ = applyHttpsServerTimeouts(httpsServ, serverTimeouts)
     HttpsServer(httpsServ)
   | None =>
     let httpServ = _createServer(requestHandler)
     let _ = _onUpgrade(httpServ, "upgrade", upgradeHandler)
+    let _ = applyServerTimeouts(httpServ, serverTimeouts)
     HttpServer(httpServ)
   }
 

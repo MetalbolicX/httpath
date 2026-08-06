@@ -13,6 +13,19 @@ let start = (
   let controller = AbortController.make()
   let sig = AbortController.signal(controller)
 
+  // Read server timeout/connection overrides from env vars (test escape hatch).
+  // Defaults: requestTimeout=30000, headersTimeout=32000, keepAliveTimeout=5000, maxConnections=1024.
+  let requestTimeout = Node_Process.getInt(~name="HTTPATH_REQUEST_TIMEOUT", ~default=30000)
+  let headersTimeout = Node_Process.getInt(~name="HTTPATH_HEADERS_TIMEOUT", ~default=32000)
+  let keepAliveTimeout = Node_Process.getInt(~name="HTTPATH_KEEP_ALIVE_TIMEOUT", ~default=5000)
+  let maxConnections = Node_Process.getInt(~name="HTTPATH_MAX_CONNECTIONS", ~default=1024)
+  let serverTimeouts: Http.serverTimeouts = {
+    requestTimeout,
+    headersTimeout,
+    keepAliveTimeout,
+    maxConnections,
+  }
+
   // Rate limiter — only active when rateLimitEnabled is true
   let rateLimiter: option<RateLimit.t> = if config.rateLimitEnabled {
     Some(
@@ -97,6 +110,7 @@ let start = (
     ~rateLimiter,
     ~authEntries,
     ~tlsCertKey=tlsKey,
+    ~serverTimeouts,
   )
 
   // Allocate the monitor handle first so the onRestart closure can reference
