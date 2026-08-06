@@ -10,6 +10,7 @@ type t =
   | InvalidPath(string)
   | HelpRequested
   | InvalidRateLimit(string, int)
+  | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
 
 // UnwritableAccessLog is a raise-able exception (separate from the result variant)
 exception UnwritableAccessLog(string)
@@ -25,5 +26,7 @@ let toString = (e: t): string => {
   | HelpRequested => "Help requested"
   | InvalidRateLimit(kind, val) =>
     `Invalid rate limit ${kind}: ${Belt.Int.toString(val)}. Must be a positive integer.`
+  | ProtectedDirRefused(requested, rule, resolved) =>
+    `httpath: refusing to serve a protected system directory.\n\n  Requested:  ${requested}\n  Resolved:   ${resolved}\n  Matched:    ${ProtectedDir.ruleToString(rule)}\n\n  Serving this directory exposes admin-privilege files over the network.\n  If this is intentional and you accept the risk, re-run with:\n\n      --allow-protected-dir\n\n  (Consider also --tls when exposing over --lan.)`
   }
 }
