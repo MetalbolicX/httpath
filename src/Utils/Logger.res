@@ -22,6 +22,8 @@ let setMode = (m: mode) => {
 
 let getMode = (): mode => currentMode.contents
 
+let getLevel = (): logLevel => currentLevel.contents
+
 let levelToStr = (level: logLevel): string => {
   switch level {
   | Info => "info"

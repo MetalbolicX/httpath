@@ -209,6 +209,7 @@ let main = (): promise<unit> => {
   | Ok(config) =>
     // Apply log mode from --log flag or HTTPATH_LOG env (precedence: flag → env → default Json)
     Logger.setMode(config.logMode)
+    Logger.setLevel(config.logLevel)
     // Preflight auth file check: --lan requires auth unless --no-auth is set.
     let preflightAuth = config.lan && !config.noAuth
     let authEntries: option<array<Basic.entry>> = Basic.searchAuthFile(~explicitPath=config.authFile, ~directory=config.directory)
