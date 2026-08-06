@@ -332,3 +332,14 @@ Stop and report (do not improvise) if:
 - The deny-list is OS-specific and will rot — add a maintenance comment in
   `ProtectedDir.res` pointing back to this spec's "What counts as protected"
   section so future maintainers update the spec AND the list together.
+
+## Follow-ups
+
+**D1 — WARNING (verify deviation):** `ProtectedDir.checkPrivilegeAncestors` is a
+no-op: it always returns `None` regardless of uid, and the privilege-check warning
+under `uid 0` is never logged (no `Js.Console.warn` / `Logger.warn` call exists).
+The deny-list path works correctly, but REQ-PDG-003 / SCN-PDG-005 is only partially
+met. Fix: extend the `Node.Fs.stats` binding to expose `mode`, `uid`, and `gid`
+bits, then re-enable `checkPrivilegeAncestors` and log a warning when
+`process.getuid() === 0`. Alternatively, remove `SCN-PDG-005` from spec #3081
+until that binding lands. Neither path blocks plan 012 (TLS under LAN).
