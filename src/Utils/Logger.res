@@ -61,8 +61,7 @@ let log = (level: logLevel, msg: string) => {
     | Json => {
         let ts = Date.make()->Date.toISOString
         // Hand-roll JSON: a flat object with ts/level/msg. msg is sanitized by JSON.stringify.
-        let sanitizedMsg = msg->String.replaceAll("\\", "\\\\")->String.replaceAll("\"", "\\\"")->String.replaceAll("\n", "\\n")
-        let line = `{"ts":"${ts}","level":"${levelToStr(level)}","msg":"${sanitizedMsg}"}`
+        let line = `{"ts":"${ts}","level":"${levelToStr(level)}","msg":"${JsonEscape.escape(msg)}"}`
         switch level {
         | Error => Console.error(line)
         | _ => Console.log(line)
