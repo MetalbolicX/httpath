@@ -416,6 +416,7 @@ let gateWs = (
   ~socket: serverSocket,
   ~continue: unit => unit,
 ): unit => {
+  let rejected = ref(false)
   // Rate limit check first
   if config.rateLimitEnabled {
     switch rateLimiter {
@@ -426,14 +427,16 @@ let gateWs = (
           let response = `HTTP/1.1 429 Too Many Requests\r\nRetry-After: ${Int.toString(retryAfterSeconds)}\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
           socketWrite(socket, response)
           socketDestroy(socket)
+          rejected := true
         }
       | RateLimit.Allow => ()
       }
     | None => ()
     }
   }
-  // Auth check
-  if !config.noAuth {
+  // Auth check — skipped if rate-limit already rejected
+  if !rejected.contents {
+    if !config.noAuth {
     let authHeader = Types.getHeader(req.headers, "authorization")
     switch authEntries {
     | None =>
@@ -457,6 +460,7 @@ let gateWs = (
     }
   } else {
     continue()
+  }
   }
 }
 
