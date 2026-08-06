@@ -4,9 +4,8 @@
 module NodePath = Node_Path
 module Probes = Probes
 
-// Slice 1: hardcoded ref(false) — the real draining ref is wired from
-// Httpath.res in T-HP-005 (slice 2).
-let probes = Probes.make(~draining=ref(false))
+// probes — initialized lazily inside make() once per handler instance.
+// The draining ref is passed from Httpath via Handler.make.
 
 // ---------------------------------------------------------------------------
 // respond helper: wraps every response with security headers + logs
@@ -311,7 +310,11 @@ let serveDirectory = (
 // REQ-HANDLER-2..13
 // ---------------------------------------------------------------------------
 
-let handle = (config: Config.t, request: Types.request): promise<Types.outcome> => {
+let handle = (
+  ~probes: Probes.probeHandlers,
+  ~config: Config.t,
+  ~request: Types.request,
+): promise<Types.outcome> => {
   // REQ-HANDLER-2: 413 — content-length > 0
   switch getContentLength(request.headers) {
   | Some(_) =>
@@ -611,11 +614,18 @@ let handle = (config: Config.t, request: Types.request): promise<Types.outcome> 
 }
 
 // ---------------------------------------------------------------------------
-// make: Config.t => Http.handlerCb
+// make: Config.t => {handler: Http.handlerCb, drain: ref<bool>}
 // REQ-HANDLER-1
+//
+// `drain` is a ref<bool> read by /readyz and set true on SIGTERM by start().
+// Returning it lets start() share ownership of the ref with the Handler.
 // ---------------------------------------------------------------------------
 
-let make = (config: Config.t): Http.handlerCb => {
-  let handler = (req: Types.request) => handle(config, req)
-  handler
+type t = {handler: Http.handlerCb, drain: ref<bool>}
+
+let make = (config: Config.t): t => {
+  let drain = ref(false)
+  let probes = Probes.make(~draining=drain)
+  let handler = (req: Types.request) => handle(~probes, ~config, ~request=req)
+  {handler, drain}
 }

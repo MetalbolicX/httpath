@@ -8,5 +8,11 @@ let main: unit => promise<unit>
 
 /// Start the HTTP/HTTPS server + Monitor with the given handler and config.
 /// TLS is activated automatically when config.tls is true.
+/// `draining` is the shared ref SIGTERM sets to make /readyz return 503.
 /// Returns only after shutdown (signal received or abort triggered).
-let start: (~handler: Http.handlerCb, ~config: Config.t, ~authEntries: option<array<Basic.entry>>) => promise<unit>
+let start: (
+  ~handler: Http.handlerCb,
+  ~draining: ref<bool>,
+  ~config: Config.t,
+  ~authEntries: option<array<Basic.entry>>,
+) => promise<unit>

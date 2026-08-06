@@ -74,7 +74,7 @@ interface changes agreed before code.
 |------|-------|-------------|--------|------|------------|
 | 011 | Protected-directory startup guard (admin-privilege dirs) — the edge case | `[SDD]` | L | HIGH | Phase 1 |
 | 012 | Enforce TLS by default under `--lan` (secure-by-default) | `[SDD]` | L | HIGH | 011 |
-| 013 | Add `/healthz` and `/readyz` probes with contracts | `[SDD]` | M | MED | 007 |
+| 013 | Add `/healthz` and `/readyz` probes with contracts | `[SDD]` | M | MED | 007 | DONE |
 | 014 | Structured, correlated access + application logging | `[SDD]` | L | HIGH | 013 |
 
 **Deliverable & Success Criteria:** New `sdd/*/spec` delta specs land first and
@@ -103,7 +103,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 010  | Drained graceful shutdown | P1 | M | 007 | DONE |
 | 011  | Protected-directory guard (edge case) | P1 | L | Phase 1 | DONE |
 | 012  | Enforce TLS under `--lan` | P1 | L | 011 | DONE |
-| 013  | `/healthz` + `/readyz` probes | P2 | M | 007 | TODO |
+| 013  | `/healthz` + `/readyz` probes | P2 | M | 007 | DONE |
 | 014  | Structured + correlated logging | P2 | L | 013 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).

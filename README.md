@@ -277,6 +277,35 @@ and Windows.
 
 ---
 
+## Health and readiness probes
+
+httpath exposes two HTTP probe endpoints, suitable for orchestrators
+(Kubernetes, Nomad, systemd, Docker healthcheck) and load balancers:
+
+| Path       | Status                | Body                            | When                                        |
+|------------|----------------------|---------------------------------|---------------------------------------------|
+| `/healthz` | `200 OK`             | `{"status":"ok"}`               | Process is up (liveness only).              |
+| `/readyz`  | `200 OK` / `503`     | `{"status":"ready"\|"draining"}`| `200` while serving; `503` after SIGTERM.   |
+
+Both endpoints return `application/json`. Probes are exempt from Basic Auth
+under `--lan`.
+
+```bash
+curl http://localhost:8080/healthz   # → 200 {"status":"ok"}
+curl http://localhost:8080/readyz    # → 200 {"status":"ready"}
+```
+
+Kubernetes example:
+
+```yaml
+livenessProbe:
+  httpGet: { path: /healthz, port: 8080 }
+readinessProbe:
+  httpGet: { path: /readyz, port: 8080 }
+```
+
+---
+
 ## Architecture
 
 For a deep dive into the internals — module map, Mermaid flow diagrams,

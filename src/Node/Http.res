@@ -41,6 +41,9 @@ type serverHandle = {
 @send external socketWrite: (serverSocket, string) => unit = "write"
 @send external socketDestroy: serverSocket => unit = "destroy"
 
+// Global timer — used to defer socket.destroy() so res.end() data flushes first.
+@val external _setTimeout: (unit => unit, int) => float = "setTimeout"
+
 // socket.write(Buffer, callback) — callback receives error or null
 @send
 external _writeBufferRaw: (serverSocket, Buffer.t, Nullable.t<JsExn.t> => unit) => bool = "write"
@@ -313,6 +316,8 @@ let extractCredentials = (
 // Gate runs ONLY when config.lan is true.
 // Rate limit is checked only when config.rateLimitEnabled is true.
 // Auth is checked only when config.noAuth is false.
+// Auth exemption: exact probe paths /healthz and /readyz bypass auth only
+// (rate-limit still applies — orchestrators can still be rate-limited).
 // Returns a gateDecision — the caller (requestHandler) writes the response.
 // This avoids double-writeHead that caused ERR_HTTP_HEADERS_SENT.
 // ---------------------------------------------------------------------------
@@ -333,6 +338,10 @@ let gate = (
   ~clientIp: string,
   ~req: Types.request,
 ): gateDecision => {
+  // Auth exemption: exact probe paths /healthz and /readyz bypass auth
+  // (rate-limit still applies; probes reveal only "up/draining", not content)
+  let isProbe = req.path == "/healthz" || req.path == "/readyz"
+
   // Rate limit first (cheaper, prevents brute-force on auth)
   let rateDecision: gateDecision = if config.rateLimitEnabled {
     switch rateLimiter {
@@ -352,11 +361,15 @@ let gate = (
   } else {
     Allowed
   }
-  // Auth check (skip if noAuth is set) — only reached if rate-limit allowed
+
+  // Auth check — skipped for exact probe paths (rate-limit still applies above)
   switch rateDecision {
   | Rejected(_) => rateDecision // already rejected by rate-limit
   | Allowed =>
-    if !config.noAuth {
+    if isProbe {
+      // Auth-exempt: probes reveal only "up/draining", not content
+      Allowed
+    } else if !config.noAuth {
       // Extract credentials from Authorization header
       let authHeader = Types.getHeader(req.headers, "authorization")
       switch authEntries {
@@ -643,7 +656,10 @@ let startServer = (
         let _ = await onWsUpgrade(request, socket, head)
       }
     | Types.Respond(_) => {
-        let _ = socketDestroy(socket)
+        // Defer destroy to next tick so res.end() data reaches the kernel before
+        // the socket is closed. Without this, socket.destroy() can abort the
+        // response mid-flight causing ECONNRESET on the client side.
+        let _ = _setTimeout(() => socketDestroy(socket), 50)
       }
     }
   }

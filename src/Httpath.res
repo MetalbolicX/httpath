@@ -5,8 +5,12 @@
 /// Start the HTTP/HTTPS server + Monitor with the given handler and config.
 /// authEntries: auth file entries, if found (None if no file or --no-auth).
 /// TLS is activated automatically when config.tls is true.
+/// `draining` is shared with the Handler.make Probes module so /readyz can
+/// observe SIGTERM state. Tests call start() directly and supply their own
+/// `draining` is shared with the Handler.make Probes module so /readyz can observe SIGTERM state. Tests call start() directly and supply their own handler + ref; production calls through main() which destructures Handler.make to share the ref.
 let start = (
   ~handler: Http.handlerCb,
+  ~draining: ref<bool>,
   ~config: Config.t,
   ~authEntries: option<array<Basic.entry>>,
 ): promise<unit> => {
@@ -154,6 +158,8 @@ let start = (
   monitorHandle := Some(handle)
 
   let shutdown = () => {
+    // Signal draining BEFORE closing connections so /readyz starts returning 503.
+    draining := true
     switch monitorHandle.contents {
     | Some(h) => Monitor.cancel(h)
     | None => ()
@@ -224,8 +230,8 @@ let main = (): promise<unit> => {
               `  Use --tls-cert/--tls-key or remove --lan.`,
             )
           }
-          let handler = Handler.make(config)
-          start(~handler, ~config, ~authEntries)
+          let {handler, drain: draining} = Handler.make(config)
+          start(~handler, ~draining, ~config, ~authEntries)
         | ProtectedDir.Protected(rule, resolved) =>
           if config.allowProtectedDir {
             // Loud warning: user opted in but should still see the risk.
@@ -235,8 +241,8 @@ let main = (): promise<unit> => {
               `  Matched:   ${ProtectedDir.ruleToString(rule)}\n` ++
               `  Consider using --tls when exposing over --lan.`,
             )
-            let handler = Handler.make(config)
-            start(~handler, ~config, ~authEntries)
+            let {handler, drain: draining} = Handler.make(config)
+            start(~handler, ~draining, ~config, ~authEntries)
           } else {
             // Refuse with actionable escape-hatch message.
             Console.error("Error: " ++ ParseError.toString(ProtectedDirRefused(config.directory, rule, resolved)))
@@ -258,8 +264,8 @@ let main = (): promise<unit> => {
             `  Use --tls-cert/--tls-key or remove --lan.`,
           )
         }
-        let handler = Handler.make(config)
-        start(~handler, ~config, ~authEntries)
+        let {handler, drain: draining} = Handler.make(config)
+        start(~handler, ~draining, ~config, ~authEntries)
       | ProtectedDir.Protected(rule, resolved) =>
         if config.allowProtectedDir {
           Console.error(
@@ -268,8 +274,8 @@ let main = (): promise<unit> => {
             `  Matched:   ${ProtectedDir.ruleToString(rule)}\n` ++
             `  Consider using --tls when exposing over --lan.`,
           )
-          let handler = Handler.make(config)
-          start(~handler, ~config, ~authEntries)
+          let {handler, drain: draining} = Handler.make(config)
+          start(~handler, ~draining, ~config, ~authEntries)
         } else {
           Console.error("Error: " ++ ParseError.toString(ProtectedDirRefused(config.directory, rule, resolved)))
           let _ = Process.exit(1)

@@ -90,7 +90,8 @@ const handler = (req) => Promise.resolve({
 
 console.error("CHILD DEBUG: calling start()...");
 // start() only returns after SIGTERM/SIGINT.
-start(handler, configResult._0, undefined);
+const draining = { contents: false };
+start(handler, draining, configResult._0, undefined);
 
 console.error("CHILD DEBUG: start() returned (should not happen before SIGTERM)");
 `;
@@ -269,7 +270,8 @@ const configResult = parseArgs([
 ]);
 if (configResult.TAG !== "Ok") { process.exit(1); }
 
-start(wsHandler, configResult._0);
+const draining = { contents: false };
+start(wsHandler, draining, configResult._0, undefined);
 `;
   writeFileSync(scriptPath, childScript);
 
@@ -404,7 +406,8 @@ if (configResult.TAG !== "Ok") { process.exit(1); }
 // Override enableLiveReload to true in the config.
 const config = { ...configResult._0, enableLiveReload: true };
 
-start(wsHandler, config);
+const draining = { contents: false };
+start(wsHandler, draining, config, undefined);
 `;
   writeFileSync(scriptPath, childScript);
 
@@ -599,7 +602,8 @@ const configResult = parseArgs([
 ]);
 if (configResult.TAG !== "Ok") { process.exit(1); }
 
-start(handler, configResult._0, undefined);
+const draining = { contents: false };
+start(handler, draining, configResult._0, undefined);
 `;
 
   writeFileSync(scriptPath, childScript);

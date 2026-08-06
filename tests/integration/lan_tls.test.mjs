@@ -67,8 +67,8 @@ if (parseResult.TAG !== "Ok") {
 
 const config = ${extraConfig ? `Object.assign({}, parseResult._0, ${extraConfig})` : "parseResult._0"};
 
-const handler = makeHandler(config);
-start(handler, config, undefined);
+const {handler, drain: draining} = makeHandler(config);
+start(handler, draining, config, undefined);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };
@@ -489,8 +489,8 @@ if (!config.tls) {
   process.exit(1);
 }
 
-const handler = makeHandler(config);
-start(handler, config, undefined);
+const {handler, drain: draining} = makeHandler(config);
+start(handler, draining, config, undefined);
 `;
   writeFileSync(scriptPath, childScript);
 

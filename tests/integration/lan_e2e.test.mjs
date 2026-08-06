@@ -108,8 +108,8 @@ if (config.lan && !config.noAuth) {
   authEntries = entries;
 }
 
-const handler = makeHandler(config);
-start(handler, config, authEntries);
+const {handler, drain: draining} = makeHandler(config);
+start(handler, draining, config, authEntries);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };

@@ -57,9 +57,9 @@ if (config.lan && !config.noAuth) {
 }
 
 // Wire real Handler.make instead of 501 stub.
-const handler = makeHandler(config);
+const {handler, drain: draining} = makeHandler(config);
 
-start(handler, config, authEntries);
+start(handler, draining, config, authEntries);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };

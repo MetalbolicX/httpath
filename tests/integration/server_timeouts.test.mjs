@@ -75,8 +75,8 @@ if (parseResult.TAG !== "Ok") {
 }
 
 const config = parseResult._0;
-const handler = makeHandler(config);
-start(handler, config, null);
+const {handler, drain: draining} = makeHandler(config);
+start(handler, draining, config, null);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };

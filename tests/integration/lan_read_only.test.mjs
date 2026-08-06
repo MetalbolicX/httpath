@@ -70,9 +70,9 @@ if (parseResult.TAG !== "Ok") {
 const config = ${extraConfig ? `Object.assign({}, parseResult._0, ${extraConfig})` : "parseResult._0"};
 
 // Wire real Handler.make instead of fake handler.
-const handler = makeHandler(config);
+const {handler, drain: draining} = makeHandler(config);
 
-start(handler, config, undefined);
+start(handler, draining, config, undefined);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };

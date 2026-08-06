@@ -118,9 +118,9 @@ if (config.lan && !config.noAuth) {
 }
 
 // Wire real Handler.make instead of fake handler.
-const handler = makeHandler(config);
+const {handler, drain: draining} = makeHandler(config);
 
-start(handler, config, authEntries);
+start(handler, draining, config, authEntries);
 `;
   writeFileSync(scriptPath, childScript);
   return { scriptPath };
@@ -207,9 +207,9 @@ if (configResult.TAG !== "Ok") {
 }
 
 // Wire real Handler.make - auth preflight will fail if no auth file
-const handler = makeHandler(configResult._0);
+const {handler, drain: draining} = makeHandler(configResult._0);
 
-start(handler, configResult._0, undefined);
+start(handler, draining, configResult._0, undefined);
 `;
   writeFileSync(scriptPath, childScript);
   const child = spawn(process.execPath, [scriptPath], {
