@@ -108,6 +108,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 015  | Refuse non-loopback bind without `--lan` | P1 | L | — | DONE |
 | 016  | Short-circuit WS rate-limit rejection in `gateWs` | P1 | M | — | DONE |
 | 017  | Apply configured log level at startup | P2 | S | — | DONE |
+| 018  | Safe JSON string escaping for logger and access log | P2 | M | — | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
