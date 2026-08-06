@@ -93,7 +93,12 @@ external _createServer: ((incomingMessage, serverResponse) => promise<unit>) => 
 @send external closeIdleConnections: server => unit = "closeIdleConnections"
 
 // HTTPS server type and creators
-type httpsOptions = {cert: Buffer.t, key: Buffer.t}
+type httpsOptions = {
+  cert: Buffer.t,
+  key: Buffer.t,
+  minVersion: string,
+  ciphers: string,
+}
 @module("node:https")
 external _createHttpsServer: (httpsOptions, (incomingMessage, serverResponse) => promise<unit>) => httpsServer = "createServer"
 @send external _httpsListen: (httpsServer, int, string, unit => unit) => unit = "listen"
@@ -741,7 +746,15 @@ let startServer = (
   // Both server types register the same handlers; only the createServer call differs.
   let serverVariant: serverVariant = switch tlsCertKey {
   | Some({cert, key}) =>
-    let httpsServ = _createHttpsServer({cert: cert, key: key}, requestHandler)
+    let httpsServ = _createHttpsServer(
+      {
+        cert: cert,
+        key: key,
+        minVersion: "TLSv1.2",
+        ciphers: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384",
+      },
+      requestHandler,
+    )
     let _ = _onUpgradeHttps(httpsServ, "upgrade", upgradeHandler)
     let _ = applyHttpsServerTimeouts(httpsServ, serverTimeouts)
     HttpsServer(httpsServ)
