@@ -12,6 +12,7 @@ type t =
   | InvalidRateLimit(string, int)
   | ConflictingTlsFlags(array<string>)  // conflicting args: typically ["--no-tls", "--tls-cert", path] etc.
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
+  | PublicBindRequiresLan(string)  // host that requires --lan
 
 // UnwritableAccessLog is a raise-able exception (separate from the result variant)
 exception UnwritableAccessLog(string)
@@ -32,5 +33,7 @@ let toString = (e: t): string => {
     `Conflicting TLS flags: --no-tls cannot be used together with TLS certificate/key options (${flagList}).`
   | ProtectedDirRefused(requested, rule, resolved) =>
     `httpath: refusing to serve a protected system directory.\n\n  Requested:  ${requested}\n  Resolved:   ${resolved}\n  Matched:    ${ProtectedDir.ruleToString(rule)}\n\n  Serving this directory exposes admin-privilege files over the network.\n  If this is intentional and you accept the risk, re-run with:\n\n      --allow-protected-dir\n\n  (Consider also --tls when exposing over --lan.)`
+  | PublicBindRequiresLan(host) =>
+    `--host ${host} requires --lan. Non-loopback binds must opt into LAN security defaults (TLS, auth, rate limiting).`
   }
 }

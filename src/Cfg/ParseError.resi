@@ -11,6 +11,7 @@ type t =
   | InvalidRateLimit(string, int)
   | ConflictingTlsFlags(array<string>)  // conflicting args
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
+  | PublicBindRequiresLan(string)  // host that requires --lan
 
 exception UnwritableAccessLog(string)
 
