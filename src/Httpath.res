@@ -216,6 +216,14 @@ let main = (): promise<unit> => {
         // REF: plans/011-protected-directory-guard.md § "The three behaviors at the boundary".
         switch (ProtectedDir.classify(~directory=config.directory)) {
         | ProtectedDir.Allowed =>
+          // TLS preflight: LAN without TLS logs a loud credential-sniffing warning.
+          // REF: plans/012-enforce-tls-under-lan.md § "Preflight ordering".
+          if config.lan && !config.tls && config.noTls {
+            Console.error(
+              `WARNING: --lan without TLS exposes Basic Auth credentials in plaintext.\n` ++
+              `  Use --tls-cert/--tls-key or remove --lan.`,
+            )
+          }
           let handler = Handler.make(config)
           start(~handler, ~config, ~authEntries)
         | ProtectedDir.Protected(rule, resolved) =>
@@ -242,6 +250,14 @@ let main = (): promise<unit> => {
       // REF: plans/011-protected-directory-guard.md § "The three behaviors at the boundary".
       switch (ProtectedDir.classify(~directory=config.directory)) {
       | ProtectedDir.Allowed =>
+        // TLS preflight: LAN without TLS logs a loud credential-sniffing warning.
+        // REF: plans/012-enforce-tls-under-lan.md § "Preflight ordering".
+        if config.lan && !config.tls && config.noTls {
+          Console.error(
+            `WARNING: --lan without TLS exposes Basic Auth credentials in plaintext.\n` ++
+            `  Use --tls-cert/--tls-key or remove --lan.`,
+          )
+        }
         let handler = Handler.make(config)
         start(~handler, ~config, ~authEntries)
       | ProtectedDir.Protected(rule, resolved) =>

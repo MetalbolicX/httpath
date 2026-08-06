@@ -145,12 +145,12 @@ environments. These features are **opt-in** via flags; localhost is unaffected.
 - Write methods (POST, PUT, DELETE, PATCH) are rejected with `405 Method Not Allowed`.
 - The server is rate-limited to prevent brute-force and DoS attacks.
 - All requests (including rejected ones) are written to a structured access log.
-- TLS/HTTPS is available for encrypted transport on LANs.
+- **TLS/HTTPS is enabled by default under `--lan`** — traffic is encrypted.
 
 **What's NOT protected (know your boundary):**
 
-- Traffic between the server and clients is **unencrypted by default**. Use `--tls`
-  to enable HTTPS.
+- If you use `--no-tls`, Basic Auth credentials are sent in plaintext over the LAN.
+  httpath logs a loud warning when this happens.
 - Authentication is HTTP Basic Auth over TLS — do not use weak passwords.
 - The `.httpath-auth` file format uses scrypt but is not a full user management
   system. Rotate credentials if compromised.
@@ -160,21 +160,28 @@ environments. These features are **opt-in** via flags; localhost is unaffected.
 ### Enabling LAN mode
 
 ```sh
-# Minimal LAN server — requires auth credentials
+# Minimal LAN server — TLS is enabled by default, requires auth credentials
 httpath --lan
 
 # LAN server without authentication (not recommended on untrusted LANs)
 httpath --lan --no-auth
+
+# LAN server without TLS — DANGER: credentials sent in plaintext
+# httpath logs a WARNING when you use this:
+#   WARNING: --lan without TLS exposes Basic Auth credentials in plaintext.
+#     Use --tls-cert/--tls-key or remove --lan.
+httpath --lan --no-tls
 ```
 
 ### LAN Security CLI flags
 
 | Flag                        | Default              | Description                                                    |
 | --------------------------- | -------------------- | -------------------------------------------------------------- |
-| `--lan`                     | `false`              | Enable LAN security hardening (auth, rate-limit, read-only)     |
+| `--lan`                     | `false`              | Enable LAN security hardening (auth, rate-limit, read-only, TLS) |
 | `--no-auth`                 | `false`              | Skip authentication requirement under `--lan`                   |
 | `--auth-file <path>`        | `.httpath-auth`      | Path to scrypt-auth credential file (see below)                 |
-| `--tls`                     | `false`              | Enable HTTPS with auto-generated self-signed certificate        |
+| `--tls`                     | `false` (LAN: true)  | Enable HTTPS (auto-generates self-signed cert under `--lan`)     |
+| `--no-tls`                  | `false`              | Disable TLS under `--lan` — logs WARNING about plaintext risk  |
 | `--tls-cert <path>`         | auto-generate        | Path to PEM X.509 certificate for HTTPS                         |
 | `--tls-key <path>`          | auto-generate        | Path to PEM private key for HTTPS                              |
 | `--rate-limit`              | `false` (LAN default) | Enable per-IP request rate limiting                             |
@@ -183,8 +190,10 @@ httpath --lan --no-auth
 | `--access-log <path>`       | stdout (LAN default) | Append access log to a file                                    |
 | `--read-only`               | `true` (LAN default) | Reject write methods (POST/PUT/DELETE/PATCH) with `405`        |
 
-> **Note:** `--rate-limit`, `--rate-limit-max`, `--rate-limit-window`, and
-> `--read-only` are automatically set to secure defaults when `--lan` is used.
+> **Note:** Under `--lan`, TLS is enabled by default (auto-generates a self-signed
+> certificate). Use `--no-tls` only for debugging; credentials will be visible in
+> plaintext on the LAN. `--rate-limit`, `--rate-limit-max`, `--rate-limit-window`,
+> and `--read-only` are automatically set to secure defaults when `--lan` is used.
 > Pass explicit values to override.
 
 ### Auth file format

@@ -66,6 +66,7 @@ let testConfigBase: Config.t = {
   trustProxy: false,
   authFile: None,
   noAuth: false,
+  noTls: false,
   tls: false,
   tlsCert: None,
   tlsKey: None,
