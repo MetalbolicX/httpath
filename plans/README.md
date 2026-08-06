@@ -110,6 +110,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 017  | Apply configured log level at startup | P2 | S | — | DONE |
 | 018  | Safe JSON string escaping for logger and access log | P2 | M | — | DONE |
 | 019  | Protected-directory privilege-escape runtime check | P2 | L | — | DONE |
+| 020  | Default access log to stdout under `--lan` (match README) | P3 | S | — | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
