@@ -132,8 +132,8 @@ test("--listing --no-listing: no-listing wins (listing && !no-listing)", () => {
 // REQ-CLI-2: Hostname precedence (explicit --host > --lan > default)
 // ---------------------------------------------------------------------------
 
-test("--host overrides default", () => {
-  let c = unwrapConfig(Parser.parse(["--host", "0.0.0.0"]))
+test("--host overrides default with --lan", () => {
+  let c = unwrapConfig(Parser.parse(["--host", "0.0.0.0", "--lan"]))
   assertion(
     ~message="hostname is explicitly set",
     ~operator="=",
@@ -1087,4 +1087,69 @@ test("loopback (no --lan) with --tls-cert sets tls=true, no conflict", () => {
     c.tlsCert,
     Some("/certs/cert.pem"),
   )
+})
+
+// ---------------------------------------------------------------------------
+// Plan 015: PublicBindRequiresLan — refuse non-loopback bind without --lan
+// ---------------------------------------------------------------------------
+
+test("--host 0.0.0.0 without --lan returns PublicBindRequiresLan", () => {
+  let r = Parser.parse(["--host", "0.0.0.0", "--dir", "."])
+  switch r {
+  | Ok(_) =>
+    JsError.throwWithMessage("Expected PublicBindRequiresLan error, got Ok")
+  | Error(ParseError.PublicBindRequiresLan(host)) =>
+    assertion(~message="PublicBindRequiresLan host is 0.0.0.0", ~operator="=", (a, b) => a == b, host, "0.0.0.0")
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected PublicBindRequiresLan, got: " ++ msg)
+  }
+})
+
+test("--host 0.0.0.0 with --lan is allowed", () => {
+  let c = unwrapConfig(Parser.parse(["--host", "0.0.0.0", "--lan", "--dir", "."]))
+  assertion(
+    ~message="hostname is 0.0.0.0 with --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.hostname,
+    "0.0.0.0",
+  )
+  assertion(~message="lan is true", ~operator="=", (a, b) => a == b, c.lan, true)
+})
+
+test("--host 127.0.0.1 without --lan is allowed", () => {
+  let c = unwrapConfig(Parser.parse(["--host", "127.0.0.1", "--dir", "."]))
+  assertion(
+    ~message="hostname is 127.0.0.1 without --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.hostname,
+    "127.0.0.1",
+  )
+  assertion(~message="lan is false", ~operator="=", (a, b) => a == b, c.lan, false)
+})
+
+test("--host ::1 (IPv6 loopback) without --lan is allowed", () => {
+  let c = unwrapConfig(Parser.parse(["--host", "::1", "--dir", "."]))
+  assertion(
+    ~message="hostname is ::1 without --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.hostname,
+    "::1",
+  )
+  assertion(~message="lan is false", ~operator="=", (a, b) => a == b, c.lan, false)
+})
+
+test("--host localhost without --lan is allowed", () => {
+  let c = unwrapConfig(Parser.parse(["--host", "localhost", "--dir", "."]))
+  assertion(
+    ~message="hostname is localhost without --lan",
+    ~operator="=",
+    (a, b) => a == b,
+    c.hostname,
+    "localhost",
+  )
+  assertion(~message="lan is false", ~operator="=", (a, b) => a == b, c.lan, false)
 })

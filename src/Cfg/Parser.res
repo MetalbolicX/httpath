@@ -230,13 +230,21 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
         }
       }
 
+      // Plan 015: refuse non-loopback bind without explicit --lan.
+      let isLoopback = switch effectiveHost {
+      | "127.0.0.1" | "::1" | "localhost" => true
+      | _ => false
+      }
+
       let effectivePort = switch port.contents {
       | Some(p) => p
       | None => 8080
       }
 
-      // Port validation.
-      if effectivePort < 0 || effectivePort > 65535 {
+      // Port and host validation.
+      if !lan.contents && !isLoopback {
+        Error(ParseError.PublicBindRequiresLan(effectiveHost))
+      } else if effectivePort < 0 || effectivePort > 65535 {
         Error(ParseError.InvalidPort(effectivePort))
       } else {
         let effectiveIgnorePatterns = switch ignorePatterns.contents {
