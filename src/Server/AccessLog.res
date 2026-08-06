@@ -19,17 +19,9 @@ type dest =
   | File(string)
 
 // Log entry — all fields required
+// Both plain and JSON formats use this unified type.
+// Plain format appends request_id and duration_ms to the pipe-delimited line.
 type record = {
-  timestamp: string,
-  ip: string,
-  method: string,
-  path: string,
-  status: int,
-  bytes: int,
-}
-
-// Extended record for JSON format — includes request_id and duration_ms
-type line = {
   timestamp: string,
   requestId: string,
   ip: string,
@@ -40,13 +32,16 @@ type line = {
   duration_ms: int,
 }
 
+// line is an alias for record (kept for source clarity at call sites)
+type line = record
+
 // format — pure formatter, CR/LF sanitized
 // Uses String.replace for plain-string replacement (no regex needed for single chars)
 let format = (entry: record): string => {
   let sanitizedPath = entry.path
     ->String.replace("\r", "?")
     ->String.replace("\n", "?")
-  `${entry.timestamp} | ${entry.ip} | ${entry.method} | ${sanitizedPath} | ${Belt.Int.toString(entry.status)} | ${Belt.Int.toString(entry.bytes)}`
+  `${entry.timestamp} | ${entry.ip} | ${entry.method} | ${sanitizedPath} | ${Belt.Int.toString(entry.status)} | ${Belt.Int.toString(entry.bytes)} | ${entry.requestId} | ${Belt.Int.toString(entry.duration_ms)}`
 }
 
 // formatJson — pure JSON formatter, CR/LF sanitized.
@@ -77,14 +72,7 @@ let writeLine = (dest: dest, line: string): unit => {
 // This is the main entry point for AccessLog from Http.res once wired.
 let emit = (dest: dest, entry: line): unit => {
   let line = switch Logger.getMode() {
-  | Logger.Plain => format({
-      timestamp: entry.timestamp,
-      ip: entry.ip,
-      method: entry.method,
-      path: entry.path,
-      status: entry.status,
-      bytes: entry.bytes,
-    })
+  | Logger.Plain => format(entry)
   | Logger.Json => formatJson(entry)
   }
   writeLine(dest, line)

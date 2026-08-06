@@ -20,6 +20,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let noLiveReload = ref(false)
   let restartOnChange = ref(false)
   let logLevel = ref((None: option<Logger.logLevel>))
+  let logMode = ref((None: option<Logger.mode>))
   let lan = ref(false)
   let allowProtectedDir = ref(false)
   let helpRequested = ref(false)
@@ -98,12 +99,14 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       if i.contents + 1 >= argsLen {
         parseError := Some(ParseError.MissingValue(arg))
       } else {
-        let levelStr = args[i.contents + 1]->Option.getOr("")
-        switch levelStr {
+        let valueStr = args[i.contents + 1]->Option.getOr("")
+        switch valueStr {
         | "info" => logLevel := Some(Logger.Info)
         | "debug" => logLevel := Some(Logger.Debug)
         | "error" => logLevel := Some(Logger.Error)
-        | _ => parseError := Some(ParseError.InvalidLogLevel(levelStr))
+        | "json" => logMode := Some(Logger.Json)
+        | "plain" => logMode := Some(Logger.Plain)
+        | _ => parseError := Some(ParseError.InvalidLogLevel(valueStr))
         }
         i := i.contents + 2
       }
@@ -256,6 +259,22 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
           | Some(l) => l
           | None => Logger.Info
           }
+          // HTTPATH_LOG env overrides --log json|plain flag.
+          // Precedence: --log flag → HTTPATH_LOG → default Json
+          let effectiveLogMode = switch Node_Process.get("HTTPATH_LOG") {
+          | Some(v) =>
+            if v == "plain" {
+              Logger.Plain
+            } else {
+              // "json" or any other value → default to Json
+              Logger.Json
+            }
+          | None =>
+            switch logMode.contents {
+            | Some(m) => m
+            | None => Logger.Json
+            }
+          }
           let effectiveLiveReload = !noLiveReload.contents
 
           // LAN security: effective values with LAN defaults
@@ -284,6 +303,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
             ignorePatterns: effectiveIgnorePatterns,
             enableDirectoryListing: effectiveListing,
             logLevel: effectiveLogLevel,
+            logMode: effectiveLogMode,
             enableLiveReload: effectiveLiveReload,
             restartOnChange: restartOnChange.contents,
             lan: lan.contents,

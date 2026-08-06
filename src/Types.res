@@ -11,6 +11,7 @@ type request = {
   path: string,
   headers: array<(string, string)>,
   clientIp: string,
+  requestId: string,
 }
 
 // ---------------------------------------------------------------------------

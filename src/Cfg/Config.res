@@ -8,6 +8,7 @@ type t = {
   ignorePatterns: array<string>,
   enableDirectoryListing: bool,
   logLevel: Logger.logLevel,
+  logMode: Logger.mode,
   enableLiveReload: bool,
   restartOnChange: bool,
   lan: bool,
@@ -33,6 +34,7 @@ type t = {
 //   ignorePatterns: [".git", "node_modules", ".DS_Store"]
 //   enableDirectoryListing: true
 //   logLevel: Logger.Info
+//   logMode: Logger.Json
 //   enableLiveReload: true
 //   restartOnChange: false
 //   trustProxy: removed (--trust-proxy flag emits ParseError.RemovedFlag)
@@ -45,6 +47,7 @@ let default: t = {
   ignorePatterns: [".git", "node_modules", ".DS_Store"],
   enableDirectoryListing: true,
   logLevel: Logger.Info,
+  logMode: Logger.Json,
   enableLiveReload: true,
   restartOnChange: false,
   lan: false,

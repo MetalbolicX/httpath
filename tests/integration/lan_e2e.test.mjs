@@ -89,6 +89,7 @@ const parseResult = parseArgs([
   "--host", "127.0.0.1",
   "--dir", "${tmpDir}",
   "--no-live-reload",
+  "--log", "plain",
 ]);
 if (parseResult.TAG !== "Ok") {
   console.error("CHILD: config parse failed", parseResult);
@@ -298,18 +299,23 @@ test("Full LAN security E2E: auth + rate limit + read-only + access log", async 
         `Expected 12 log lines, got ${logLines.length}. Log:\n${logContent}`,
       );
 
-      // Verify format: each line should match "ISO8601 | ip | method | path | status | bytes"
-      // Example: "2026-08-04T07:44:10.000Z | 127.0.0.1 | GET | /index.html | 200 | 14"
+      // Verify format: each line should match the pipe-delimited format with requestId and duration_ms:
+      // "ISO8601 | ip | method | path | status | bytes | requestId | duration_ms"
+      // Example: "2026-08-04T07:44:10.000Z | 127.0.0.1 | GET | /index.html | 200 | 14 | uuid | 5"
       const iso8601Regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
       for (const line of logLines) {
         const parts = line.split(" | ");
-        assert.strictEqual(parts.length, 6, `Log line should have 6 fields: ${line}`);
+        assert.strictEqual(parts.length, 8, `Log line should have 8 fields: ${line}`);
         assert.ok(iso8601Regex.test(parts[0]), `First field should be ISO8601 timestamp: ${parts[0]}`);
         assert.ok(["127.0.0.1"].includes(parts[1]), `Second field should be IP: ${parts[1]}`);
         assert.ok(["GET", "POST"].includes(parts[2]), `Third field should be method: ${parts[2]}`);
         assert.strictEqual(parts[3], "/index.html", `Fourth field should be path: ${parts[3]}`);
         assert.ok(["200", "401", "405", "429"].includes(parts[4]), `Fifth field should be status code: ${parts[4]}`);
         assert.ok(/\d+/.test(parts[5]), `Sixth field should be bytes: ${parts[5]}`);
+        // Seventh field is requestId (UUID)
+        assert.ok(parts[6].match(/^[0-9a-f-]{36}$/), `Seventh field should be UUID requestId: ${parts[6]}`);
+        // Eighth field is duration_ms
+        assert.ok(/\d+/.test(parts[7]), `Eighth field should be duration_ms: ${parts[7]}`);
       }
 
       // Verify all rejection codes appear: 200 (5x), 401 (5x), 429 (1-2x), 405 (0-1x)

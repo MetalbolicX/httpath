@@ -217,11 +217,13 @@ let buildRequest = (~trustProxy: bool, ~socketIp: string, req: incomingMessage):
   }
   let path = Js.String.split("?", url)->Array.get(0)->Option.getOr(url)
   let clientIp = resolveClientIp(~trustProxy, ~socketIp, ~headers)
-  {method, path, headers, clientIp}
+  let requestId = Request_Id.make()
+  {method, path, headers, clientIp, requestId}
 }
 
 // Write a Types.response to a ServerResponse (status + headers + body).
-let writeResponse = (response: Types.response, res: serverResponse): promise<unit> => {
+// Sets x-request-id header from the request's generated UUID.
+let writeResponse = (response: Types.response, res: serverResponse, ~requestId: string): promise<unit> => {
   Promise.make((resolve, _reject) => {
     let i = ref(0)
     while i.contents < Array.length(response.headers) {
@@ -233,6 +235,8 @@ let writeResponse = (response: Types.response, res: serverResponse): promise<uni
       }
       i.contents = i.contents + 1
     }
+    // Always set x-request-id — correlates this response to the access log line
+    let _ = responseSetHeader(res, "x-request-id", requestId)
     let _ = responseWriteHead(res, response.status)
     switch response.body {
     | Types.File(path) => {
@@ -483,6 +487,7 @@ let startServer = (
     } catch {
     | _ => "unknown"
     }
+    let startMs = Date.now()
     let request = buildRequest(~trustProxy, ~socketIp, req)
     // Apply gate before handler — gate returns decision; we write once.
     if config.lan {
@@ -505,22 +510,25 @@ let startServer = (
           switch accessLogDest {
           | Some(dest) =>
             let ts = Date.make()->Date.toISOString
-            let line = AccessLog.format({
+            let durationMs = Float.toInt(Date.now() -. startMs)
+            let entry: AccessLog.line = {
               timestamp: ts,
+              requestId: request.requestId,
               ip: request.clientIp,
               method: request.method,
               path: request.path,
               status,
               bytes: String.length(body),
-            })
+              duration_ms: durationMs,
+            }
             try {
-              AccessLog.writeLine(dest, line)
+              AccessLog.emit(dest, entry)
             } catch {
             | _ => ()
             }
           | None => ()
           }
-          let _ = await writeResponse(r, res)
+          let _ = await writeResponse(r, res, ~requestId=request.requestId)
         }
       | Allowed => {
           let outcome = try {
@@ -537,6 +545,7 @@ let startServer = (
           switch (outcome, accessLogDest) {
           | (Types.Respond(r), Some(dest)) =>
             let ts = Date.make()->Date.toISOString
+            let durationMs = Float.toInt(Date.now() -. startMs)
             // File bytes: Handler.serveFile already sets Content-Length for non-HTML files.
             // We read it from the response headers here. This is exact for non-range responses.
             // TODO (range roadmap): if range support is added, Content-Length will be the
@@ -561,16 +570,18 @@ let startServer = (
               }
               findContentLength(0)
             }
-            let line = AccessLog.format({
+            let entry: AccessLog.line = {
               timestamp: ts,
+              requestId: request.requestId,
               ip: request.clientIp,
               method: request.method,
               path: request.path,
               status: r.status,
               bytes,
-            })
+              duration_ms: durationMs,
+            }
             try {
-              AccessLog.writeLine(dest, line)
+              AccessLog.emit(dest, entry)
             } catch {
             | _ => ()
             }
@@ -578,7 +589,7 @@ let startServer = (
           }
           switch outcome {
           | Types.Respond(r) => {
-              let _ = await writeResponse(r, res)
+              let _ = await writeResponse(r, res, ~requestId=request.requestId)
             }
           | Types.WsUpgrade => ()
           }
@@ -597,7 +608,7 @@ let startServer = (
       }
       switch outcome {
       | Types.Respond(r) => {
-          let _ = await writeResponse(r, res)
+          let _ = await writeResponse(r, res, ~requestId=request.requestId)
         }
       | Types.WsUpgrade => ()
       }

@@ -14,6 +14,8 @@ let start = (
   ~config: Config.t,
   ~authEntries: option<array<Basic.entry>>,
 ): promise<unit> => {
+  // Apply log mode from config (covers both main() path and direct test calls)
+  Logger.setMode(config.logMode)
   let controller = AbortController.make()
   let sig = AbortController.signal(controller)
 
@@ -205,6 +207,8 @@ let main = (): promise<unit> => {
   let args = Array.slice(argv, ~start=2, ~end=Array.length(argv))
   switch Parser.parse(args) {
   | Ok(config) =>
+    // Apply log mode from --log flag or HTTPATH_LOG env (precedence: flag → env → default Json)
+    Logger.setMode(config.logMode)
     // Preflight auth file check: --lan requires auth unless --no-auth is set.
     let preflightAuth = config.lan && !config.noAuth
     let authEntries: option<array<Basic.entry>> = Basic.searchAuthFile(~explicitPath=config.authFile, ~directory=config.directory)

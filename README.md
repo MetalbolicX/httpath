@@ -80,6 +80,7 @@ npx @metalbolicx/httpath --no-live-reload --no-listing
 | `--trust-proxy`           | `false`                       | Trust `X-Forwarded-For` headers from reverse proxies          |
 | `--allow-protected-dir`   | `false`                       | Allow serving system directories (`/etc`, `C:\Windows`, etc.)|
 | `--log <level>`           | `info`                        | One of: `info`, `debug`, `error`                             |
+| `--log json\|plain`       | `json`                        | Log output format (JSON or pipe-delimited plain text)       |
 | `-h, --help`              |                               | Show help and exit                                            |
 
 ### Smart Mode vs Legacy Mode
@@ -252,20 +253,69 @@ httpath --lan --tls --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem
 > **openssl required for auto-TLS.** If `openssl` is not available in the
 > server's `PATH`, you must provide `--tls-cert` and `--tls-key` explicitly.
 
-### Access log format
+### Logging
 
-Each line records one request in the format:
+httpath emits two kinds of logs: application logs (stderr) and access logs (stdout or file).
+
+#### Application log format (default: JSON)
+
+Each line is a JSON object with these fields:
+
+```json
+{"ts":"2026-08-06T12:34:56.789Z","level":"info","msg":"Serving /home/user at http://127.0.0.1:8080"}
+```
+
+| Field | Type   | Description                                      |
+|-------|--------|--------------------------------------------------|
+| `ts`  | string | ISO 8601 UTC timestamp with milliseconds          |
+| `level` | string | One of: `info`, `debug`, `error`                |
+| `msg` | string | Log message                                      |
+
+#### Access log format (default: JSON)
+
+Each line is a JSON object recording one HTTP request:
+
+```json
+{"ts":"2026-08-06T12:34:56.789Z","request_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","ip":"192.168.1.42","method":"GET","path":"/index.html","status":200,"bytes":1234,"duration_ms":42}
+```
+
+| Field         | Type   | Description                                      |
+|---------------|--------|--------------------------------------------------|
+| `ts`          | string | ISO 8601 UTC timestamp                           |
+| `request_id`  | string | UUIDv4 correlator — also in the `x-request-id` response header |
+| `ip`          | string | Client IP (or `X-Forwarded-For` if `--trust-proxy`) |
+| `method`      | string | HTTP method                                      |
+| `path`        | string | Request path (CR/LF sanitized)                  |
+| `status`      | number | HTTP response status                             |
+| `bytes`       | number | Response body bytes                              |
+| `duration_ms` | number | Request handling time in milliseconds            |
+
+#### `x-request-id` response header
+
+Every HTTP response includes an `x-request-id` header carrying the UUIDv4 generated for that request. This lets you correlate a client-side error or support ticket back to the exact access log line.
 
 ```
-ISO8601 | ip | method | path | status | bytes
-2026-08-04T07:44:10.000Z | 192.168.1.42 | GET | /index.html | 200 | 1234
+x-request-id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 ```
 
-Log format features:
+#### Plain-text escape (`--log plain`)
 
-- **ISO 8601 timestamps** for easy parsing.
+To restore the legacy pipe-delimited format, use `--log plain`:
+
+```
+2026-08-06T12:34:56.789Z | 192.168.1.42 | GET | /index.html | 200 | 1234 | a1b2c3d4-e5f6-7890-abcd-ef1234567890 | 42
+```
+
+The plain format includes `request_id` and `duration_ms` as the last two pipe-separated fields.
+
+#### `HTTPATH_LOG` environment variable
+
+Set `HTTPATH_LOG=plain` in the environment to override the default JSON format without changing CLI flags. Precedence: `--log` flag → `HTTPATH_LOG` env → default `json`.
+
+#### Log format features
+
 - **CR/LF sanitization** — embedded newlines in request paths are replaced with `?`.
-- **Rejections logged** — 401, 405, and 429 responses are also written to the log.
+- **Rejections logged** — 401, 405, and 429 responses are also written to the access log.
 - **Per-process state** — rate limit counters reset when the server restarts.
 
 ---

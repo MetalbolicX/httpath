@@ -104,7 +104,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 011  | Protected-directory guard (edge case) | P1 | L | Phase 1 | DONE |
 | 012  | Enforce TLS under `--lan` | P1 | L | 011 | DONE |
 | 013  | `/healthz` + `/readyz` probes | P2 | M | 007 | DONE |
-| 014  | Structured + correlated logging | P2 | L | 013 | TODO |
+| 014  | Structured + correlated logging | P2 | L | 013 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 

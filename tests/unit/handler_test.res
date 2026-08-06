@@ -59,6 +59,7 @@ let testConfigBase: Config.t = {
   ignorePatterns: ["node_modules", ".git"],
   enableDirectoryListing: true,
   logLevel: Logger.Debug,
+  logMode: Logger.Json,
   enableLiveReload: true,
   restartOnChange: false,
   lan: false,
@@ -144,6 +145,7 @@ test("Handler: POST returns 405 Method Not Allowed with allow: GET, HEAD", () =>
     path: "/file.txt",
     headers: [],
     clientIp: "127.0.0.1",
+    requestId: "test-request-id",
   }
   // Method check: only GET and HEAD are allowed
   let isAllowedMethod = (method: string): bool => {
@@ -160,6 +162,7 @@ test("Handler: GET returns true from method check", () => {
     path: "/file.txt",
     headers: [],
     clientIp: "127.0.0.1",
+    requestId: "test-request-id",
   }
   let isAllowedMethod = (method: string): bool => {
     let upper = String.toUpperCase(method)
@@ -224,6 +227,7 @@ test("Handler: /livereload + upgrade:websocket returns WsUpgrade when liveReload
     path: "/livereload",
     headers: [("upgrade", "websocket")],
     clientIp: "127.0.0.1",
+    requestId: "test-request-id",
   }
   // WS upgrade check: enableLiveReload && path == "/livereload" && upgrade == "websocket"
   let shouldUpgrade = (config: Config.t, req: Types.request): bool => {
@@ -253,6 +257,7 @@ test("Handler: /livereload without upgrade header does not WS upgrade", () => {
     path: "/livereload",
     headers: [],
     clientIp: "127.0.0.1",
+    requestId: "test-request-id",
   }
   let shouldUpgrade = (config: Config.t, req: Types.request): bool => {
     config.enableLiveReload &&

@@ -8,6 +8,7 @@ type t = {
   ignorePatterns: array<string>,
   enableDirectoryListing: bool,
   logLevel: Logger.logLevel,
+  logMode: Logger.mode,
   enableLiveReload: bool,
   restartOnChange: bool,
   lan: bool,
