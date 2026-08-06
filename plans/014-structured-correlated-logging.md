@@ -137,3 +137,10 @@ These items were identified during verify-report #3116 as requiring additional w
 - A spy for capturing stdout in unit tests isn't present — extract a tiny
   injectable sink rather than monkeypatching `console`; STOP and align if that
   refactor exceeds one file.
+## Final status
+
+- **Status**: COMPLETE (with documented F1/F2 follow-ups)
+- **Commits**: `a2e7ccd` (slice 1), `3df52a4` (slice 2), `1fa8a08` (slice 3 corrective)
+- **Gate**: 348 unit pass, 55 integration pass, 0 warnings, 1 unrelated skip
+- **Reused-from-predecessors**: Probes module from plan 013 (where `/readyz` requests now also have `request_id` in JSON access log)
+- **Out of scope confirmation**: no external sink, no OTLP, no non-Node runtimes.

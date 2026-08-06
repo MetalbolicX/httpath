@@ -112,3 +112,18 @@ itself (plan 010).
 - You're tempted to add downstream-dependency health checks (disk, external
   services) for a file server — out of scope; `healthz` is a process liveness
   only.
+
+## Follow-ups
+
+> Archived during SDD archive phase. Do not reopen; track via next change's apply
+> or as a standalone investigation.
+
+- **F1 (WARNING)** — Add integration tests for SCN-HP-002 (liveness-during-drain),
+  SCN-HP-004 (ready-during-drain via SIGTERM), SCN-HP-005/006 (--lan auth exemption),
+  SCN-HP-007 (POST→405). Today's coverage is unit + source-verified only. Blocked on: a
+  more reliable `node:test` child-harness pattern, or the integration test runner gaining
+  the ability to observe SIGTERM state without race.
+- **F2 (INFO)** — Design API drift: design #3100 said `Handler.make(~draining, config)
+  => handler` but implementation chose `Handler.make(config) => {handler, drain}` —
+  Handler owns the drain ref. Behaviorally equivalent; ownership model differs. Future
+  readers should consult the implementation over the design for the canonical API.
