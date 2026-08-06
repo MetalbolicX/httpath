@@ -1,12 +1,117 @@
-// tests/unit/security/protected_dir_test.res — unit tests for ProtectedDir classifier.
-// RED phase: these tests fail because ProtectedDir.classify does not exist yet.
-// Once T-PDG-002 lands (GREEN), all 5 cases pass.
+// checkPrivilegeAncestors — privilege-escape runtime check (plan 019)
+// Tests use Belt.Array.reduce-style inline switch callbacks per the working
+// pattern established in Auth/Basic.res (lines 225-230).
 
 open Test
 
+// TC-PDA-1: uid 0 skips privilege checks (graceful degradation).
+test("checkPrivilegeAncestors returns None for uid 0", () => {
+  let mockReader: ProtectedDir.reader = {
+    realpathSync: _ => "/srv/app",
+    statSync: _ => { isFile: false, isDirectory: true, isSymlink: false, size: 4096, mode: 0o755, uid: 0, gid: 0 },
+    getuid: () => 0,
+    platform: "linux",
+    cwd: () => "/",
+  }
+  let result = ProtectedDir.checkPrivilegeAncestors(~reader=mockReader, ~resolved="/srv/app/deep/nested")
+  switch result {
+  | None => () // expected
+  | Some(_) => JsError.throwWithMessage("uid 0 should not check ancestors")
+  }
+})
+
+// TC-PDA-2: win32 platform skips privilege checks.
+test("checkPrivilegeAncestors returns None on win32", () => {
+  let mockReader: ProtectedDir.reader = {
+    realpathSync: _ => "C:\\Users\\Public",
+    statSync: _ => { isFile: false, isDirectory: true, isSymlink: false, size: 4096, mode: 0o755, uid: 1000, gid: 1000 },
+    getuid: () => 1000,
+    platform: "win32",
+    cwd: () => "C:\\",
+  }
+  let result = ProtectedDir.checkPrivilegeAncestors(~reader=mockReader, ~resolved="C:\\Users\\Public\\Documents")
+  switch result {
+  | None => () // expected
+  | Some(_) => JsError.throwWithMessage("win32 should not check ancestors")
+  }
+})
+
+// TC-PDA-3: all ancestors owned by current uid → None (no privilege escape).
+test("checkPrivilegeAncestors returns None when all ancestors owned by caller uid", () => {
+  let uid = 9999
+  let mockReader: ProtectedDir.reader = {
+    realpathSync: _ => "/home/app/data",
+    statSync: path => {
+      let isDir = !Js.String.includes(".", path)
+      { isFile: !isDir, isDirectory: isDir, isSymlink: false, size: 4096, mode: 0o755, uid: uid, gid: uid }
+    },
+    getuid: () => uid,
+    platform: "linux",
+    cwd: () => "/",
+  }
+  let result = ProtectedDir.checkPrivilegeAncestors(~reader=mockReader, ~resolved="/home/app/data")
+  switch result {
+  | None => () // expected
+  | Some(rule) => JsError.throwWithMessage("all ancestors owned by caller: " ++ ProtectedDir.ruleToString(rule))
+  }
+})
+
+// TC-PDA-4: ancestor not owned by caller BUT world-readable (mode has o+r) → None.
+test("checkPrivilegeAncestors returns None when non-owned ancestor is world-readable", () => {
+  let uid = 9999
+  let mockReader: ProtectedDir.reader = {
+    realpathSync: _ => "/tmp/app/data",
+    statSync: path => {
+      let isDir = !Js.String.includes(".", path)
+      let ownerUid = if path == "/tmp" || path == "/tmp/app" { 0 } else { uid }
+      // mode 0o755: owner rwx, group r-x, other r-x → world-readable
+      { isFile: !isDir, isDirectory: isDir, isSymlink: false, size: 4096, mode: 0o755, uid: ownerUid, gid: 0 }
+    },
+    getuid: () => uid,
+    platform: "linux",
+    cwd: () => "/",
+  }
+  let result = ProtectedDir.checkPrivilegeAncestors(~reader=mockReader, ~resolved="/tmp/app/data")
+  switch result {
+  | None => () // expected
+  | Some(rule) => JsError.throwWithMessage("world-readable ancestor should not block: " ++ ProtectedDir.ruleToString(rule))
+  }
+})
+
+// TC-PDA-5: ancestor not owned by caller AND not world-readable → Some(PrivilegeEscape).
+test("checkPrivilegeAncestors returns PrivilegeEscape when non-owned ancestor is not world-readable", () => {
+  let uid = 9999
+  let mockReader: ProtectedDir.reader = {
+    realpathSync: _ => "/root/app/data",
+    statSync: path => {
+      let isDir = !Js.String.includes(".", path)
+      let ownerUid = if path == "/root" || path == "/root/app" { 0 } else { uid }
+      // mode 0o750: owner rwx, group r-x, other --- → NOT world-readable
+      { isFile: !isDir, isDirectory: isDir, isSymlink: false, size: 4096, mode: 0o750, uid: ownerUid, gid: 0 }
+    },
+    getuid: () => uid,
+    platform: "linux",
+    cwd: () => "/",
+  }
+  let result = ProtectedDir.checkPrivilegeAncestors(~reader=mockReader, ~resolved="/root/app/data")
+  switch result {
+  | Some(ProtectedDir.PrivilegeEscape(path)) =>
+    assertion(
+      ~message="privilege escape detected on /root/app (leafmost tripped ancestor)",
+      ~operator="=",
+      (a, b) => a == b,
+      path,
+      "/root/app",
+    )
+  | Some(rule) => JsError.throwWithMessage("expected PrivilegeEscape, got: " ++ ProtectedDir.ruleToString(rule))
+  | None => JsError.throwWithMessage("expected PrivilegeEscape for non-owned, non-world-readable ancestor")
+  }
+})
+
+
+
 // ---------------------------------------------------------------------------
 // ProtectedDir.classify — boundary scenarios per SCN-PDG-001..005
-// ---------------------------------------------------------------------------
 
 // SCN-PDG-001: POSIX well-known root refused at startup.
 // GIVEN directory is /etc

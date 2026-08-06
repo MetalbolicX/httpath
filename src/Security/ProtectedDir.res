@@ -144,20 +144,52 @@ let isAllowedPrefix = (~resolved: string): bool => {
   )
 }
 
+// Check a single path for privilege escape. Returns Some if unsafe, None if safe.
+let checkPrivilegePath = (~reader: reader, ~uid: int, ~path: string): option<matchedRule> => {
+  try {
+    let st = reader.statSync(path);
+    let ownerUid = Fs.statUid(st);
+    let mode = Fs.statMode(st);
+    let modeAnd = (mode)->Int.bitwiseAnd(0o004);
+    let isOther = ownerUid != uid;
+    if isOther && modeAnd == 0 {
+      Some(PrivilegeEscape(path))
+    } else {
+      None
+    }
+  } catch {
+  | _ => None
+  }
+}
+
 // Walk ancestors of `resolved`; check if any is privilege-protected.
 // Returns PrivilegeEscape if an ancestor is found not owned by current uid
 // and not world/group-readable. Degrades to None under uid 0.
-let checkPrivilegeAncestors = (~reader: reader, ~_resolved: string): option<matchedRule> => {
+let checkPrivilegeAncestors = (~reader: reader, ~resolved: string): option<matchedRule> => {
   let uid = reader.getuid()
-  // Under uid 0, privilege check is unreliable — degrade to deny-list-only.
-  // REF: plan § STOP condition "privilege check unreliable as root".
-  if uid == 0 {
+  if uid == 0 || reader.platform == "win32" {
     None
   } else {
-    // Privilege check is deny-list-only for now because Node.Fs.stats binding
-    // does not expose mode/uid/gid bits needed for a proper owner/world check.
-    // REF: plan § "extend Node.Fs.stats binding" as future improvement.
-    None
+    let parts = Js.String.split("/", resolved)
+    let n = Belt.Array.length(parts)
+    let ancestorArray = Belt.Array.make(n, "")
+    let prefix = ref("")
+    for i in 0 to n - 1 {
+      let seg = Belt.Array.get(parts, i)
+      switch seg {
+      | Some(s) if s != "" =>
+        let newPrefix = prefix.contents == "" ? "/" ++ s : prefix.contents ++ "/" ++ s
+        prefix := newPrefix
+        ignore(ancestorArray->Belt.Array.set(n - 1 - i, prefix.contents))
+      | _ => ()
+      }
+    }
+    Belt.Array.reduce(ancestorArray, (None: option<matchedRule>), (acc, path) =>
+      switch acc {
+      | Some(_) => acc
+      | None => checkPrivilegePath(~reader, ~uid, ~path)
+      }
+    )
   }
 }
 
@@ -193,7 +225,7 @@ let classifyWith = (reader: reader, ~directory: string): verdict => {
       Allowed
     } else {
       // Step 4: best-effort privilege check (degrades under uid 0).
-      switch checkPrivilegeAncestors(~reader, ~_resolved=resolved) {
+      switch checkPrivilegeAncestors(~reader, ~resolved) {
       | Some(rule) => Protected(rule, resolved)
       | None => Allowed
       }

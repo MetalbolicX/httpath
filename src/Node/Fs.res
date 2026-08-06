@@ -21,6 +21,10 @@ type stats = {
   isFile: bool,
   isDirectory: bool,
   isSymlink: bool,
+  size: int,
+  mode: int,
+  uid: int,
+  gid: int,
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +38,9 @@ type stats = {
 @send external statIsDirectory: stats => bool = "isDirectory"
 @send external statIsSymlink: stats => bool = "isSymbolicLink"
 @get external statSize: stats => int = "size"
+@get external statMode: stats => int = "mode"
+@get external statUid: stats => int = "uid"
+@get external statGid: stats => int = "gid"
 @get external direntName: dirent => string = "name"
 @send external direntIsDirectory: dirent => bool = "isDirectory"
 
