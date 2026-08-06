@@ -96,7 +96,7 @@ let ensureOpenssl = (): unit => {
   if !opensslAvailable() {
     throw(
       MissingOpenssl(
-        "openssl not found in PATH. Provide explicit --tls-cert and --tls-key files, or install openssl.",
+        "openssl not found in PATH. Provide explicit --tls-cert and --tls-key files, install openssl, or use --no-tls under --lan (insecure).",
       ),
     )
   }
