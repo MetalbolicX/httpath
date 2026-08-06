@@ -478,10 +478,18 @@ let startServer = (
   ~tlsCertKey: option<Tls.certKeyPair>,
   ~serverTimeouts: serverTimeouts,
 ): serverHandle => {
-  // Access log destination — None means no access logging
+  // Access log destination:
+  //   --access-log <path>  → File(path)
+  //   --lan (no --access-log) → Stdout (matches README § "stdout (LAN default)")
+  //   loopback (no --access-log) → None (keep developer terminal clean)
   let accessLogDest: option<AccessLog.dest> = switch accessLog {
   | Some(path) => Some(AccessLog.File(path))
-  | None => None
+  | None =>
+    if config.lan {
+      Some(AccessLog.Stdout)
+    } else {
+      None
+    }
   }
 
   // 'request' event — normal HTTP/HTTPS. Build request, apply gate, call handler, write response.
