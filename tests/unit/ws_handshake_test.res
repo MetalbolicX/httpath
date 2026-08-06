@@ -16,7 +16,7 @@ test("WsHandshake.computeAccept matches RFC 6455 §1.3 test vector", () => {
 })
 
 test("WsHandshake.handshakeResponse starts with HTTP/1.1 101", () => {
-  let response = WsHandshake.handshakeResponse("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
+  let response = WsHandshake.handshakeResponse(~requestId="test-request-id", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
   assertion(
     ~message="response starts with 'HTTP/1.1 101'",
     ~operator="=",
@@ -28,7 +28,7 @@ test("WsHandshake.handshakeResponse starts with HTTP/1.1 101", () => {
 
 test("WsHandshake.handshakeResponse includes Sec-WebSocket-Accept", () => {
   let accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
-  let response = WsHandshake.handshakeResponse(accept)
+  let response = WsHandshake.handshakeResponse(~requestId="test-request-id", accept)
   assertion(
     ~message="response contains the accept header value",
     ~operator="=",

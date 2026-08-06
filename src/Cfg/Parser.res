@@ -259,19 +259,19 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
           | Some(l) => l
           | None => Logger.Info
           }
-          // HTTPATH_LOG env overrides --log json|plain flag.
+          // HTTPATH_LOG env is the fallback when --log json|plain is absent.
           // Precedence: --log flag → HTTPATH_LOG → default Json
-          let effectiveLogMode = switch Node_Process.get("HTTPATH_LOG") {
-          | Some(v) =>
-            if v == "plain" {
-              Logger.Plain
-            } else {
-              // "json" or any other value → default to Json
-              Logger.Json
-            }
+          let effectiveLogMode = switch logMode.contents {
+          | Some(m) => m
           | None =>
-            switch logMode.contents {
-            | Some(m) => m
+            switch Node_Process.get("HTTPATH_LOG") {
+            | Some(v) =>
+              if v == "plain" {
+                Logger.Plain
+              } else {
+                // "json" or any other value → default to Json
+                Logger.Json
+              }
             | None => Logger.Json
             }
           }

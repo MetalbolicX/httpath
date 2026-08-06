@@ -58,7 +58,7 @@ let start = (
       Promise.resolve()
     | Some(key) =>
       let accept = WsHandshake.computeAccept(key)
-      let response = WsHandshake.handshakeResponse(accept)
+      let response = WsHandshake.handshakeResponse(~requestId=req.requestId, accept)
       Http.socketWriteBuffer(socket, Buffer.fromString(response, "utf8"))
       ->Promise.then(result => {
         switch result {

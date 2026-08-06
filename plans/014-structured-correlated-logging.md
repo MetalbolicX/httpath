@@ -106,6 +106,28 @@ mode), `tests/unit/logger_test.res`, `tests/integration/logging_json.test.mjs`,
 - [ ] `pnpm test` exits 0.
 - [ ] `plans/README.md` row 014 set to DONE.
 
+## Follow-ups (Slice 3 corrective — 2026-08-06)
+
+These items were identified during verify-report #3116 as requiring additional work beyond the scope of Slice 3:
+
+### F1 — Logger named functions with ~requestId (REQ-APPLOG-002)
+**What**: Add `info`/`warn`/`error` named functions to `Logger.res` that accept an optional `~requestId` parameter. When `~requestId` is supplied, include `request_id` in the JSON output.
+
+**Why deferred**: Requires extensive type changes to Logger API (`option<string>` vs `string=?` optional parameter semantics), updates to all ~15 call sites in `Handler.res` (including the `respond` helper), and careful handling of the `respond` helper's `~logMsg` parameter threading. This is a larger API change best done as a standalone PR.
+
+**Files affected**:
+- `src/Utils/Logger.res` — add `info`/`warn`/`error` functions with optional `~requestId`
+- `src/Utils/Logger.resi` — update interface signatures
+- `src/Server/Handler.res` — update all `Logger.log` calls to named functions; add `~requestId` to `respond` helper and all call sites
+
+### F2 — E2E integration test for x-request-id ↔ access log correlation (SCN-SL-005)
+**What**: Add an integration test that spawns the httpath server, makes an HTTP request, captures stdout or `--access-log` file, parses the JSON, and asserts the response `x-request-id` header matches the access log `request_id`.
+
+**Why deferred**: The test infrastructure exists but requires spawning the server, waiting for it to be ready, making a request, and capturing/correlating the output. Estimated >30 minutes for proper implementation.
+
+**Files affected**:
+- `tests/integration/logging_json.test.mjs` — add correlation test
+
 ## STOP conditions
 
 - Emitting JSON breaks a consumer that greps the legacy pipe format — keep the

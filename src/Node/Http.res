@@ -606,6 +606,33 @@ let startServer = (
           body: Types.Empty,
         })
       }
+      // Emit access log (not gated on lan — accessLogDest controls emission)
+      switch (outcome, accessLogDest) {
+      | (Types.Respond(r), Some(dest)) =>
+        let ts = Date.make()->Date.toISOString
+        let durationMs = Float.toInt(Date.now() -. startMs)
+        let bytes = switch r.body {
+        | Types.Html(s) => String.length(s)
+        | Types.Empty => 0
+        | Types.File(_) => 0
+        }
+        let entry: AccessLog.line = {
+          timestamp: ts,
+          requestId: request.requestId,
+          ip: request.clientIp,
+          method: request.method,
+          path: request.path,
+          status: r.status,
+          bytes,
+          duration_ms: durationMs,
+        }
+        try {
+          AccessLog.emit(dest, entry)
+        } catch {
+        | _ => ()
+        }
+      | _ => ()
+      }
       switch outcome {
       | Types.Respond(r) => {
           let _ = await writeResponse(r, res, ~requestId=request.requestId)
@@ -622,6 +649,7 @@ let startServer = (
     } catch {
     | _ => "unknown"
     }
+    let startMs = Date.now()
     let request = buildRequest(~trustProxy, ~socketIp, req)
     // Apply gate before handler — gate writes rejection directly to socket if denied
     let outcome = if config.lan {
@@ -664,6 +692,28 @@ let startServer = (
     }
     switch outcome {
     | Types.WsUpgrade => {
+        // Emit access log for WS upgrade (status 101, bytes 0)
+        let ts = Date.make()->Date.toISOString
+        let durationMs = Float.toInt(Date.now() -. startMs)
+        switch accessLogDest {
+        | Some(dest) =>
+          let entry: AccessLog.line = {
+            timestamp: ts,
+            requestId: request.requestId,
+            ip: request.clientIp,
+            method: request.method,
+            path: request.path,
+            status: 101,
+            bytes: 0,
+            duration_ms: durationMs,
+          }
+          try {
+            AccessLog.emit(dest, entry)
+          } catch {
+          | _ => ()
+          }
+        | None => ()
+        }
         let _ = await onWsUpgrade(request, socket, head)
       }
     | Types.Respond(_) => {
