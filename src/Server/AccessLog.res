@@ -49,11 +49,7 @@ let format = (entry: record): string => {
 // Hand-rolled to avoid Js.Json / JSON.Encode deprecation churn.
 // Field set matches SCN-SL-001 / REQ-AL-002 in spec #3111.
 let formatJson = (entry: line): string => {
-  let sanitizedPath = entry.path
-    ->String.replace("\r", "?")
-    ->String.replace("\n", "?")
-  // All string fields are assumed safe (caller controls them); CR/LF stripped from path.
-  `{"ts":"${entry.timestamp}","request_id":"${entry.requestId}","ip":"${entry.ip}","method":"${entry.method}","path":"${sanitizedPath}","status":${Int.toString(entry.status)},"bytes":${Int.toString(entry.bytes)},"duration_ms":${Int.toString(entry.duration_ms)}}`
+  `{"ts":"${JsonEscape.escape(entry.timestamp)}","request_id":"${JsonEscape.escape(entry.requestId)}","ip":"${JsonEscape.escape(entry.ip)}","method":"${JsonEscape.escape(entry.method)}","path":"${JsonEscape.escape(entry.path)}","status":${Int.toString(entry.status)},"bytes":${Int.toString(entry.bytes)},"duration_ms":${Int.toString(entry.duration_ms)}}`
 }
 
 // writeLine — emit one line to the destination
