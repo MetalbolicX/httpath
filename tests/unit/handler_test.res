@@ -77,6 +77,8 @@ let testConfigBase: Config.t = {
   rateLimitEnabled: false,
   accessLog: None,
   readOnly: false,
+  user: None,
+  group: None,
 }
 
 // ---------------------------------------------------------------------------

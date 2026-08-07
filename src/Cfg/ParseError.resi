@@ -13,6 +13,8 @@ type t =
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
   | PublicBindRequiresLan(string)  // host that requires --lan
   | TrustProxyWithoutTrustedProxies  // --trust-proxy without --trusted-proxies
+  | UnknownUser(string)  // user not found at runtime during privilege drop (plan 026)
+  | SetuidFailed(string, string)  // (operation, message) during privilege drop (plan 026)
 
 exception UnwritableAccessLog(string)
 

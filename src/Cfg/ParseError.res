@@ -14,6 +14,8 @@ type t =
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
   | PublicBindRequiresLan(string)  // host that requires --lan
   | TrustProxyWithoutTrustedProxies  // --trust-proxy without --trusted-proxies
+  | UnknownUser(string)  // user not found at runtime during privilege drop (plan 026)
+  | SetuidFailed(string, string)  // (operation, message) during privilege drop (plan 026)
 
 // UnwritableAccessLog is a raise-able exception (separate from the result variant)
 exception UnwritableAccessLog(string)
@@ -38,5 +40,9 @@ let toString = (e: t): string => {
     `--host ${host} requires --lan. Non-loopback binds must opt into LAN security defaults (TLS, auth, rate limiting).`
   | TrustProxyWithoutTrustedProxies =>
     `--trust-proxy requires --trusted-proxies to be set. X-Forwarded-For spoofing is only safe when the immediate TCP peer is a known proxy (e.g. nginx on the LAN).`
+  | UnknownUser(user) =>
+    `Unknown user: ${user}. Could not resolve user name to a uid at runtime during privilege drop.`
+  | SetuidFailed(op, msg) =>
+    `privilege-drop ${op} failed: ${msg}. Refusing to serve as root — a privilege drop was requested but could not complete.`
   }
 }

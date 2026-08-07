@@ -1,6 +1,11 @@
-// Httpath.res — lifecycle coordinator: CLI parse → HTTP/HTTPS server → Monitor → signals.
-// Signal ownership: Httpath is the SOLE signal owner (per design Q3a).
-// Monitor does NOT register SIGINT/SIGTERM handlers.
+// FFI for privilege drop (plan 026)
+// process.getuid/setuid/setgid accept uid/gid as int. Name resolution (user string → uid)
+// is handled in the dropPrivilege function below using Belt.Int.fromString + fallback.
+@val external privGetuid: unit => int = "process.getuid"
+@val external privGid: unit => int = "process.getgid"
+@val external privPlatform: string = "process.platform"
+@val external privSetuid: int => unit = "process.setuid"
+@val external privSetgid: int => unit = "process.setgid"
 
 /// Start the HTTP/HTTPS server + Monitor with the given handler and config.
 /// authEntries: auth file entries, if found (None if no file or --no-auth).
@@ -136,12 +141,68 @@ let start = (
   let monitorHandle = ref((None: option<Monitor.handle>))
 
   // Print startup banner after the server is listening.
+  // Plan 026: drop privileges AFTER bind but BEFORE accepting requests.
   listening->Promise.then(() => {
-    let addr = config.hostname == "0.0.0.0" ? "127.0.0.1" : config.hostname
-    let protocol = switch tlsKey { | Some(_) => "https" | None => "http" }
-    let url = `${protocol}://${addr}:${Int.toString(config.port)}`
-    Logger.log(Logger.Info, `Serving ${config.directory} at ${url}`)
-    Promise.resolve()
+    // Privilege-drop block (plan 026): setgid BEFORE setuid (order matters!).
+    // Falls through to banner on success or no-op; exits on fatal failure.
+    let dropResult: result<unit, string> = if privPlatform == "win32" {
+      Logger.log(Logger.Info, "privilege-drop: skipping on Windows")
+      Ok()
+    } else if privGetuid() != 0 {
+      Logger.log(Logger.Info, "privilege-drop: already unprivileged, no drop needed")
+      Ok()
+    } else {
+      switch config.user {
+      | None =>
+        Logger.log(Logger.Error,
+          "WARNING: running as root; pass --user to drop privileges after bind")
+        Ok()
+      | Some(userStr) =>
+        let groupStr = switch config.group {
+        | Some(g) => g
+        | None => userStr  // default group to user when absent
+        }
+        // Resolve name strings to integer ids; fall back to current ids on parse failure.
+        let gid = switch Belt.Int.fromString(groupStr) {
+        | Some(g) => g
+        | None =>
+          Logger.log(Logger.Info, `privilege-drop: could not parse group "${groupStr}" as integer; using current gid`)
+          privGid()
+        }
+        let uid = switch Belt.Int.fromString(userStr) {
+        | Some(u) => u
+        | None =>
+          Logger.log(Logger.Info, `privilege-drop: could not parse user "${userStr}" as integer; using current uid`)
+          privGetuid()
+        }
+        try {
+          privSetgid(gid)
+          privSetuid(uid)
+          Logger.log(Logger.Info, `privilege-drop: dropped to uid=${Belt.Int.toString(uid)}, gid=${Belt.Int.toString(gid)}`)
+          Ok()
+        } catch {
+        | e =>
+          let msg = switch JsExn.message(Obj.magic(e)) {
+          | Some(m) => m
+          | None => "unknown error"
+          }
+          Error(`failed to drop privileges (setgid(${Belt.Int.toString(gid)}) succeeded, setuid(${Belt.Int.toString(uid)}) failed): ${msg}`)
+        }
+      }
+    }
+    switch dropResult {
+    | Error(msg) =>
+      Console.error(`Error: ${msg}`)
+      Console.error("Exiting — privilege drop failed. Run without --user to serve as root (not recommended).")
+      let _ = Process.exit(1)
+      Promise.resolve()  // unreachable; satisfies return type
+    | Ok() =>
+      let addr = config.hostname == "0.0.0.0" ? "127.0.0.1" : config.hostname
+      let protocol = switch tlsKey { | Some(_) => "https" | None => "http" }
+      let url = `${protocol}://${addr}:${Int.toString(config.port)}`
+      Logger.log(Logger.Info, `Serving ${config.directory} at ${url}`)
+      Promise.resolve()
+    }
   })->ignore
 
   let onRestart = () => {
@@ -299,7 +360,7 @@ let main = (): promise<unit> => {
     }
   | Error(ParseError.HelpRequested) =>
     Console.log(
-      "Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>]",
+      "Usage: httpath [-d <dir>] [-p <port>] [-i <patterns>] [--no-listing] [--no-live-reload] [-r] [-l] [--allow-protected-dir] [--log <level>] [--user <uid>] [--group <gid>]",
     )
     let _ = Process.exit(0)
     Promise.resolve()
