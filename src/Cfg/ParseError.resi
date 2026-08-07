@@ -12,6 +12,7 @@ type t =
   | ConflictingTlsFlags(array<string>)  // conflicting args
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
   | PublicBindRequiresLan(string)  // host that requires --lan
+  | TrustProxyWithoutTrustedProxies  // --trust-proxy without --trusted-proxies
 
 exception UnwritableAccessLog(string)
 

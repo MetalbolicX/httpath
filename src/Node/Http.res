@@ -166,48 +166,62 @@ let applyHttpsServerTimeouts = (s: httpsServer, t: serverTimeouts): unit => {
 }
 
 // resolveClientIp — pure IP resolution logic.
-// Honors X-Forwarded-For only when trustProxy is true.
+// Honors X-Forwarded-For only when trustProxy is true AND the socket peer is in trustedCidrs.
+// When trustProxy=true but trustedCidrs is empty, falls back to old behavior (XFF always honored).
 // Takes socket IP as fallback; returns "unknown" when socket IP is absent.
 let resolveClientIp = (
   ~trustProxy: bool,
   ~socketIp: string,
   ~headers: array<(string, string)>,
+  ~trustedCidrs: array<string>=[],
 ): string => {
-  let ip = if trustProxy {
-    let rec findXff = (i: int): string => {
-      if i >= Array.length(headers) {
-        socketIp
-      } else {
-        switch Array.get(headers, i) {
-        | Some((k, v)) =>
-          if k == "x-forwarded-for" {
-            if v == "" {
-              socketIp
+  if !trustProxy {
+    if socketIp == "" {
+      "unknown"
+    } else {
+      socketIp
+    }
+  } else {
+    // Extract raw XFF strings from headers for passing to Ip.resolveClientIp.
+    let xffValues: array<string> = {
+      let rec findXff = (i: int): array<string> => {
+        if i >= Array.length(headers) {
+          []
+        } else {
+          switch Array.get(headers, i) {
+          | Some((k, v)) =>
+            if k == "x-forwarded-for" {
+              if v == "" {
+                []
+              } else {
+                let parts = Js.String.split(",", v)
+                Belt.Array.map(parts, s => String.trim(s))
+              }
             } else {
-              let parts = Js.String.split(",", v)
-              let first = Array.get(parts, 0)->Belt.Option.getWithDefault(v)
-              String.trim(first)
+              findXff(i + 1)
             }
-          } else {
-            findXff(i + 1)
+          | None => []
           }
-        | None => socketIp
         }
       }
+      findXff(0)
     }
-    findXff(0)
-  } else {
-    socketIp
-  }
-  if ip == "" || ip == "::" || ip == "::1" {
-    "unknown"
-  } else {
-    ip
+    if trustedCidrs->Array.length == 0 {
+      // Backward-compat: old behavior — honor XFF unconditionally when trustProxy=true.
+      switch xffValues->Array.get(0) {
+      | Some(v) =>
+        let trimmed = String.trim(v)
+        if trimmed == "" { socketIp } else { trimmed }
+      | None => socketIp
+      }
+    } else {
+      Ip.resolveClientIp(~peer=socketIp, ~xff=xffValues, ~trustedCidrs)
+    }
   }
 }
 
 // Build Types.request from an IncomingMessage (path strips query string).
-let buildRequest = (~trustProxy: bool, ~socketIp: string, req: incomingMessage): Types.request => {
+let buildRequest = (~trustProxy: bool, ~socketIp: string, ~trustedCidrs: array<string>, req: incomingMessage): Types.request => {
   let method = incomingMethod(req)
   let url = incomingUrl(req)
   let rawHeaders = incomingHeaders(req)
@@ -221,7 +235,7 @@ let buildRequest = (~trustProxy: bool, ~socketIp: string, req: incomingMessage):
     i.contents = i.contents + 1
   }
   let path = Js.String.split("?", url)->Array.get(0)->Option.getOr(url)
-  let clientIp = resolveClientIp(~trustProxy, ~socketIp, ~headers)
+  let clientIp = resolveClientIp(~trustProxy, ~socketIp, ~headers, ~trustedCidrs)
   let requestId = Request_Id.make()
   {method, path, headers, clientIp, requestId}
 }
@@ -505,7 +519,7 @@ let startServer = (
     | _ => "unknown"
     }
     let startMs = Date.now()
-    let request = buildRequest(~trustProxy, ~socketIp, req)
+    let request = buildRequest(~trustProxy, ~socketIp, ~trustedCidrs=config.trustedProxies, req)
     // Apply gate before handler — gate returns decision; we write once.
     if config.lan {
       let decision = gate(
@@ -667,7 +681,7 @@ let startServer = (
     | _ => "unknown"
     }
     let startMs = Date.now()
-    let request = buildRequest(~trustProxy, ~socketIp, req)
+    let request = buildRequest(~trustProxy, ~socketIp, ~trustedCidrs=config.trustedProxies, req)
     // Apply gate before handler — gate writes rejection directly to socket if denied
     let outcome = if config.lan {
       let gateAllowed = ref(false)

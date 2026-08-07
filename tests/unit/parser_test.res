@@ -383,21 +383,80 @@ test("unknown short flag -z returns UnknownFlag", () => {
 // REQ-CLI-3: Removed flags
 // ---------------------------------------------------------------------------
 
-test("--trust-proxy sets trustProxy=true in config", () => {
+// ---------------------------------------------------------------------------
+// Plan 024: --trust-proxy gated behind --trusted-proxies
+// ---------------------------------------------------------------------------
+
+test("--trust-proxy alone returns TrustProxyWithoutTrustedProxies", () => {
   let r = Parser.parse(["--trust-proxy"])
   switch r {
+  | Ok(_) =>
+    JsError.throwWithMessage("Expected TrustProxyWithoutTrustedProxies error, got Ok")
+  | Error(ParseError.TrustProxyWithoutTrustedProxies) =>
+    assertion(~message="TrustProxyWithoutTrustedProxies raised", ~operator="=", (a, b) => a == b, true, true)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected TrustProxyWithoutTrustedProxies, got: " ++ msg)
+  }
+})
+
+test("--trust-proxy --trusted-proxies 10.0.0.0/8 → Ok with trustProxy=true", () => {
+  let r = Parser.parse(["--trusted-proxies", "10.0.0.0/8", "--trust-proxy"])
+  switch r {
   | Ok(config) =>
-    assertion(
-      ~message="trustProxy is true when --trust-proxy passed",
-      ~operator="=",
-      (a, b) => a == b,
-      config.trustProxy,
-      true,
-    )
+    assertion(~message="trustProxy is true", ~operator="=", (a, b) => a == b, config.trustProxy, true)
   | Error(e) =>
     let msg = ParseError.toString(e)
     JsError.throwWithMessage("Expected Ok, got error: " ++ msg)
   }
+})
+
+test("--trusted-proxies 10.0.0.0/8 --trust-proxy → Ok (order doesn't matter)", () => {
+  let r = Parser.parse(["--trusted-proxies", "10.0.0.0/8", "--trust-proxy"])
+  switch r {
+  | Ok(config) =>
+    assertion(~message="trustProxy is true", ~operator="=", (a, b) => a == b, config.trustProxy, true)
+  | Error(e) =>
+    let msg = ParseError.toString(e)
+    JsError.throwWithMessage("Expected Ok, got error: " ++ msg)
+  }
+})
+
+test("--trusted-proxies 10.0.0.0/8,192.168.0.0/16 parses (comma-separated)", () => {
+  let c = unwrapConfig(Parser.parse(["--trusted-proxies", "10.0.0.0/8,192.168.0.0/16", "--trust-proxy"]))
+  assertion(
+    ~message="trustedProxies has 2 entries",
+    ~operator="=",
+    (a, b) => a == b,
+    Array.length(c.trustedProxies),
+    2,
+  )
+  assertion(
+    ~message="first CIDR is 10.0.0.0/8",
+    ~operator="=",
+    (a, b) => a == b,
+    c.trustedProxies[0]->Option.getOr(""),
+    "10.0.0.0/8",
+  )
+  assertion(
+    ~message="second CIDR is 192.168.0.0/16",
+    ~operator="=",
+    (a, b) => a == b,
+    c.trustedProxies[1]->Option.getOr(""),
+    "192.168.0.0/16",
+  )
+})
+
+test("--trusted-proxies 10.0.0.0/8 without --trust-proxy → Ok, trustedProxies set but unused", () => {
+  let c = unwrapConfig(Parser.parse(["--trusted-proxies", "10.0.0.0/8"]))
+  assertion(
+    ~message="trustedProxies has 1 entry",
+    ~operator="=",
+    (a, b) => a == b,
+    Array.length(c.trustedProxies),
+    1,
+  )
+  assertion(~message="trustProxy is false", ~operator="=", (a, b) => a == b, c.trustProxy, false)
 })
 
 test("--rate-limit-max-requests returns RemovedFlag error", () => {

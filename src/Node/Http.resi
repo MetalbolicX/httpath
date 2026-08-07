@@ -26,7 +26,7 @@ let socketWriteBuffer: (serverSocket, Buffer.t) => promise<result<unit, JsExn.t>
 let socketDestroy: serverSocket => unit
 let closeServer: server => promise<unit>
 let closeServerVariant: serverVariant => promise<unit>
-let resolveClientIp: (~trustProxy: bool, ~socketIp: string, ~headers: array<(string, string)>) => string
+let resolveClientIp: (~trustProxy: bool, ~socketIp: string, ~headers: array<(string, string)>, ~trustedCidrs: array<string>=?) => string
 let extractCredentials: (~authHeader: option<string>, ~entries: array<Basic.entry>) => option<string>
 
 type serverHandle = {

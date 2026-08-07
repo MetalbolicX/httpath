@@ -13,6 +13,7 @@ type t =
   | ConflictingTlsFlags(array<string>)  // conflicting args: typically ["--no-tls", "--tls-cert", path] etc.
   | ProtectedDirRefused(string, ProtectedDir.matchedRule, string)  // (requested, matchedRule, resolvedPath)
   | PublicBindRequiresLan(string)  // host that requires --lan
+  | TrustProxyWithoutTrustedProxies  // --trust-proxy without --trusted-proxies
 
 // UnwritableAccessLog is a raise-able exception (separate from the result variant)
 exception UnwritableAccessLog(string)
@@ -35,5 +36,7 @@ let toString = (e: t): string => {
     `httpath: refusing to serve a protected system directory.\n\n  Requested:  ${requested}\n  Resolved:   ${resolved}\n  Matched:    ${ProtectedDir.ruleToString(rule)}\n\n  Serving this directory exposes admin-privilege files over the network.\n  If this is intentional and you accept the risk, re-run with:\n\n      --allow-protected-dir\n\n  (Consider also --tls when exposing over --lan.)`
   | PublicBindRequiresLan(host) =>
     `--host ${host} requires --lan. Non-loopback binds must opt into LAN security defaults (TLS, auth, rate limiting).`
+  | TrustProxyWithoutTrustedProxies =>
+    `--trust-proxy requires --trusted-proxies to be set. X-Forwarded-For spoofing is only safe when the immediate TCP peer is a known proxy (e.g. nginx on the LAN).`
   }
 }
