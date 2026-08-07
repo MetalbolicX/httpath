@@ -2,6 +2,7 @@
   "name": "@metalbolicx/httpath-rescript",
   "version": "0.1.0",
   "description": "ReScript rewrite of httpath",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "httpath": "./dist/httpath.mjs"
@@ -9,6 +10,19 @@
   "engines": {
     "node": ">=22"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MetalbolicX/httpath.git"
+  },
+  "author": "José Martínez Santana",
+  "keywords": [
+    "static-server",
+    "file-server",
+    "dev-server",
+    "live-reload",
+    "rescript",
+    "cli"
+  ],
   "files": [
     "dist/",
     "package.json",
