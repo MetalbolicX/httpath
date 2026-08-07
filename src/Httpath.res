@@ -62,7 +62,16 @@ let start = (
       Http.socketWriteBuffer(socket, Buffer.fromString(response, "utf8"))
       ->Promise.then(result => {
         switch result {
-        | Ok() => WsHub.register(socket)
+        | Ok() =>
+          let clientIp = try {
+            Http.socketRemoteAddress(socket)
+          } catch {
+          | _ => "unknown"
+          }
+          switch WsHub.register(socket, clientIp) {
+          | Ok() => ()
+          | Error(_) => Http.socketDestroy(socket)
+          }
         | Error(_) => Http.socketDestroy(socket)
         }
         Promise.resolve()
