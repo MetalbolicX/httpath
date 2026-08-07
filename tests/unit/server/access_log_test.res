@@ -7,6 +7,10 @@ open Test
 // AccessLog.record is the log entry type — defined in src/Server/AccessLog.res
 type logEntry = AccessLog.record
 
+type parsedJson = {path: string}
+
+@scope("JSON") external parseJson: string => parsedJson = "parse"
+
 // ---------------------------------------------------------------------------
 // Test helpers — module-level externals for temp file handling
 // ---------------------------------------------------------------------------
@@ -111,6 +115,90 @@ test("AccessLog.format sanitizes CRLF in path (no raw CR or LF)", () => {
     ~operator="=",
     (a, b) => a == b,
     String.includes(line, "\n"),
+    false,
+  )
+})
+
+test("AccessLog.formatJson sanitizes CR in path", () => {
+  let entry: logEntry = {
+    timestamp: "2026-08-04T07:44:10.000Z",
+    requestId: "test-uuid-0006",
+    ip: "192.168.1.1",
+    method: "GET",
+    path: "/foo\rbar",
+    status: 200,
+    bytes: 0,
+    duration_ms: 5,
+  }
+  let parsed = parseJson(AccessLog.formatJson(entry))
+  assertion(
+    ~message="parsed path does not contain raw CR",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(parsed.path, "\r"),
+    false,
+  )
+  assertion(
+    ~message="parsed path does not contain raw LF",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(parsed.path, "\n"),
+    false,
+  )
+})
+
+test("AccessLog.formatJson sanitizes LF in path", () => {
+  let entry: logEntry = {
+    timestamp: "2026-08-04T07:44:10.000Z",
+    requestId: "test-uuid-0007",
+    ip: "192.168.1.1",
+    method: "POST",
+    path: "/foo\nbar",
+    status: 200,
+    bytes: 0,
+    duration_ms: 5,
+  }
+  let parsed = parseJson(AccessLog.formatJson(entry))
+  assertion(
+    ~message="parsed path does not contain raw CR",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(parsed.path, "\r"),
+    false,
+  )
+  assertion(
+    ~message="parsed path does not contain raw LF",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(parsed.path, "\n"),
+    false,
+  )
+})
+
+test("AccessLog.formatJson sanitizes CRLF in path (no raw CR or LF)", () => {
+  let entry: logEntry = {
+    timestamp: "2026-08-04T07:44:10.000Z",
+    requestId: "test-uuid-0008",
+    ip: "192.168.1.1",
+    method: "PUT",
+    path: "/foo\r\nbar",
+    status: 201,
+    bytes: 512,
+    duration_ms: 10,
+  }
+  let parsed = parseJson(AccessLog.formatJson(entry))
+  assertion(
+    ~message="parsed path does not contain raw CR",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(parsed.path, "\r"),
+    false,
+  )
+  assertion(
+    ~message="parsed path does not contain raw LF",
+    ~operator="=",
+    (a, b) => a == b,
+    String.includes(parsed.path, "\n"),
     false,
   )
 })
