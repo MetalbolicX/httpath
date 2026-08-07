@@ -27,6 +27,12 @@ let securityHeaders: array<(string, string)> = [
   ),
 ]
 
+// HSTS — only emitted when TLS is active (not part of the static set).
+let hstsHeader: (string, string) = (
+  "strict-transport-security",
+  "max-age=31536000; includeSubDomains",
+)
+
 // ---------------------------------------------------------------------------
 // REQ-HEADERS-2: withSecurityHeaders appends all eight to any existing headers
 // ---------------------------------------------------------------------------
@@ -43,9 +49,15 @@ let isSecurityHeaderKey = (name: string): bool => {
   name == "content-security-policy"
 }
 
-let withSecurityHeaders = (existing: array<(string, string)>): array<(string, string)> => {
+let withSecurityHeaders = (~cspOverride: option<string>=?, existing: array<(string, string)>): array<(string, string)> => {
   // Filter out any pre-existing security headers before appending the full set.
   // This avoids duplication when called on a response that already contains them.
   let filtered = existing->Array.filter(((name, _)) => !isSecurityHeaderKey(name))
-  Array.concat(filtered, securityHeaders)
+  switch cspOverride {
+  | Some(csp) =>
+    let base = Array.concat(filtered, securityHeaders)
+    let filteredBase = base->Array.filter(((name, _)) => name != "content-security-policy")
+    Array.concat(filteredBase, [("content-security-policy", csp)])
+  | None => Array.concat(filtered, securityHeaders)
+  }
 }

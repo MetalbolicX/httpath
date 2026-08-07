@@ -108,7 +108,7 @@ let errorMsg = (error: exn): string => {
 // serveFile: MIME + optional live-reload injection + SVG content-disposition
 // ---------------------------------------------------------------------------
 
-let serveFile = (~method: string, ~safePath: string, ~enableLiveReload: bool, ~port: int): promise<
+let serveFile = (~method: string, ~safePath: string, ~enableLiveReload: bool, ~port: int, ~tls: bool): promise<
   Types.outcome,
 > => {
   let mime = Mime.fromPath(~path=safePath)
@@ -116,10 +116,11 @@ let serveFile = (~method: string, ~safePath: string, ~enableLiveReload: bool, ~p
 
   // HEAD returns Empty body
   if method == "HEAD" {
+    let hdrs = tls ? Array.concat([Headers.hstsHeader], baseHeaders) : baseHeaders
     Promise.resolve(
       Types.Respond({
         status: 200,
-        headers: Headers.withSecurityHeaders(baseHeaders),
+        headers: Headers.withSecurityHeaders(hdrs),
         body: Types.Empty,
       }),
     )
@@ -127,19 +128,23 @@ let serveFile = (~method: string, ~safePath: string, ~enableLiveReload: bool, ~p
     Fs.readTextFile(safePath)
     ->Promise.then(html => {
       let injected = Injector.injectLiveReloadScript(~html, ~port)
+      let hdrs = tls ? Array.concat([Headers.hstsHeader], baseHeaders) : baseHeaders
       Promise.resolve(
         Types.Respond({
           status: 200,
-          headers: Headers.withSecurityHeaders(baseHeaders),
+          headers: Headers.withSecurityHeaders(hdrs),
           body: Types.Html(injected),
         }),
       )
     })
     ->Promise.catch(_error => {
+      let hdrs = tls
+        ? Array.concat([Headers.hstsHeader], [("content-type", "text/plain; charset=utf-8")])
+        : [("content-type", "text/plain; charset=utf-8")]
       Promise.resolve(
         Types.Respond({
           status: 500,
-          headers: Headers.withSecurityHeaders([("content-type", "text/plain; charset=utf-8")]),
+          headers: Headers.withSecurityHeaders(hdrs),
           body: Types.Empty,
         }),
       )
@@ -163,10 +168,11 @@ let serveFile = (~method: string, ~safePath: string, ~enableLiveReload: bool, ~p
       } else {
         Array.concat(baseHeaders, [contentLengthHeader])
       }
+      let hdrs = tls ? Array.concat([Headers.hstsHeader], finalHeaders) : finalHeaders
       Promise.resolve(
         Types.Respond({
           status: 200,
-          headers: Headers.withSecurityHeaders(finalHeaders),
+          headers: Headers.withSecurityHeaders(hdrs),
           body: Types.File(safePath),
         }),
       )
@@ -201,6 +207,7 @@ let serveDirectory = (
   ~enableLiveReload: bool,
   ~port: int,
   ~ignorePatterns: array<string>,
+  ~tls: bool,
 ): promise<Types.outcome> => {
   // HEAD returns Empty body with content-type
   if method == "HEAD" {
@@ -288,7 +295,15 @@ let serveDirectory = (
       Promise.resolve(
         Types.Respond({
           status: 200,
-          headers: Headers.withSecurityHeaders([("content-type", "text/html; charset=utf-8")]),
+          headers: Headers.withSecurityHeaders(
+            ~cspOverride="default-src 'none'",
+            tls
+              ? [
+                  ("content-type", "text/html; charset=utf-8"),
+                  Headers.hstsHeader,
+                ]
+              : [("content-type", "text/html; charset=utf-8")],
+          ),
           body: Types.Html(withInjection),
         }),
       )
@@ -440,6 +455,7 @@ let handle = (
                                 ~safePath,
                                 ~enableLiveReload=config.enableLiveReload,
                                 ~port=config.port,
+                                ~tls=config.tls,
                               )
                             } else if Fs.statIsDirectory(statInfo) {
                               if config.enableDirectoryListing {
@@ -450,6 +466,7 @@ let handle = (
                                   ~enableLiveReload=config.enableLiveReload,
                                   ~port=config.port,
                                   ~ignorePatterns=config.ignorePatterns,
+                                  ~tls=config.tls,
                                 )
                               } else {
                                 // Try index.html fallback
@@ -480,6 +497,7 @@ let handle = (
                                             ~safePath=indexPath,
                                             ~enableLiveReload=config.enableLiveReload,
                                             ~port=config.port,
+                                            ~tls=config.tls,
                                           )
                                         },
                                       )
