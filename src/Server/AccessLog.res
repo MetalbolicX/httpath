@@ -50,7 +50,7 @@ let format = (entry: record): string => {
 // Field set matches SCN-SL-001 / REQ-AL-002 in spec #3111.
 let formatJson = (entry: line): string => {
   // Sanitize CR/LF in path: replace the short JSON escapes \r and \n with
-  // \\r and \\n+  // so they don't unescape back to raw CR/LF during JSON parsing.
+  // \\r and \\n so they don't unescape back to raw CR/LF during JSON parsing.
   // Otherwise a path containing /foo\r\nbar would parse back to a value that
   // re-breaks the one-line-per-request invariant of the access log.
   let sanitizedPath = JsonEscape.escape(entry.path)
