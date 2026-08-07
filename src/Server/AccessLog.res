@@ -49,7 +49,14 @@ let format = (entry: record): string => {
 // Hand-rolled to avoid Js.Json / JSON.Encode deprecation churn.
 // Field set matches SCN-SL-001 / REQ-AL-002 in spec #3111.
 let formatJson = (entry: line): string => {
-  `{"ts":"${JsonEscape.escape(entry.timestamp)}","request_id":"${JsonEscape.escape(entry.requestId)}","ip":"${JsonEscape.escape(entry.ip)}","method":"${JsonEscape.escape(entry.method)}","path":"${JsonEscape.escape(entry.path)}","status":${Int.toString(entry.status)},"bytes":${Int.toString(entry.bytes)},"duration_ms":${Int.toString(entry.duration_ms)}}`
+  // Sanitize CR/LF in path: replace the short JSON escapes \r and \n with
+  // \\r and \\n+  // so they don't unescape back to raw CR/LF during JSON parsing.
+  // Otherwise a path containing /foo\r\nbar would parse back to a value that
+  // re-breaks the one-line-per-request invariant of the access log.
+  let sanitizedPath = JsonEscape.escape(entry.path)
+    ->String.replace("\\r", "\\\\r")
+    ->String.replace("\\n", "\\\\n")
+  `{"ts":"${JsonEscape.escape(entry.timestamp)}","request_id":"${JsonEscape.escape(entry.requestId)}","ip":"${JsonEscape.escape(entry.ip)}","method":"${JsonEscape.escape(entry.method)}","path":"${sanitizedPath}","status":${Int.toString(entry.status)},"bytes":${Int.toString(entry.bytes)},"duration_ms":${Int.toString(entry.duration_ms)}}`
 }
 
 // writeLine — emit one line to the destination
