@@ -84,6 +84,31 @@ refuses admin-privilege directories; `--lan` requires TLS unless an explicit
 one-line JSON with a request id. See each plan file; plan 011 is the detailed
 protected-directory plan requested.
 
+### Phase 5 — LAN-Private Hardening (post-Phase-4 audit)
+
+**Phase Objective:** Harden the server for the stated target — **private LAN
+deployment that is secure** — closing the remaining defense-in-depth and DoS gaps
+found in the post-Phase-4 re-audit (commit `cceb354`). Scoped to what matters for
+trusted-LAN use; public-internet-only items are deliberately excluded.
+
+| Plan | Title | Methodology | Effort | Risk | Depends on |
+|------|-------|-------------|--------|------|------------|
+| 021 | Add HSTS under TLS + tighten listing CSP to `default-src 'none'` | `[Basic]` | S | LOW | — |
+| 022 | Escape all C0 control characters in `JsonEscape` | `[TDD]` | S | LOW | — |
+| 023 | Enforce TLS 1.2 minimum + modern cipher list | `[TDD]` | S | LOW | — |
+| 024 | Gate `X-Forwarded-For` behind a trusted-proxy CIDR allowlist | `[TDD]` | M | MED | — |
+| 025 | Cap concurrent WebSocket connections (per-IP + global) | `[TDD]` | M | MED | — |
+| 026 | Drop privileges after bind when started as root | `[SDD]` | L | HIGH | — |
+
+**Methodology counts for Phase 5:** Basic 1 (021) · TDD 4 (022–025) · SDD 1 (026).
+
+**Deliverable & Success Criteria:** HSTS present iff TLS; listing CSP denies all
+script; JSON logs escape the full `U+0000–U+001F` range; TLS ≤1.1 handshakes
+rejected; XFF honored only from trusted-proxy peers; concurrent WS connections
+capped per-IP and globally; root-started server drops to `--user` before serving
+(completing plan 019's intent). Each plan: `pnpm run build` 0 warnings, full
+`pnpm test` green. See each plan file.
+
 ## Execution order & status
 
 Execute in order unless dependencies say otherwise. Within a phase, independent
@@ -111,6 +136,12 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 018  | Safe JSON string escaping for logger and access log | P2 | M | — | DONE |
 | 019  | Protected-directory privilege-escape runtime check | P2 | L | — | DONE |
 | 020  | Default access log to stdout under `--lan` (match README) | P3 | S | — | DONE |
+| 021  | HSTS under TLS + tighten listing CSP | P1 | S | — | DONE |
+| 022  | Escape all C0 control chars in JsonEscape | P2 | S | — | DONE |
+| 023  | Enforce TLS 1.2 minimum + ciphers | P2 | S | — | DONE |
+| 024  | Trusted-proxy CIDR allowlist for XFF | P3 | M | — | DONE |
+| 025  | Concurrent WebSocket connection caps | P1 | M | — | DONE |
+| 026  | Privilege drop after bind (root → --user) | P2 | L | — | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
@@ -125,8 +156,42 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
 - 014 (structured logging) depends on 013 so application logs and probe logs
   share the correlation id source.
 
+### Phase 5 ordering
+
+- 021–026 are mutually independent; within Phase 5, parallelize the three
+  `[Basic]`/`[TDD]` small ones (021, 022, 023) first, then 024/025, then the SDD
+  026 last (highest risk).
+- **026 completes 019**: privilege drop makes `checkPrivilegeAncestors`
+  (`src/Security/ProtectedDir.res:168-171`) reachable when `--user` is used, so
+  plan 019's root-degradation no-op no longer applies in practice.
+- **024 is conditional**: it only matters when httpath runs behind a reverse
+  proxy on the LAN. Direct-LAN deployments can defer it without exposure.
+- **025 is the highest-value LAN DoS fix**: a rogue/compromised LAN host is the
+  realistic threat; per-IP + global WS caps close the only unbounded resource.
+
 ## Findings considered and rejected
 
 - *Remove `unsafe-inline` from the live-reload CSP* — deferred; `unsafe-inline`
   is required for the injected WS reload script. Changing it needs a nonce-based
   injector, tracked separately from this readiness work.
+- *Add `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` headers*
+  — rejected during plan 021 vetting: all three (plus `permissions-policy`,
+  COOP, CORP, and a broad CSP) already exist in `src/Security/Headers.res`.
+  Plan 021 therefore narrowed to the two genuine gaps: HSTS (absent) and
+  tightening the directory-listing CSP from
+  `default-src 'self'; script-src 'unsafe-inline'` to `default-src 'none'`.
+- *Public-internet hardening (HSTS preload, per-IP HTTP connection caps beyond
+  plan 007, full CSP everywhere)* — out of scope: the stated target is
+  **private LAN**, not public internet. Revisit if the deployment model changes.
+- *`--tls-min-version` CLI flag* — deferred from plan 023; a fixed secure
+  default (TLS 1.2) ships first. Make configurable only if an operator
+  genuinely needs to raise/lower it.
+- *Pre-existing test failure: `tests/integration/logging_json.test.mjs:234`*
+  (`AccessLog.formatJson: sanitizes CR and LF in path`) — was failing on
+  master BEFORE plans 022/024/025 (verified by checkout at `cceb354`); it is
+  unrelated to Phase 5 work. The test expects CR/LF in the JSON-parsed `path`
+  to be removed/replaced, but the current `AccessLog.formatJson` calls
+  `JsonEscape.escape`, which preserves the short forms `\r`/`\n` (RFC-correct
+  but parseable as raw CR/LF). Track as a separate follow-up to either
+  tighten the escape scheme or re-encode CR/LF as `\u000d`/`\u000a` in
+  `formatJson` specifically.
