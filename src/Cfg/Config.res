@@ -26,6 +26,8 @@ type t = {
   rateLimitEnabled: bool,
   accessLog: option<string>,
   readOnly: bool,
+  user: option<string>,   // privilege-drop target user (plan 026)
+  group: option<string>,  // privilege-drop target group (plan 026)
 }
 
 // Default Config values. Directory is resolved to absolute at parse time.
@@ -66,4 +68,6 @@ let default: t = {
   rateLimitEnabled: false,
   accessLog: None,
   readOnly: false,
+  user: None,
+  group: None,
 }

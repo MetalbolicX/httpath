@@ -26,6 +26,8 @@ type t = {
   rateLimitEnabled: bool,
   accessLog: option<string>,
   readOnly: bool,
+  user: option<string>,   // privilege-drop target user (plan 026)
+  group: option<string>,  // privilege-drop target group (plan 026)
 }
 
 // The default config — all flag defaults from the legacy parser.

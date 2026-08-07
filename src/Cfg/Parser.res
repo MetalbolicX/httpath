@@ -38,6 +38,8 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let rateLimitWindow = ref((None: option<int>))
   let accessLog = ref((None: option<string>))
   let readOnly = ref(false)
+  let user = ref((None: option<string>))
+  let group = ref((None: option<string>))
 
   let i = ref(0)
   let argsLen = Array.length(args)
@@ -209,6 +211,20 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
     } else if arg == "--read-only" {
       readOnly := true
       i := i.contents + 1
+    } else if arg == "--user" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        user := Some(args[i.contents + 1]->Option.getOr(""))
+        i := i.contents + 2
+      }
+    } else if arg == "--group" {
+      if i.contents + 1 >= argsLen {
+        parseError := Some(ParseError.MissingValue(arg))
+      } else {
+        group := Some(args[i.contents + 1]->Option.getOr(""))
+        i := i.contents + 2
+      }
     } else if (
       arg == "--rate-limit-max-requests" ||
       arg == "--rate-limit-window-ms"
@@ -344,6 +360,8 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
             rateLimitEnabled: effectiveRateLimitEnabled,
             accessLog: accessLog.contents,
             readOnly: effectiveReadOnly,
+            user: user.contents,
+            group: group.contents,
           })
         }
       }
