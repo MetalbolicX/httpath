@@ -7,6 +7,12 @@
 @val external privSetuid: int => unit = "process.setuid"
 @val external privSetgid: int => unit = "process.setgid"
 
+// Like Signals.onSignal, but the callback receives the event payload (error/reason).
+// Used for `uncaughtException` and `unhandledRejection`, where the payload carries
+// the diagnostic. The payload is untyped ('a) because Node emits heterogeneous values;
+// callers cast via Obj.magic + JsExn.message.
+@scope("process") @val external onProcessEvent: (string, 'a => unit) => unit = "on"
+
 /// Start the HTTP/HTTPS server + Monitor with the given handler and config.
 /// authEntries: auth file entries, if found (None if no file or --no-auth).
 /// TLS is activated automatically when config.tls is true.
@@ -259,6 +265,39 @@ let start = (
 
   Signals.onSignal("SIGINT", sigintHandler)
   Signals.onSignal("SIGTERM", sigtermHandler)
+
+  // Guard against double-invocation of shutdown from multiple sources
+  // (e.g., SIGTERM while uncaughtException is firing).
+  let shuttingDown = ref(false)
+  let guardedShutdown = () => {
+    if shuttingDown.contents {
+      ()
+    } else {
+      shuttingDown := true
+      shutdown()
+    }
+  }
+
+  // Handle process-level exception events with Logger.Error + exit.
+  // The payload is untyped ('a) — Obj.magic + JsExn.message extracts the string.
+  let uncaughtHandler = (e) => {
+    let msg = switch JsExn.message(Obj.magic(e)) {
+    | Some(m) => m
+    | None => "unknown error"
+    }
+    Logger.log(Logger.Error, `uncaughtException: ${msg}`)
+    guardedShutdown()
+  }
+  let rejectionHandler = (e) => {
+    let msg = switch JsExn.message(Obj.magic(e)) {
+    | Some(m) => m
+    | None => "unknown error"
+    }
+    Logger.log(Logger.Error, `unhandledRejection: ${msg}`)
+    guardedShutdown()
+  }
+  onProcessEvent("uncaughtException", uncaughtHandler)
+  onProcessEvent("unhandledRejection", rejectionHandler)
 
   // Wait for the server to finish closing before exiting.
   // The closed promise is resolved by Http.startServer's abort handler
