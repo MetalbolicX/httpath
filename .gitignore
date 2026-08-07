@@ -163,6 +163,10 @@ dist
 # SDD / skill registry artifacts
 .atl/
 
+# Local planning / opencode metadata
+plans/
+.opencode/
+
 # Rolldown build output
 dist/
 
