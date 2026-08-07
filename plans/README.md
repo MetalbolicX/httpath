@@ -141,7 +141,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 023  | Enforce TLS 1.2 minimum + ciphers | P2 | S | — | DONE |
 | 024  | Trusted-proxy CIDR allowlist for XFF | P3 | M | — | DONE |
 | 025  | Concurrent WebSocket connection caps | P1 | M | — | DONE |
-| 026  | Privilege drop after bind (root → --user) | P2 | L | — | TODO |
+| 026  | Privilege drop after bind (root → --user) | P2 | L | — | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
