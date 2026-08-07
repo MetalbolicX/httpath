@@ -14,6 +14,7 @@ type t = {
   lan: bool,
   allowProtectedDir: bool,
   trustProxy: bool,
+  trustedProxies: array<string>,
   authFile: option<string>,
   noAuth: bool,
   noTls: bool,
@@ -37,7 +38,7 @@ type t = {
 //   logMode: Logger.Json
 //   enableLiveReload: true
 //   restartOnChange: false
-//   trustProxy: removed (--trust-proxy flag emits ParseError.RemovedFlag)
+//   trustProxy: false  // --trust-proxy gate requires --trusted-proxies
 //   allowProtectedDir: false
 //   lan: false
 let default: t = {
@@ -53,6 +54,7 @@ let default: t = {
   lan: false,
   allowProtectedDir: false,
   trustProxy: false,
+  trustedProxies: [],
   authFile: None,
   noAuth: false,
   noTls: false,

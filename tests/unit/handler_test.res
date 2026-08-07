@@ -65,6 +65,7 @@ let testConfigBase: Config.t = {
   lan: false,
   allowProtectedDir: false,
   trustProxy: false,
+  trustedProxies: [],
   authFile: None,
   noAuth: false,
   noTls: false,

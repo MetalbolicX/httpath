@@ -14,6 +14,7 @@ type t = {
   lan: bool,
   allowProtectedDir: bool,
   trustProxy: bool,
+  trustedProxies: array<string>,
   authFile: option<string>,
   noAuth: bool,
   noTls: bool,
