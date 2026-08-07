@@ -167,7 +167,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 025  | Concurrent WebSocket connection caps | P1 | M | — | DONE |
 | 026  | Privilege drop after bind (root → --user) | P2 | L | — | DONE |
 | 027  | npm publish metadata (license + discoverability) | P1 | S | — | DONE |
-| 028  | Process-level uncaughtException/unhandledRejection handlers | P1 | M | — | TODO |
+| 028  | Process-level uncaughtException/unhandledRejection handlers | P1 | M | — | DONE |
 | 029  | Default ignore `.env`/`.httpath-auth`/`.npmrc` in listings | P1 | S | — | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
