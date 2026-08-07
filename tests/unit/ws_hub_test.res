@@ -3,6 +3,7 @@
 // The fake socket records events; the hub's public API is exercised without throws.
 
 open Test
+open WsHub_Types
 
 @module("./ws_hub_socket.mjs")
 external createFakeSocket: unit => 'fakeSocket = "createFakeSocket"
@@ -44,7 +45,7 @@ test("WsHub.register grows live set size from 0 to 1", () => {
   let sock = asServerSocket(fake)
 
   let before = WsHub._testGetRegisteredCount()
-  WsHub.register(sock)
+  let _ = WsHub.register(sock, "1.1.1.1")
   let after = WsHub._testGetRegisteredCount()
 
   assertion(
@@ -64,9 +65,9 @@ test("WsHub.register is idempotent — second call leaves size at 1", () => {
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
-  WsHub.register(sock)
+  let _ = WsHub.register(sock, "2.2.2.2")
   let before = WsHub._testGetRegisteredCount()
-  WsHub.register(sock)
+  let _ = WsHub.register(sock, "2.2.2.2")
   let after = WsHub._testGetRegisteredCount()
 
   assertion(
@@ -86,9 +87,9 @@ test("WsHub.unregister returns live set size to 0", () => {
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
-  WsHub.register(sock)
+  let _ = WsHub.register(sock, "3.3.3.3")
   let before = WsHub._testGetRegisteredCount()
-  WsHub.unregister(sock)
+  WsHub.unregister(sock, "3.3.3.3")
   let after = WsHub._testGetRegisteredCount()
 
   assertion(
@@ -109,7 +110,7 @@ test("WsHub.unregister is idempotent — unknown socket leaves size unchanged", 
   let sock = asServerSocket(fake)
 
   let before = WsHub._testGetRegisteredCount()
-  WsHub.unregister(sock)
+  WsHub.unregister(sock, "0.0.0.0")
   let after = WsHub._testGetRegisteredCount()
 
   assertion(
@@ -131,7 +132,7 @@ test("WsHub.register attaches close listener — socket close triggers unregiste
   let sock = asServerSocket(fake)
   let counter = getCounter()
 
-  WsHub.register(sock)
+  let _ = WsHub.register(sock, "4.4.4.4")
   let registeredCount = WsHub._testGetRegisteredCount()
 
   // Verify the socket is registered (count == 1).
@@ -186,7 +187,7 @@ test("WsHub.register attaches error listener — socket error triggers unregiste
   let sock = asServerSocket(fake)
   let counter = getCounter()
 
-  WsHub.register(sock)
+  let _ = WsHub.register(sock, "5.5.5.5")
   let registeredCount = WsHub._testGetRegisteredCount()
 
   // Verify the socket is registered.
@@ -257,7 +258,7 @@ test("WsHub.notifyReload writes to registered socket without throwing", () => {
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
 
-  WsHub.register(sock)
+  let _ = WsHub.register(sock, "6.6.6.6")
   // notifyReload should not throw even when write succeeds.
   WsHub.notifyReload()
 
@@ -282,8 +283,8 @@ test("WsHub.notifyReload broadcasts to all registered clients", () => {
   let sock1 = asServerSocket(fake1)
   let sock2 = asServerSocket(fake2)
 
-  WsHub.register(sock1)
-  WsHub.register(sock2)
+  let _ = WsHub.register(sock1, "7.7.7.7")
+  let _ = WsHub.register(sock2, "7.7.7.8")
   WsHub.notifyReload()
 
   // Both sockets should have received exactly one write.
@@ -304,8 +305,8 @@ test("WsHub.notifyReload broadcasts in registration order", () => {
   let sock1 = asServerSocket(fake1)
   let sock2 = asServerSocket(fake2)
 
-  WsHub.register(sock1)
-  WsHub.register(sock2)
+  let _ = WsHub.register(sock1, "8.8.8.8")
+  let _ = WsHub.register(sock2, "8.8.8.9")
   clearWrites(fake1)
   clearWrites(fake2)
   WsHub.notifyReload()
@@ -341,8 +342,8 @@ test("WsHub.notifyReload continues to remaining clients after sync throw", () =>
   let sock1 = asServerSocket(fake1)
   let sock2 = asServerSocket(fake2)
 
-  WsHub.register(sock1)
-  WsHub.register(sock2)
+  let _ = WsHub.register(sock1, "9.9.9.9")
+  let _ = WsHub.register(sock2, "9.9.9.10")
   clearWrites(fake1)
   clearWrites(fake2)
 
@@ -380,3 +381,228 @@ test("WsHub.notifyReload continues to remaining clients after sync throw", () =>
 // Since socketWriteBuffer is synchronous and doesn't await the callback, the hub
 // cannot detect this failure synchronously. This would require a design change
 // (async socketWriteBuffer that the hub awaits). Out of scope for this change.
+
+// ---------------------------------------------------------------------------
+// Scenario: Per-IP cap — 3rd socket from same IP is rejected (perIpMax=2)
+// ---------------------------------------------------------------------------
+test("WsHub.register rejects 3rd socket from same IP (per-ip cap=2)", () => {
+  WsHub._testResetHub()
+  let fake1 = createFakeSocket()
+  let fake2 = createFakeSocket()
+  let fake3 = createFakeSocket()
+  let sock1 = asServerSocket(fake1)
+  let sock2 = asServerSocket(fake2)
+  let sock3 = asServerSocket(fake3)
+
+  let r1 = WsHub.register(sock1, "1.2.3.4")
+  let r2 = WsHub.register(sock2, "1.2.3.4")
+
+  // First two connections from the same IP succeed.
+  assertion(
+    ~message="first connection from IP should succeed",
+    ~operator="=",
+    (a, b) => a == b,
+    r1,
+    Ok(),
+  )
+  assertion(
+    ~message="second connection from same IP should succeed",
+    ~operator="=",
+    (a, b) => a == b,
+    r2,
+    Ok(),
+  )
+
+  // Third from same IP is rejected with CapRejected({ reason: PerIp, clientIp }).
+  let r3 = WsHub.register(sock3, "1.2.3.4")
+  switch r3 {
+  | Error(CapRejected({ reason: PerIp, clientIp })) =>
+    assertion(
+      ~message="third connection should be rejected with PerIp reason",
+      ~operator="=",
+      (a, b) => a == b,
+      clientIp,
+      "1.2.3.4",
+    )
+  | Ok() =>
+    assertion(
+      ~message="third connection should NOT succeed",
+      ~operator="=",
+      (a, b) => a == b,
+      "unexpected Ok",
+      "Error expected",
+    )
+  | Error(CapRejected({ reason: Global, clientIp: _ })) =>
+    assertion(
+      ~message="rejection should be PerIp not Global",
+      ~operator="=",
+      (a, b) => a == b,
+      "PerIp",
+      "Global",
+    )
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Scenario: Global cap — 4th socket from any IP is rejected (globalMax=3)
+// ---------------------------------------------------------------------------
+test("WsHub.register rejects 4th socket regardless of IP (global cap=3)", () => {
+  WsHub._testResetHub()
+  let fake1 = createFakeSocket()
+  let fake2 = createFakeSocket()
+  let fake3 = createFakeSocket()
+  let fake4 = createFakeSocket()
+  let sock1 = asServerSocket(fake1)
+  let sock2 = asServerSocket(fake2)
+  let sock3 = asServerSocket(fake3)
+  let sock4 = asServerSocket(fake4)
+
+  let r1 = WsHub.register(sock1, "1.2.3.4")
+  let r2 = WsHub.register(sock2, "1.2.3.5")
+  let r3 = WsHub.register(sock3, "1.2.3.6")
+
+  // Three distinct IPs all succeed.
+  assertion(
+    ~message="first connection should succeed",
+    ~operator="=",
+    (a, b) => a == b,
+    r1,
+    Ok(),
+  )
+  assertion(
+    ~message="second connection from different IP should succeed",
+    ~operator="=",
+    (a, b) => a == b,
+    r2,
+    Ok(),
+  )
+  assertion(
+    ~message="third connection from yet another IP should succeed",
+    ~operator="=",
+    (a, b) => a == b,
+    r3,
+    Ok(),
+  )
+
+  // Fourth from any IP is rejected with Global.
+  let r4 = WsHub.register(sock4, "1.2.3.7")
+  switch r4 {
+  | Error(CapRejected({ reason: Global, clientIp: _ })) =>
+    assertion(
+      ~message="fourth connection should be rejected with Global reason",
+      ~operator="=",
+      (a, b) => a == b,
+      true,
+      true,
+    )
+  | Ok() =>
+    assertion(
+      ~message="fourth connection should NOT succeed",
+      ~operator="=",
+      (a, b) => a == b,
+      "unexpected Ok",
+      "Error expected",
+    )
+  | Error(CapRejected({ reason: PerIp, clientIp: _ })) =>
+    assertion(
+      ~message="rejection should be Global not PerIp",
+      ~operator="=",
+      (a, b) => a == b,
+      "Global",
+      "PerIp",
+    )
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Scenario: Disconnect decrements per-IP counter — 3rd reconnects after 1 closes
+// ---------------------------------------------------------------------------
+test("WsHub.disconnect decrements IP counter and allows new connection", () => {
+  WsHub._testResetHub()
+  let fake1 = createFakeSocket()
+  let fake2 = createFakeSocket()
+  let fake3 = createFakeSocket()
+  let sock1 = asServerSocket(fake1)
+  let sock2 = asServerSocket(fake2)
+  let sock3 = asServerSocket(fake3)
+
+  // Register two from same IP (at cap of 2).
+  let r1 = WsHub.register(sock1, "5.6.7.8")
+  let r2 = WsHub.register(sock2, "5.6.7.8")
+
+  assertion(~message="first connection succeeds", ~operator="=", (a, b) => a == b, r1, Ok())
+  assertion(~message="second connection succeeds", ~operator="=", (a, b) => a == b, r2, Ok())
+
+  // Third should be rejected.
+  let r3 = WsHub.register(sock3, "5.6.7.8")
+  switch r3 {
+  | Error(CapRejected(_)) => () // expected
+  | Ok() =>
+    assertion(~message="third should be rejected before close", ~operator="=", (a, b) => a == b, "ok", "err")
+  }
+
+  // sock1 closes — simulate via the hub's registered close listener.
+  callListeners(fake1, "close")
+
+  // Now a new socket from the same IP should succeed.
+  let fake4 = createFakeSocket()
+  let sock4 = asServerSocket(fake4)
+  let r4 = WsHub.register(sock4, "5.6.7.8")
+
+  switch r4 {
+  | Ok() =>
+    assertion(
+      ~message="new connection after close should succeed",
+      ~operator="=",
+      (a, b) => a == b,
+      true,
+      true,
+    )
+  | Error(CapRejected({ reason: _, clientIp: _ })) =>
+    assertion(
+      ~message="new connection after close should NOT be rejected",
+      ~operator="=",
+      (a, b) => a == b,
+      "rejected",
+      "should be Ok",
+    )
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Scenario: Unknown IP bucket acts as single client (fallback IP = "unknown")
+// ---------------------------------------------------------------------------
+test("WsHub.register with unknown IP is treated as single client bucket", () => {
+  WsHub._testResetHub()
+  let fake1 = createFakeSocket()
+  let fake2 = createFakeSocket()
+  let fake3 = createFakeSocket()
+  let sock1 = asServerSocket(fake1)
+  let sock2 = asServerSocket(fake2)
+  let sock3 = asServerSocket(fake3)
+
+  let r1 = WsHub.register(sock1, "unknown")
+  let _r2 = WsHub.register(sock2, "unknown")
+
+  assertion(~message="first unknown-IP connection succeeds", ~operator="=", (a, b) => a == b, r1, Ok())
+  // Second from "unknown" IP succeeds (at cap of 2). Third hits per-IP cap.
+  let r3 = WsHub.register(sock3, "unknown")
+  switch r3 {
+  | Error(CapRejected({ reason: PerIp, clientIp })) =>
+    assertion(
+      ~message="second unknown-IP should be rejected as PerIp",
+      ~operator="=",
+      (a, b) => a == b,
+      clientIp,
+      "unknown",
+    )
+  | _ =>
+    assertion(
+      ~message="second unknown-IP should be rejected",
+      ~operator="=",
+      (a, b) => a == b,
+      "not rejected",
+      "rejected",
+    )
+  }
+})

@@ -2,14 +2,17 @@
 // Tracks upgraded serverSocket values and broadcasts "reload" frames.
 // Out of scope: Phase-6 watcher call site, Phase-7 wiring.
 
+open WsHub_Types
+
 // ---------------------------------------------------------------------------
 // Private state
 // ---------------------------------------------------------------------------
 
-// Private client record — owns socket and its lifecycle callbacks.
+// Private client record — owns socket, client IP, and its lifecycle callbacks.
 // Callbacks are stored so they can be detached on unregister.
 type client = {
   socket: Http.serverSocket,
+  clientIp: string,
   onClose: unit => unit,
   onError: unit => unit,
 }
@@ -18,6 +21,17 @@ type client = {
 // The array preserves registration order for deterministic broadcast.
 // The state is not exported in WsHub.resi — encapsulated.
 let clients: ref<array<client>> = ref([])
+
+// Per-IP connection counts. Key = IP string, value = current count for that IP.
+// Empty entries MUST be removed on decrement to prevent unbounded map growth.
+let perIpCounts: ref<Belt.Map.String.t<int>> = ref(Belt.Map.String.empty)
+
+// Global connection counter
+let globalCount: ref<int> = ref(0)
+
+// Constants — follow-up will make these configurable via CLI flags
+let maxPerIp = 2
+let maxGlobal = 3
 
 // test-only: increment the shared counter in the test fake.
 // This is called by the onClose/onError callbacks so tests can verify
@@ -90,36 +104,65 @@ let makeReloadFrame = (): Buffer.t => {
 // Public API (matches WsHub.resi)
 // ---------------------------------------------------------------------------
 
-// Register a new socket. Idempotent — no-op if already registered.
+// Register a new socket with cap enforcement. Idempotent for the same socket.
 // Attaches 'close' and 'error' listeners that auto-unregister the socket.
-let rec register = (socket: Http.serverSocket): unit => {
+// Returns Ok() on success, Error(capRejected) if per-IP or global cap is hit.
+let rec register = (socket: Http.serverSocket, clientIp: string): result<unit, capRejected> => {
   if clientExists(socket) {
-    ()
+    Ok()
   } else {
-    let onClose = () => {
-      _testIncrementCounter()
-      unregister(socket)
+    // Cap checks BEFORE adding the client
+    let ipCount = switch Belt.Map.String.get(perIpCounts.contents, clientIp) {
+    | Some(n) => n
+    | None => 0
     }
-    let onError = () => {
-      _testIncrementCounter()
-      unregister(socket)
+    if ipCount >= maxPerIp {
+      Error(CapRejected({ reason: PerIp, clientIp }))
+    } else if globalCount.contents >= maxGlobal {
+      Error(CapRejected({ reason: Global, clientIp }))
+    } else {
+      // Increment counters BEFORE registering
+      perIpCounts := Belt.Map.String.set(perIpCounts.contents, clientIp, ipCount + 1)
+      globalCount := globalCount.contents + 1
+      // Attach lifecycle callbacks and register
+      let onClose = () => {
+        _testIncrementCounter()
+        unregister(socket, clientIp)
+      }
+      let onError = () => {
+        _testIncrementCounter()
+        unregister(socket, clientIp)
+      }
+      let _ = Events.on(socket, "close", onClose)
+      let _ = Events.on(socket, "error", onError)
+      let entry = { socket, clientIp, onClose, onError }
+      clients := Array.concat(clients.contents, [entry])
+      Ok()
     }
-    let _ = Events.on(socket, "close", onClose)
-    let _ = Events.on(socket, "error", onError)
-    let entry = {socket, onClose, onError}
-    clients := Array.concat(clients.contents, [entry])
-    ()
   }
 }
 
 // Unregister a socket. Idempotent — no-op if unknown.
 // Detaches the lifecycle listeners and removes the client record.
-and unregister = (socket: Http.serverSocket): unit => {
+// Decrements both global and per-IP counters; evicts the per-IP entry when count reaches 0.
+and unregister = (socket: Http.serverSocket, clientIp: string): unit => {
   let maybe = removeFromClients(socket)
   switch maybe {
   | Some(entry) => {
       let _ = Events.remove(socket, "close", entry.onClose)
       let _ = Events.remove(socket, "error", entry.onError)
+      // Decrement global counter
+      globalCount := globalCount.contents - 1
+      // Decrement per-IP counter; remove entry if count reaches 0
+      switch Belt.Map.String.get(perIpCounts.contents, clientIp) {
+      | Some(n) =>
+        if n <= 1 {
+          perIpCounts := Belt.Map.String.remove(perIpCounts.contents, clientIp)  // evict empty entry
+        } else {
+          perIpCounts := Belt.Map.String.set(perIpCounts.contents, clientIp, n - 1)
+        }
+      | None => ()
+      }
     }
   | None => ()
   }
@@ -128,10 +171,12 @@ and unregister = (socket: Http.serverSocket): unit => {
 // test-only: expose registered client count for unit-test assertions.
 let _testGetRegisteredCount = (): int => Array.length(clients.contents)
 
-// test-only: reset hub state — clears all registered clients.
+// test-only: reset hub state — clears all registered clients and counters.
 // Used by unit tests to ensure a clean baseline before each test.
 let _testResetHub = (): unit => {
   clients := []
+  perIpCounts := Belt.Map.String.empty
+  globalCount := 0
   ()
 }
 
@@ -175,7 +220,7 @@ and notifyReload = (): unit => {
       switch entryOpt {
       | Some(client) => {
           // Listen for async error before attempting write.
-          let errorListener = () => unregister(client.socket)
+          let errorListener = () => unregister(client.socket, client.clientIp)
           let _ = Events.on(client.socket, "error", errorListener)
           try {
             // Attempt one non-blocking write. The error listener handles async
@@ -185,7 +230,7 @@ and notifyReload = (): unit => {
           | _ => {
               // Sync throw — socket not writable. Prune immediately.
               let _ = Events.remove(client.socket, "error", errorListener)
-              unregister(client.socket)
+              unregister(client.socket, client.clientIp)
             }
           }
           i := i.contents + 1

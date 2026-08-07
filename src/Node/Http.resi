@@ -24,6 +24,7 @@ type serverTimeouts = {
 let socketWrite: (serverSocket, string) => unit
 let socketWriteBuffer: (serverSocket, Buffer.t) => promise<result<unit, JsExn.t>>
 let socketDestroy: serverSocket => unit
+let socketRemoteAddress: serverSocket => string
 let closeServer: server => promise<unit>
 let closeServerVariant: serverVariant => promise<unit>
 let resolveClientIp: (~trustProxy: bool, ~socketIp: string, ~headers: array<(string, string)>) => string
