@@ -109,6 +109,30 @@ capped per-IP and globally; root-started server drops to `--user` before serving
 (completing plan 019's intent). Each plan: `pnpm run build` 0 warnings, full
 `pnpm test` green. See each plan file.
 
+### Phase 6 — npm publish readiness (post-Phase-5 re-audit)
+
+**Phase Objective:** Close the final gaps for publishing the package to npm and
+running it via `npx httpath`. Re-audited at commit `e6ad31a`. The server itself
+is publish-ready; these three plans address packaging metadata, a process-level
+resilience gap, and a default-ignore hardening for secret-bearing dotfiles.
+Verified finding: `prepare` does NOT run on consumer registry/`npx` installs
+(see npm CLI `install.js` — root lifecycle scripts gate on bare local install
+only), so it is not a publish blocker and is left in place.
+
+| Plan | Title | Methodology | Effort | Risk | Depends on |
+|------|-------|-------------|--------|------|------------|
+| 027 | Add npm publish metadata (license + repository + keywords + author) | `[Basic]` | S | LOW | — |
+| 028 | Register process-level uncaughtException/unhandledRejection handlers | `[TDD]` | M | LOW | — |
+| 029 | Expand default ignore patterns to shield `.env`/`.httpath-auth`/`.npmrc` | `[TDD]` | S | LOW | — |
+
+**Methodology counts for Phase 6:** Basic 1 (027) · TDD 2 (028, 029).
+
+**Deliverable & Success Criteria:** `package.json` carries `"license": "MIT"`
+plus repository/keywords/author; a stray uncaught exception drains connections
+via the existing `shutdown()` instead of crashing; `.env`, `.httpath-auth`, and
+`.npmrc` are hidden from listings and serving by default. Each plan:
+`pnpm run build` 0 warnings, full `pnpm test` green. See each plan file.
+
 ## Execution order & status
 
 Execute in order unless dependencies say otherwise. Within a phase, independent
@@ -142,6 +166,9 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 024  | Trusted-proxy CIDR allowlist for XFF | P3 | M | — | DONE |
 | 025  | Concurrent WebSocket connection caps | P1 | M | — | DONE |
 | 026  | Privilege drop after bind (root → --user) | P2 | L | — | DONE |
+| 027  | npm publish metadata (license + discoverability) | P1 | S | — | DONE |
+| 028  | Process-level uncaughtException/unhandledRejection handlers | P1 | M | — | TODO |
+| 029  | Default ignore `.env`/`.httpath-auth`/`.npmrc` in listings | P1 | S | — | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
@@ -193,3 +220,14 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   to escape the short `\r`/`\n` forms into `\\r`/`\\n` so JSON parsing
   produces a 2-char literal `\r`/`\n` text value rather than raw CR/LF.
   Companion unit tests added in `tests/unit/server/access_log_test.res`.
+- *Remove the `prepare` script* — rejected during Phase 6 vetting: the initial
+  audit flagged `prepare` as a blocker that crashes consumer `npm install` /
+  `npx`. Verified false against the npm CLI source (`install.js:161`): root
+  lifecycle scripts (`preinstall`, `install`, `postinstall`, `prepare`) only
+  run for a **bare local `npm install`** (`!args.length && !isGlobalInstall`),
+  i.e. inside the package's own directory. Consumer registry/`npx` installs do
+  NOT run `prepare`; only local dev, `npm publish`/`npm pack`, and git
+  installs do. Since this is a registry-published CLI and `prepublishOnly`
+  already builds+tests before publish, `prepare` is harmless DX convention and
+  is intentionally left in place. (Git-based installs would still need the
+  toolchain — out of scope for the `npx` target.)
