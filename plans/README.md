@@ -188,10 +188,8 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED 
   genuinely needs to raise/lower it.
 - *Pre-existing test failure: `tests/integration/logging_json.test.mjs:234`*
   (`AccessLog.formatJson: sanitizes CR and LF in path`) — was failing on
-  master BEFORE plans 022/024/025 (verified by checkout at `cceb354`); it is
-  unrelated to Phase 5 work. The test expects CR/LF in the JSON-parsed `path`
-  to be removed/replaced, but the current `AccessLog.formatJson` calls
-  `JsonEscape.escape`, which preserves the short forms `\r`/`\n` (RFC-correct
-  but parseable as raw CR/LF). Track as a separate follow-up to either
-  tighten the escape scheme or re-encode CR/LF as `\u000d`/`\u000a` in
-  `formatJson` specifically.
+  master BEFORE plans 022/024/025 (verified by checkout at `cceb354`).
+  **Resolved in `8ad0bc4`** by post-processing `JsonEscape.escape(entry.path)`
+  to escape the short `\r`/`\n` forms into `\\r`/`\\n` so JSON parsing
+  produces a 2-char literal `\r`/`\n` text value rather than raw CR/LF.
+  Companion unit tests added in `tests/unit/server/access_log_test.res`.
