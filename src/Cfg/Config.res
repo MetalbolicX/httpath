@@ -47,7 +47,7 @@ let default: t = {
   directory: Process.cwd(),
   hostname: "127.0.0.1",
   port: 8080,
-  ignorePatterns: [".git", "node_modules", ".DS_Store"],
+  ignorePatterns: [".git", "node_modules", ".DS_Store", ".env", ".httpath-auth", ".npmrc"],
   enableDirectoryListing: true,
   logLevel: Logger.Info,
   logMode: Logger.Json,

@@ -280,7 +280,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
       } else {
         let effectiveIgnorePatterns = switch ignorePatterns.contents {
         | Some(patterns) => patterns
-        | None => [".git", "node_modules", ".DS_Store"]
+        | None => [".git", "node_modules", ".DS_Store", ".env", ".httpath-auth", ".npmrc"]
         }
 
         // Conflict: --no-tls is meaningless when explicit TLS material is provided.

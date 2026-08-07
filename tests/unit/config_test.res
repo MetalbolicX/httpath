@@ -60,6 +60,43 @@ test("Config.default ignorePatterns has .git, node_modules, .DS_Store", () => {
   )
 })
 
+test("Config.default ignorePatterns has sensitive dotfiles: .env, .httpath-auth, .npmrc", () => {
+  let patterns = Config.default.ignorePatterns
+  let hasEnv = Array.some(patterns, p => p == ".env")
+  let hasHttpathAuth = Array.some(patterns, p => p == ".httpath-auth")
+  let hasNpmrc = Array.some(patterns, p => p == ".npmrc")
+  assertion(
+    ~message="ignorePatterns contains .env",
+    ~operator="=",
+    (a, b) => a == b,
+    hasEnv,
+    true,
+  )
+  assertion(
+    ~message="ignorePatterns contains .httpath-auth",
+    ~operator="=",
+    (a, b) => a == b,
+    hasHttpathAuth,
+    true,
+  )
+  assertion(
+    ~message="ignorePatterns contains .npmrc",
+    ~operator="=",
+    (a, b) => a == b,
+    hasNpmrc,
+    true,
+  )
+  // Sanity check: matcher is exact-segment, so .environment should NOT be ignored
+  let hasEnvironment = Array.some(patterns, p => p == ".environment")
+  assertion(
+    ~message=".environment is NOT in ignorePatterns (exact-segment matcher)",
+    ~operator="=",
+    (a, b) => a == b,
+    hasEnvironment,
+    false,
+  )
+})
+
 test("Config.default enableDirectoryListing is true", () => {
   assertion(
     ~message="enableDirectoryListing defaults to true",

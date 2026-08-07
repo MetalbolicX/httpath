@@ -67,11 +67,11 @@ test("parse([]) returns all defaults", () => {
     )
     assertion(~message="logLevel is Info", ~operator="=", (a, b) => a == b, c.logLevel, Logger.Info)
     assertion(
-      ~message="ignorePatterns has 3 entries",
+      ~message="ignorePatterns has 6 entries",
       ~operator="=",
       (a, b) => a == b,
       Array.length(c.ignorePatterns),
-      3,
+      6,
     )
   }
 })
