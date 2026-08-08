@@ -1,5 +1,6 @@
 // tests/unit/node/http_gate_test.res — unit tests for Http gate credential parsing.
-// Tests Http.extractCredentials (Basic auth parsing + user verification).
+// Tests Gate.extractCredentials (Basic auth parsing + user verification).
+// extractCredentials now lives in Security/Gate; Http.gate/gateWs delegate to Gate.
 
 open Test
 
@@ -30,101 +31,88 @@ let bobEntry: authEntry = {
 }
 
 // ---------------------------------------------------------------------------
-// Http.extractCredentials — credential parsing and verification
+// Gate.extractCredentials — credential parsing and verification
+// Returns extractResult: Found | MissingHeader | WrongCredentials
 // ---------------------------------------------------------------------------
 
-test("extractCredentials returns None when authHeader is None", () => {
+test("extractCredentials returns MissingHeader when authHeader is None", () => {
   let entries: array<authEntry> = [aliceEntry]
-  let result = Http.extractCredentials(~authHeader=None, ~entries)
-  assertion(
-    ~message="None authHeader yields None",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  let result = Gate.extractCredentials(~authHeader=None, ~entries)
+  switch result {
+  | Gate.MissingHeader => () // expected
+  | Gate.WrongCredentials => JsError.throwWithMessage("expected MissingHeader")
+  | Gate.Found(_) => JsError.throwWithMessage("expected MissingHeader")
+  }
 })
 
-test("extractCredentials returns None when header does not start with Basic", () => {
+test("extractCredentials returns WrongCredentials when header does not start with Basic", () => {
   let entries: array<authEntry> = [aliceEntry]
-  let result = Http.extractCredentials(~authHeader=Some("Bearer token123"), ~entries)
-  assertion(
-    ~message="Bearer scheme is rejected",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  let result = Gate.extractCredentials(~authHeader=Some("Bearer token123"), ~entries)
+  switch result {
+  | Gate.WrongCredentials => () // expected
+  | Gate.MissingHeader => JsError.throwWithMessage("expected WrongCredentials")
+  | Gate.Found(_) => JsError.throwWithMessage("expected WrongCredentials")
+  }
 })
 
-test("extractCredentials returns None for user not in entries", () => {
+test("extractCredentials returns WrongCredentials for user not in entries", () => {
   let entries: array<authEntry> = [aliceEntry]
   // Valid format but user "charlie" is not in entries
   // "charlie:password" base64 = "Y2hhcmxpZTpwYXNzd29yZA=="
   let header = Some("Basic Y2hhcmxpZTpwYXNzd29yZA==")
-  let result = Http.extractCredentials(~authHeader=header, ~entries)
-  assertion(
-    ~message="user not in entries returns None",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  let result = Gate.extractCredentials(~authHeader=header, ~entries)
+  switch result {
+  | Gate.WrongCredentials => () // expected
+  | Gate.MissingHeader => JsError.throwWithMessage("expected WrongCredentials")
+  | Gate.Found(_) => JsError.throwWithMessage("expected WrongCredentials")
+  }
 })
 
-test("extractCredentials returns None for wrong password", () => {
+test("extractCredentials returns WrongCredentials for wrong password", () => {
   let entries: array<authEntry> = [aliceEntry]
   // "alice:wrongpassword" base64
   let header = Some("Basic YWxpY2U6d3JvbmxwYXNzd29yZA==")
-  let result = Http.extractCredentials(~authHeader=header, ~entries)
-  assertion(
-    ~message="wrong password returns None",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  let result = Gate.extractCredentials(~authHeader=header, ~entries)
+  switch result {
+  | Gate.WrongCredentials => () // expected
+  | Gate.MissingHeader => JsError.throwWithMessage("expected WrongCredentials")
+  | Gate.Found(_) => JsError.throwWithMessage("expected WrongCredentials")
+  }
 })
 
-test("extractCredentials returns None when decoded credentials have no colon", () => {
+test("extractCredentials returns WrongCredentials when decoded credentials have no colon", () => {
   let entries: array<authEntry> = [aliceEntry]
   // "justusername" base64 (no colon)
   let header = Some("Basic anVzdHVzZXJuYW1l")
-  let result = Http.extractCredentials(~authHeader=header, ~entries)
-  assertion(
-    ~message="no colon in decoded returns None",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  let result = Gate.extractCredentials(~authHeader=header, ~entries)
+  switch result {
+  | Gate.WrongCredentials => () // expected
+  | Gate.MissingHeader => JsError.throwWithMessage("expected WrongCredentials")
+  | Gate.Found(_) => JsError.throwWithMessage("expected WrongCredentials")
+  }
 })
 
-test("extractCredentials returns None for empty entries array", () => {
+test("extractCredentials returns WrongCredentials for empty entries array", () => {
   let entries: array<authEntry> = []
   // "alice:secret123" base64
   let header = Some("Basic YWxpY2U6c2VjcmV0MTIz")
-  let result = Http.extractCredentials(~authHeader=header, ~entries)
-  assertion(
-    ~message="empty entries returns None even with valid-looking header",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  let result = Gate.extractCredentials(~authHeader=header, ~entries)
+  switch result {
+  | Gate.WrongCredentials => () // expected
+  | Gate.MissingHeader => JsError.throwWithMessage("expected WrongCredentials")
+  | Gate.Found(_) => JsError.throwWithMessage("expected WrongCredentials")
+  }
 })
 
-test("extractCredentials returns None for invalid base64 encoding", () => {
+test("extractCredentials returns WrongCredentials for invalid base64 encoding", () => {
   let entries: array<authEntry> = [aliceEntry]
   // "alice:password" but with invalid base64 (not valid base64 chars)
   let header = Some("Basic YWxpY2U6cGFzc3dvcmQ===!")
-  let result = Http.extractCredentials(~authHeader=header, ~entries)
-  // Should return None because the base64 decode will produce garbage
-  assertion(
-    ~message="invalid base64 returns None",
-    ~operator="=",
-    (a, b) => a == b,
-    result,
-    None,
-  )
+  let result = Gate.extractCredentials(~authHeader=header, ~entries)
+  // Should return WrongCredentials because the base64 decode will produce garbage
+  switch result {
+  | Gate.WrongCredentials => () // expected
+  | Gate.MissingHeader => JsError.throwWithMessage("expected WrongCredentials")
+  | Gate.Found(_) => JsError.throwWithMessage("expected WrongCredentials")
+  }
 })

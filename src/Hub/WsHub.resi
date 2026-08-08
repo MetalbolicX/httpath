@@ -1,8 +1,14 @@
 // Hub/WsHub — public interface
-// Only register, unregister, and notifyReload are exposed (REQ-WH-8).
+// Only register, unregister, notifyReload, and init are exposed (REQ-WH-8).
 // The live-set state is private to this module.
 
-let register: (Http.serverSocket, string) => result<unit, WsHub_Types.capRejected>
+let init: (~maxPerIp: int, ~maxGlobal: int) => unit
+
+let register: (
+  ~socket: Http.serverSocket,
+  ~clientIp: string,
+  ~onLifecycle: unit => unit,
+) => result<unit, WsHub_Types.capRejected>
 
 let unregister: (Http.serverSocket, string) => unit
 let notifyReload: unit => unit

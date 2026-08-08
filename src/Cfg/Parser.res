@@ -6,6 +6,26 @@
 @module("node:path") external resolvePath: string => string = "resolve"
 
 // ---------------------------------------------------------------------------
+// Flag specification table — module-level, no mutable refs captured here
+// ---------------------------------------------------------------------------
+
+type flagKind =
+  | IsHelp
+  | ValueLess(unit => unit)
+  | TakesString(string => unit)
+  | TakesInt(int => unit)
+  | TakesLogLevel(Logger.logLevel => unit, Logger.mode => unit)
+
+type flagSpec = {
+  names: array<string>,
+  kind: flagKind,
+}
+
+// NOTE: flagTable cannot be built here because the setters need to close over
+// the mutable refs declared inside parse(). Instead, each flag's closure captures
+// its ref at parse-time via partial application. See parse() for the actual table.
+
+// ---------------------------------------------------------------------------
 // Core parse function
 // ---------------------------------------------------------------------------
 
@@ -40,201 +60,165 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let readOnly = ref(false)
   let user = ref((None: option<string>))
   let group = ref((None: option<string>))
+  let wsMaxPerIp = ref((None: option<int>))
+  let wsMaxGlobal = ref((None: option<int>))
 
   let i = ref(0)
   let argsLen = Array.length(args)
 
-  // Iterative flag parser — stops if an error is encountered.
+  // ---------------------------------------------------------------------------
+  // Flag specification table — all CLI flags in one place
+  // ---------------------------------------------------------------------------
+
+  // Each setter closes over the mutable refs declared above.
+  // flagKind and flagSpec types are defined at module level.
+  let flagTable: array<flagSpec> = [
+    {names: ["--help", "-h"], kind: IsHelp},
+    {
+      names: ["--dir", "-d"],
+      kind: TakesString(v => directory := Some(v)),
+    },
+    {
+      names: ["--host"],
+      kind: TakesString(v => hostname := Some(v)),
+    },
+    {
+      names: ["--port", "-p"],
+      kind: TakesInt(p => port := Some(p)),
+    },
+    {
+      names: ["--ignore", "-i"],
+      kind: TakesString(v => {
+        let patterns = Js.String.split(",", v)->Array.map(String.trim)
+        ignorePatterns := Some(patterns)
+      }),
+    },
+    {names: ["--listing"], kind: ValueLess(() => listing := true)},
+    {names: ["--no-listing"], kind: ValueLess(() => noListing := true)},
+    {names: ["--no-live-reload"], kind: ValueLess(() => noLiveReload := true)},
+    {names: ["--restart-on-change", "-r"], kind: ValueLess(() => restartOnChange := true)},
+    {
+      names: ["--log"],
+      kind: TakesLogLevel(
+        l => logLevel := Some(l),
+        m => logMode := Some(m),
+      ),
+    },
+    {names: ["--lan", "-l"], kind: ValueLess(() => lan := true)},
+    {names: ["--allow-protected-dir"], kind: ValueLess(() => allowProtectedDir := true)},
+    {
+      names: ["--trust-proxy"],
+      // Special: requires trustedProxies to be non-empty; handled inline below.
+      kind: ValueLess(() => {
+        if trustedProxies.contents->Array.length == 0 {
+          parseError := Some(ParseError.TrustProxyWithoutTrustedProxies)
+        } else {
+          trustProxy := true
+        }
+      }),
+    },
+    {
+      names: ["--trusted-proxies"],
+      kind: TakesString(v => {
+        let parts = Js.String.split(",", v)
+        let cidrs = Js.Array.map(s => String.trim(s), parts)
+        trustedProxies := cidrs
+      }),
+    },
+    {names: ["--auth-file"], kind: TakesString(v => authFile := Some(v))},
+    {names: ["--no-auth"], kind: ValueLess(() => noAuth := true)},
+    {names: ["--no-tls"], kind: ValueLess(() => noTls := true)},
+    {names: ["--tls"], kind: ValueLess(() => tls := true)},
+    {names: ["--tls-cert"], kind: TakesString(v => tlsCert := Some(v))},
+    {names: ["--tls-key"], kind: TakesString(v => tlsKey := Some(v))},
+    {
+      names: ["--rate-limit-max"],
+      kind: TakesInt(n => {
+        if n <= 0 {
+          parseError := Some(ParseError.InvalidRateLimit("max", n))
+        } else {
+          rateLimitMax := Some(n)
+        }
+      }),
+    },
+    {
+      names: ["--rate-limit-window"],
+      kind: TakesInt(n => {
+        if n <= 0 {
+          parseError := Some(ParseError.InvalidRateLimit("window", n))
+        } else {
+          // Convert seconds to milliseconds.
+          rateLimitWindow := Some(n * 1000)
+        }
+      }),
+    },
+    {names: ["--access-log"], kind: TakesString(v => accessLog := Some(v))},
+    {names: ["--read-only"], kind: ValueLess(() => readOnly := true)},
+    {names: ["--user"], kind: TakesString(v => user := Some(v))},
+    {names: ["--group"], kind: TakesString(v => group := Some(v))},
+    {names: ["--ws-max-per-ip"], kind: TakesInt(n => wsMaxPerIp := Some(n))},
+    {names: ["--ws-max-global"], kind: TakesInt(n => wsMaxGlobal := Some(n))},
+  ]
+
+  let removedFlags: array<string> = ["--rate-limit-max-requests", "--rate-limit-window-ms"]
+
+  // Iterative flag parser — table-driven dispatch.
   while i.contents < argsLen && parseError.contents == None {
     let arg = args[i.contents]->Option.getOr("")
 
-    if arg == "--help" || arg == "-h" {
-      helpRequested := true
-      i := i.contents + 1
-    } else if arg == "--dir" || arg == "-d" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        directory := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if arg == "--host" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        hostname := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if arg == "--port" || arg == "-p" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        let portStr = args[i.contents + 1]->Option.getOr("")
-        let portNum = Belt.Int.fromString(portStr)
-        switch portNum {
-        | None => parseError := Some(ParseError.InvalidPort(0))
-        | Some(p) => port := Some(p)
-        }
-        i := i.contents + 2
-      }
-    } else if arg == "--ignore" || arg == "-i" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        let patternStr = args[i.contents + 1]->Option.getOr("")
-        let patterns = Js.String.split(",", patternStr)->Array.map(String.trim)
-        ignorePatterns := Some(patterns)
-        i := i.contents + 2
-      }
-    } else if arg == "--listing" {
-      listing := true
-      i := i.contents + 1
-    } else if arg == "--no-listing" {
-      noListing := true
-      i := i.contents + 1
-    } else if arg == "--no-live-reload" {
-      noLiveReload := true
-      i := i.contents + 1
-    } else if arg == "--restart-on-change" || arg == "-r" {
-      restartOnChange := true
-      i := i.contents + 1
-    } else if arg == "--log" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        let valueStr = args[i.contents + 1]->Option.getOr("")
-        switch valueStr {
-        | "info" => logLevel := Some(Logger.Info)
-        | "debug" => logLevel := Some(Logger.Debug)
-        | "error" => logLevel := Some(Logger.Error)
-        | "json" => logMode := Some(Logger.Json)
-        | "plain" => logMode := Some(Logger.Plain)
-        | _ => parseError := Some(ParseError.InvalidLogLevel(valueStr))
-        }
-        i := i.contents + 2
-      }
-    } else if arg == "--lan" || arg == "-l" {
-      lan := true
-      i := i.contents + 1
-    } else if arg == "--allow-protected-dir" {
-      allowProtectedDir := true
-      i := i.contents + 1
-    } else if arg == "--trust-proxy" {
-      if trustedProxies.contents->Array.length == 0 {
-        parseError := Some(ParseError.TrustProxyWithoutTrustedProxies)
-      } else {
-        trustProxy := true
-      }
-      i := i.contents + 1
-    } else if arg == "--trusted-proxies" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        let val = args[i.contents + 1]->Option.getOr("")
-        let parts = Js.String.split(",", val)
-        let cidrs = Js.Array.map(s => String.trim(s), parts)
-        trustedProxies := cidrs
-        i := i.contents + 2
-      }
-    } else if arg == "--auth-file" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        authFile := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if arg == "--no-auth" {
-      noAuth := true
-      i := i.contents + 1
-    } else if arg == "--no-tls" {
-      noTls := true
-      i := i.contents + 1
-    } else if arg == "--tls" {
-      tls := true
-      i := i.contents + 1
-    } else if arg == "--tls-cert" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        tlsCert := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if arg == "--tls-key" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        tlsKey := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if arg == "--rate-limit-max" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        let maxStr = args[i.contents + 1]->Option.getOr("")
-        let maxNum = Belt.Int.fromString(maxStr)
-        switch maxNum {
-        | None => parseError := Some(ParseError.InvalidRateLimit("max", 0))
-        | Some(n) =>
-          if n <= 0 {
-            parseError := Some(ParseError.InvalidRateLimit("max", n))
-          } else {
-            rateLimitMax := Some(n)
-          }
-        }
-        i := i.contents + 2
-      }
-    } else if arg == "--rate-limit-window" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        let windowStr = args[i.contents + 1]->Option.getOr("")
-        let windowNum = Belt.Int.fromString(windowStr)
-        switch windowNum {
-        | None => parseError := Some(ParseError.InvalidRateLimit("window", 0))
-        | Some(n) =>
-          if n <= 0 {
-            parseError := Some(ParseError.InvalidRateLimit("window", n))
-          } else {
-            // Convert seconds to milliseconds
-            rateLimitWindow := Some(n * 1000)
-          }
-        }
-        i := i.contents + 2
-      }
-    } else if arg == "--access-log" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        accessLog := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if arg == "--read-only" {
-      readOnly := true
-      i := i.contents + 1
-    } else if arg == "--user" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        user := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if arg == "--group" {
-      if i.contents + 1 >= argsLen {
-        parseError := Some(ParseError.MissingValue(arg))
-      } else {
-        group := Some(args[i.contents + 1]->Option.getOr(""))
-        i := i.contents + 2
-      }
-    } else if (
-      arg == "--rate-limit-max-requests" ||
-      arg == "--rate-limit-window-ms"
-    ) {
+    // Check removed flags first.
+    if Array.includes(removedFlags, arg) {
       parseError := Some(ParseError.RemovedFlag(arg))
       i := i.contents + 1
-    } else if String.length(arg) > 0 && String.getUnsafe(arg, 0) == "-" {
-      parseError := Some(ParseError.UnknownFlag(arg))
     } else {
-      i := i.contents + 1
+      // Find matching flag spec.
+      let spec = Belt.Array.getBy(flagTable, spec => Array.includes(spec.names, arg))
+      switch spec {
+      | Some({kind: IsHelp}) =>
+        helpRequested := true
+        i := i.contents + 1
+      | Some({kind: ValueLess(apply)}) =>
+        apply()
+        i := i.contents + 1
+      | Some({kind: TakesString(apply)}) =>
+        if i.contents + 1 >= argsLen {
+          parseError := Some(ParseError.MissingValue(arg))
+        } else {
+          apply(args[i.contents + 1]->Option.getOr(""))
+          i := i.contents + 2
+        }
+      | Some({kind: TakesInt(apply)}) =>
+        if i.contents + 1 >= argsLen {
+          parseError := Some(ParseError.MissingValue(arg))
+        } else {
+          let v = Belt.Int.fromString(args[i.contents + 1]->Option.getOr(""))
+          switch v {
+          | None => parseError := Some(ParseError.InvalidPort(0))
+          | Some(n) => apply(n)
+          }
+          i := i.contents + 2
+        }
+      | Some({kind: TakesLogLevel(applyLogLevel, applyLogMode)}) =>
+        if i.contents + 1 >= argsLen {
+          parseError := Some(ParseError.MissingValue(arg))
+        } else {
+          let v = args[i.contents + 1]->Option.getOr("")
+          switch v {
+          | "info"  => applyLogLevel(Logger.Info)
+          | "debug" => applyLogLevel(Logger.Debug)
+          | "error" => applyLogLevel(Logger.Error)
+          | "json"  => applyLogMode(Logger.Json)
+          | "plain" => applyLogMode(Logger.Plain)
+          | _       => parseError := Some(ParseError.InvalidLogLevel(v))
+          }
+          i := i.contents + 2
+        }
+      | None =>
+        if String.length(arg) > 0 && String.getUnsafe(arg, 0) == "-" {
+          parseError := Some(ParseError.UnknownFlag(arg))
+        }
+        i := i.contents + 1
+      }
     }
   }
 
@@ -362,6 +346,8 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
             readOnly: effectiveReadOnly,
             user: user.contents,
             group: group.contents,
+            wsMaxPerIp: switch wsMaxPerIp.contents { | Some(n) => n | None => 2 },
+            wsMaxGlobal: switch wsMaxGlobal.contents { | Some(n) => n | None => 3 },
           })
         }
       }

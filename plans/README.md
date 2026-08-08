@@ -168,9 +168,47 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 026  | Privilege drop after bind (root → --user) | P2 | L | — | DONE |
 | 027  | npm publish metadata (license + discoverability) | P1 | S | — | DONE |
 | 028  | Process-level uncaughtException/unhandledRejection handlers | P1 | M | — | DONE |
-| 029  | Default ignore `.env`/`.httpath-auth`/`.npmrc` in listings | P1 | S | — | DONE |
+| 029 | Default ignore `.env`/`.httpath-auth`/`.npmrc` in listings | P1 | S | — | DONE |
+| 030 | Basic cleanups: orphan comment + WHY doc + Utils/Headers | P1 | S | — | DONE |
+| 031 | Extract `evaluateGate` decision function | P1 | M | 030 | DONE |
+| 032 | Table-driven `Parser.parse` | P2 | M | — | DONE |
+| 033 | WsHub caps to config (--ws-max-per-ip / --ws-max-global) | P2 | M | 034 | DONE |
+| 034 | Move test binding out of WsHub via register callback injection | P2 | S | — | DONE |
+| 035 | Decompose `Handler.handle` into sub-handlers | P1 | L | 030, 031 | DONE |
+| 036 | Decompose `Http.startServer` into requestHandler/upgradeHandler/attachShutdown | P1 | L | 031 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
+
+### Phase 7 — Code-health-audit findings (post-Phase-6 re-audit)
+
+**Phase Objective:** Resolve the 10 structural findings from the code-health-audit
+performed at commit `ok6055eab`. Three Basic cleanup items, four TDD logic
+refactors with tests-first, and two SDD architectural decompositions against
+written sub-component contracts.
+
+| Plan | Title | Methodology | Effort | Risk | Depends on |
+|------|-------|-------------|--------|------|------------|
+| 030 | Basic cleanups: drop orphan Basic.res comment, document Http.res WHY, move header helpers to Utils/Headers | `[Basic]` | S | LOW | — |
+| 031 | Extract `evaluateGate` decision function to `Security/Gate.res` | `[TDD]` | M | MED | 030 |
+| 032 | Table-driven `Parser.parse` with flag-spec dispatch | `[TDD]` | M | MED | — |
+| 033 | Promote `WsHub` per-IP / global caps to `Config.t` + CLI | `[TDD]` | M | MED | 034 |
+| 034 | Move test-only binding out of `WsHub.res` via `register` callback injection | `[TDD]` | S | LOW | — | DONE |
+| 035 | Decompose `Handler.handle` into sub-handlers (`handleProbe` / `handleFile` / etc.) | `[SDD]` | L | HIGH | 030, 031 |
+| 036 | Decompose `Http.startServer` into `requestHandler` / `upgradeHandler` / `attachShutdown` | `[SDD]` | L | HIGH | 031 |
+
+**Methodology counts for Phase 7:** Basic 1 (030) · TDD 4 (031–034) · SDD 2 (035, 036).
+
+**Deliverable & Success Criteria:** See each plan file. Every plan: `pnpm run build`
+clean, full `pnpm test` green, `Handler.resi` / `Http.resi` unchanged for SDD
+plans.
+
+### Phase 7 ordering
+
+- 030 lands first (Basic). Unblocks 031 and 035 (header helpers).
+- 031 and 032 run next in any order; 031 unblocks 036 (lifecycle decomposition).
+- 034 lands before 033 so `WsHub.register` signature settles first, then 033 adds
+  cap plumbing.
+- 035 and 036 run last; 035 can start once 030 lands, 036 needs 031 merged.
 
 ## Dependency notes
 

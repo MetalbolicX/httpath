@@ -29,15 +29,14 @@ let perIpCounts: ref<Belt.Map.String.t<int>> = ref(Belt.Map.String.empty)
 // Global connection counter
 let globalCount: ref<int> = ref(0)
 
-// Constants — follow-up will make these configurable via CLI flags
-let maxPerIp = 2
-let maxGlobal = 3
+// Configurable caps — initialised from Config.t at startup via init().
+let maxPerIp: ref<int> = ref(2)
+let maxGlobal: ref<int> = ref(3)
 
-// test-only: increment the shared counter in the test fake.
-// This is called by the onClose/onError callbacks so tests can verify
-// that the hub's lifecycle listeners were actually invoked.
-@module("../Node/TestHelpers.mjs")
-external _testIncrementCounter: unit => unit = "incrementHubListenerCounter"
+let init = (~maxPerIp as m, ~maxGlobal as g): unit => {
+  maxPerIp := m
+  maxGlobal := g
+}
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -107,7 +106,11 @@ let makeReloadFrame = (): Buffer.t => {
 // Register a new socket with cap enforcement. Idempotent for the same socket.
 // Attaches 'close' and 'error' listeners that auto-unregister the socket.
 // Returns Ok() on success, Error(capRejected) if per-IP or global cap is hit.
-let rec register = (socket: Http.serverSocket, clientIp: string): result<unit, capRejected> => {
+let rec register = (
+  ~socket: Http.serverSocket,
+  ~clientIp: string,
+  ~onLifecycle: unit => unit,
+): result<unit, capRejected> => {
   if clientExists(socket) {
     Ok()
   } else {
@@ -116,21 +119,23 @@ let rec register = (socket: Http.serverSocket, clientIp: string): result<unit, c
     | Some(n) => n
     | None => 0
     }
-    if ipCount >= maxPerIp {
+    if ipCount >= maxPerIp.contents {
       Error(CapRejected({ reason: PerIp, clientIp }))
-    } else if globalCount.contents >= maxGlobal {
+    } else if globalCount.contents >= maxGlobal.contents {
       Error(CapRejected({ reason: Global, clientIp }))
     } else {
       // Increment counters BEFORE registering
       perIpCounts := Belt.Map.String.set(perIpCounts.contents, clientIp, ipCount + 1)
       globalCount := globalCount.contents + 1
+      // Lifecycle callback — production passes no-op () => (), tests pass incrementHubListenerCounter
+      let invoke = onLifecycle
       // Attach lifecycle callbacks and register
       let onClose = () => {
-        _testIncrementCounter()
+        invoke()
         unregister(socket, clientIp)
       }
       let onError = () => {
-        _testIncrementCounter()
+        invoke()
         unregister(socket, clientIp)
       }
       let _ = Events.on(socket, "close", onClose)

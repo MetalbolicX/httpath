@@ -58,6 +58,9 @@ let start = (
     None
   }
 
+  // Initialise WebSocket connection caps from config (plan 033).
+  WsHub.init(~maxPerIp=config.wsMaxPerIp, ~maxGlobal=config.wsMaxGlobal)
+
   let onWsUpgrade = (
     req: Types.request,
     socket: Http.serverSocket,
@@ -79,7 +82,7 @@ let start = (
           } catch {
           | _ => "unknown"
           }
-          switch WsHub.register(socket, clientIp) {
+          switch WsHub.register(~socket, ~clientIp, ~onLifecycle=() => ()) {
           | Ok() => ()
           | Error(_) => Http.socketDestroy(socket)
           }

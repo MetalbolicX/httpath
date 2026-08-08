@@ -196,11 +196,6 @@ let loadAuthFile = (path: string): result<array<entry>, string> => {
 }
 
 // ---------------------------------------------------------------------------
-// extractCredentials — parse Basic auth header, find user, verify password.
-// Returns Some(username) on success, None on failure/missing.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // searchAuthFile — search explicit path first, then fall back to directory search.
 // Search order: explicitPath → <directory>/.httpath-auth → ~/.config/httpath/auth
 // ---------------------------------------------------------------------------

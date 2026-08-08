@@ -28,6 +28,8 @@ type t = {
   readOnly: bool,
   user: option<string>,   // privilege-drop target user (plan 026)
   group: option<string>,  // privilege-drop target group (plan 026)
+  wsMaxPerIp: int,        // WebSocket per-IP connection cap (plan 033)
+  wsMaxGlobal: int,       // WebSocket global connection cap (plan 033)
 }
 
 // The default config — all flag defaults from the legacy parser.

@@ -79,6 +79,8 @@ let testConfigBase: Config.t = {
   readOnly: false,
   user: None,
   group: None,
+  wsMaxPerIp: 2,
+  wsMaxGlobal: 3,
 }
 
 // ---------------------------------------------------------------------------

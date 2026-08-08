@@ -28,6 +28,8 @@ type t = {
   readOnly: bool,
   user: option<string>,   // privilege-drop target user (plan 026)
   group: option<string>,  // privilege-drop target group (plan 026)
+  wsMaxPerIp: int,        // WebSocket per-IP connection cap (plan 033)
+  wsMaxGlobal: int,       // WebSocket global connection cap (plan 033)
 }
 
 // Default Config values. Directory is resolved to absolute at parse time.
@@ -70,4 +72,6 @@ let default: t = {
   readOnly: false,
   user: None,
   group: None,
+  wsMaxPerIp: 2,
+  wsMaxGlobal: 3,
 }

@@ -149,6 +149,21 @@ type serverTimeouts = {
   maxConnections: int,
 }
 
+// serverDeps — all inputs needed to build handlers and server.
+// Passed as a record so call sites pass one object rather than many args.
+type serverDeps = {
+  config: Config.t,
+  authEntries: option<array<Basic.entry>>,
+  rateLimiter: option<RateLimit.t>,
+  handler: handlerCb,
+  onWsUpgrade: upgradeCb,
+  accessLogDest: option<AccessLog.dest>,
+  trustProxy: bool,
+  tlsCertKey: option<Tls.certKeyPair>,
+  serverTimeouts: serverTimeouts,
+  signal: Signals.abortSignal,
+}
+
 // Wrapper functions — force tree-shaking to keep the @set externals.
 // Each calls the @set external and returns unit (no meaningful return value).
 let applyServerTimeouts = (s: server, t: serverTimeouts): unit => {
@@ -290,69 +305,10 @@ let closeServerVariant = (sv: serverVariant): promise<unit> => {
 }
 
 // ---------------------------------------------------------------------------
-// extractCredentials — parse Basic auth header, find user, verify password.
-// Local definition in Http.res to avoid cross-module tree-shaking elimination.
+// gate — delegates to Gate.evaluateGate for the pure decision.
+// The gateDecision type and logic live in Security/Gate for testability
+// and to avoid duplicating the security policy in two places.
 // ---------------------------------------------------------------------------
-
-@module("./BufferImpl.mjs")
-external bufferToString: (Buffer.t, string) => string = "toString"
-
-let extractCredentials = (
-  ~authHeader: option<string>,
-  ~entries: array<Basic.entry>,
-): option<string> => {
-  switch authHeader {
-  | None => None
-  | Some(header) =>
-    if !String.startsWith(header, "Basic ") {
-      None
-    } else {
-      let encoded = String.substring(header, ~start=6, ~end=String.length(header))
-      let decodedBuf: Buffer.t = try {
-        Buffer.fromString(encoded, "base64")
-      } catch {
-      | _ => Buffer.fromString("", "utf8")
-      }
-      let decoded = bufferToString(decodedBuf, "utf8")
-      let colonPos = Js.String.indexOf(":", decoded)
-      if colonPos < 0 {
-        None
-      } else {
-        let username = String.substring(decoded, ~start=0, ~end=colonPos)
-        let password = String.substring(decoded, ~start=colonPos + 1, ~end=String.length(decoded))
-        switch Basic.findUser(entries, username) {
-        | None => None
-        | Some(entry) =>
-          if Basic.verify(entry, password) {
-            Some(username)
-          } else {
-            None
-          }
-        }
-      }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// gate — rate-limit first, then auth (unless noAuth).
-// Gate runs ONLY when config.lan is true.
-// Rate limit is checked only when config.rateLimitEnabled is true.
-// Auth is checked only when config.noAuth is false.
-// Auth exemption: exact probe paths /healthz and /readyz bypass auth only
-// (rate-limit still applies — orchestrators can still be rate-limited).
-// Returns a gateDecision — the caller (requestHandler) writes the response.
-// This avoids double-writeHead that caused ERR_HTTP_HEADERS_SENT.
-// ---------------------------------------------------------------------------
-
-type gateDecision =
-  | Allowed
-  | Rejected({
-      status: int,
-      headers: array<(string, string)>,
-      body: string,
-      reason: string, // for access log
-    })
 
 let gate = (
   ~config: Config.t,
@@ -360,70 +316,12 @@ let gate = (
   ~rateLimiter: option<RateLimit.t>,
   ~clientIp: string,
   ~req: Types.request,
-): gateDecision => {
-  // Auth exemption: exact probe paths /healthz and /readyz bypass auth
-  // (rate-limit still applies; probes reveal only "up/draining", not content)
-  let isProbe = req.path == "/healthz" || req.path == "/readyz"
-
-  // Rate limit first (cheaper, prevents brute-force on auth)
-  let rateDecision: gateDecision = if config.rateLimitEnabled {
-    switch rateLimiter {
-    | Some(limiter) =>
-      switch RateLimit.tick(limiter, clientIp) {
-      | RateLimit.Reject({retryAfterSeconds}) =>
-        Rejected({
-          status: 429,
-          headers: [("Retry-After", Int.toString(retryAfterSeconds))],
-          body: `{"error":"Too many requests"}`,
-          reason: "rate_limit",
-        })
-      | RateLimit.Allow => Allowed
-      }
-    | None => Allowed
-    }
-  } else {
-    Allowed
-  }
-
-  // Auth check — skipped for exact probe paths (rate-limit still applies above)
-  switch rateDecision {
-  | Rejected(_) => rateDecision // already rejected by rate-limit
-  | Allowed =>
-    if isProbe {
-      // Auth-exempt: probes reveal only "up/draining", not content
-      Allowed
-    } else if !config.noAuth {
-      // Extract credentials from Authorization header
-      let authHeader = Types.getHeader(req.headers, "authorization")
-      switch authEntries {
-      | None =>
-        // No auth file entries available — reject
-        Rejected({
-          status: 401,
-          headers: [("WWW-Authenticate", `Basic realm="httpath"`)],
-          body: `{"error":"Authentication required"}`,
-          reason: "auth_required",
-        })
-      | Some(entries) =>
-        switch extractCredentials(~authHeader, ~entries) {
-        | Some(_) => Allowed
-        | None =>
-          Rejected({
-            status: 401,
-            headers: [("WWW-Authenticate", `Basic realm="httpath"`)],
-            body: `{"error":"Authentication required"}`,
-            reason: "invalid_credentials",
-          })
-        }
-      }
-    } else {
-      Allowed
-    }
-  }
-}
+): Gate.gateDecision =>
+  Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~clientIp, ~req)
 
 // ---------------------------------------------------------------------------
-// gateWs — WS upgrade gate. Writes HTTP rejection directly to socket.
+// gateWs — WS upgrade gate. Delegates decision to Gate.evaluateGate then
+// translates the rejection into a raw HTTP socket write.
 // ---------------------------------------------------------------------------
 
 let gateWs = (
@@ -435,53 +333,283 @@ let gateWs = (
   ~socket: serverSocket,
   ~continue: unit => unit,
 ): unit => {
-  let rejected = ref(false)
-  // Rate limit check first
-  if config.rateLimitEnabled {
-    switch rateLimiter {
-    | Some(limiter) =>
-      switch RateLimit.tick(limiter, clientIp) {
-      | RateLimit.Reject({retryAfterSeconds}) => {
-          let body = `{"error":"Too many requests"}`
-          let response = `HTTP/1.1 429 Too Many Requests\r\nRetry-After: ${Int.toString(retryAfterSeconds)}\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
-          socketWrite(socket, response)
-          socketDestroy(socket)
-          rejected := true
-        }
-      | RateLimit.Allow => ()
-      }
-    | None => ()
+  switch Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~clientIp, ~req) {
+  | Gate.Allowed => continue()
+  | Gate.Rejected({status, headers, body}) => {
+      let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.joinWith("\r\n")
+      let reasonPhrase = status == 429 ? "Too Many Requests" : status == 401 ? "Unauthorized" : "Error"
+      let response = `HTTP/1.1 ${Int.toString(status)} ${reasonPhrase}\r\n${headerLines}\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
+      socketWrite(socket, response)
+      socketDestroy(socket)
     }
-  }
-  // Auth check — skipped if rate-limit already rejected
-  if !rejected.contents {
-    if !config.noAuth {
-    let authHeader = Types.getHeader(req.headers, "authorization")
-    switch authEntries {
-    | None =>
-      // No auth entries — reject
-      {
-        let body = `{"error":"Authentication required"}`
-        let response = `HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="httpath"\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
-        socketWrite(socket, response)
-        socketDestroy(socket)
-      }
-    | Some(entries) =>
-      switch extractCredentials(~authHeader, ~entries) {
-      | Some(_) => continue()
-      | None => {
-          let body = `{"error":"Authentication required"}`
-          let response = `HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="httpath"\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
-          socketWrite(socket, response)
-          socketDestroy(socket)
-        }
-      }
-    }
-  } else {
-    continue()
-  }
   }
 }
+
+// ---------------------------------------------------------------------------
+// makeRequestHandler — builds the HTTP/HTTPS request handler closure.
+// Captures deps at creation time; each call returns a fresh (req, res) => promise<unit>.
+// No shared mutable state between requests.
+// ---------------------------------------------------------------------------
+
+let makeRequestHandler = (deps: serverDeps) => {
+  let {config, authEntries, rateLimiter, handler, accessLogDest, trustProxy} = deps
+
+  async (req, res) => {
+    let socketIp = try {
+      incomingSocket(req)->socketRemoteAddress
+    } catch {
+    | _ => "unknown"
+    }
+    let startMs = Date.now()
+    let request = buildRequest(~trustProxy, ~socketIp, ~trustedCidrs=config.trustedProxies, req)
+
+    let writeAccessLog = (~status: int, ~bytes: int) => {
+      let ts = Date.make()->Date.toISOString
+      let durationMs = Float.toInt(Date.now() -. startMs)
+      let entry: AccessLog.line = {
+        timestamp: ts,
+        requestId: request.requestId,
+        ip: request.clientIp,
+        method: request.method,
+        path: request.path,
+        status,
+        bytes,
+        duration_ms: durationMs,
+      }
+      try {
+        switch accessLogDest {
+        | Some(dest) => AccessLog.emit(dest, entry)
+        | None => ()
+        }
+      } catch {
+      | _ => ()
+      }
+    }
+
+    if config.lan {
+      switch gate(
+        ~config,
+        ~authEntries,
+        ~rateLimiter,
+        ~clientIp=request.clientIp,
+        ~req=request,
+      ) {
+      | Rejected({status, headers, body}) => {
+          let r: Types.response = {
+            status,
+            headers,
+            body: Types.Html(body),
+          }
+          writeAccessLog(~status, ~bytes=String.length(body))
+          let _ = await writeResponse(r, res, ~requestId=request.requestId)
+        }
+      | Allowed => {
+          let outcome = try {
+            await handler(request)
+          } catch {
+          | _ =>
+            Types.Respond({
+              status: 500,
+              headers: [("content-type", "text/plain; charset=utf-8")],
+              body: Types.Empty,
+            })
+          }
+          switch (outcome, accessLogDest) {
+          | (Types.Respond(r), Some(_)) => {
+              let bytes = switch r.body {
+              | Types.Html(s) => String.length(s)
+              | Types.Empty => 0
+              | Types.File(_) => {
+                  let rec findContentLength = (i: int): int => {
+                    if i >= Array.length(r.headers) {
+                      0
+                    } else {
+                      switch r.headers[i] {
+                      | Some(("content-length", v)) =>
+                        switch Belt.Int.fromString(v) {
+                        | Some(n) => n
+                        | None => 0
+                        }
+                      | _ => findContentLength(i + 1)
+                      }
+                    }
+                  }
+                  findContentLength(0)
+                }
+              }
+              writeAccessLog(~status=r.status, ~bytes)
+            }
+          | _ => ()
+          }
+          switch outcome {
+          | Types.Respond(r) => {
+              let _ = await writeResponse(r, res, ~requestId=request.requestId)
+            }
+          | Types.WsUpgrade => ()
+          }
+        }
+      }
+    } else {
+      let outcome = try {
+        await handler(request)
+      } catch {
+      | _ =>
+        Types.Respond({
+          status: 500,
+          headers: [("content-type", "text/plain; charset=utf-8")],
+          body: Types.Empty,
+        })
+      }
+      switch (outcome, accessLogDest) {
+      | (Types.Respond(r), Some(_)) => {
+          let bytes = switch r.body {
+          | Types.Html(s) => String.length(s)
+          | Types.Empty => 0
+          | Types.File(_) => 0
+          }
+          writeAccessLog(~status=r.status, ~bytes)
+        }
+      | _ => ()
+      }
+      switch outcome {
+      | Types.Respond(r) => {
+          let _ = await writeResponse(r, res, ~requestId=request.requestId)
+        }
+      | Types.WsUpgrade => ()
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// makeUpgradeHandler — builds the WS upgrade handler closure.
+// Captures deps at creation time; each call returns a fresh (req, socket, head) => promise<unit>.
+// ---------------------------------------------------------------------------
+
+let makeUpgradeHandler = (deps: serverDeps) => {
+  let {config, authEntries, rateLimiter, handler, onWsUpgrade, accessLogDest, trustProxy} = deps
+
+  async (req, socket, head) => {
+    let socketIp = try {
+      socketRemoteAddress(socket)
+    } catch {
+    | _ => "unknown"
+    }
+    let startMs = Date.now()
+    let request = buildRequest(~trustProxy, ~socketIp, ~trustedCidrs=config.trustedProxies, req)
+
+    let writeAccessLog101 = () => {
+      let ts = Date.make()->Date.toISOString
+      let durationMs = Float.toInt(Date.now() -. startMs)
+      let entry: AccessLog.line = {
+        timestamp: ts,
+        requestId: request.requestId,
+        ip: request.clientIp,
+        method: request.method,
+        path: request.path,
+        status: 101,
+        bytes: 0,
+        duration_ms: durationMs,
+      }
+      try {
+        switch accessLogDest {
+        | Some(dest) => AccessLog.emit(dest, entry)
+        | None => ()
+        }
+      } catch {
+      | _ => ()
+      }
+    }
+
+    let outcome = if config.lan {
+      let gateAllowed = ref(false)
+      gateWs(
+        ~config,
+        ~authEntries,
+        ~rateLimiter,
+        ~clientIp=request.clientIp,
+        ~req=request,
+        ~socket,
+        ~continue=() => { gateAllowed := true },
+      )
+      if !gateAllowed.contents {
+        Types.Respond({status: 0, headers: [], body: Types.Empty})
+      } else {
+        try {
+          await handler(request)
+        } catch {
+        | _ =>
+          Types.Respond({
+            status: 500,
+            headers: [("content-type", "text/plain; charset=utf-8")],
+            body: Types.Empty,
+          })
+        }
+      }
+    } else {
+      try {
+        await handler(request)
+      } catch {
+      | _ =>
+        Types.Respond({
+          status: 500,
+          headers: [("content-type", "text/plain; charset=utf-8")],
+          body: Types.Empty,
+        })
+      }
+    }
+
+    switch outcome {
+    | Types.WsUpgrade => {
+        writeAccessLog101()
+        let _ = await onWsUpgrade(request, socket, head)
+      }
+    | Types.Respond(_) => {
+        // Defer destroy to next tick so res.end() data reaches the kernel before
+        // the socket is closed. Without this, socket.destroy() can abort the
+        // response mid-flight causing ECONNRESET on the client side.
+        let _ = _setTimeout(() => socketDestroy(socket), 50)
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// attachShutdown — wires the abort signal to server close + drain.
+// Does NOT register signal handlers; the abort signal is owned by Httpath.res.
+// Returns the `closed` promise that resolves after server.close completes.
+// ---------------------------------------------------------------------------
+
+let attachShutdown = (~server: serverVariant, ~signal: Signals.abortSignal): promise<unit> => {
+  let closedResolve = ref((None: option<unit => unit>))
+  let closed: promise<unit> = Promise.make((resolve, _reject) => {
+    closedResolve := Some(resolve)
+  })
+
+  let _ = setOnAbort(signal, () => {
+    // Close only idle sockets so in-flight requests can drain before shutdown.
+    // closeIdleConnections is Node ≥22.
+    switch server {
+    | HttpServer(s) => closeIdleConnections(s)
+    | HttpsServer(s) => httpsCloseIdleConnections(s)
+    }
+    let _ = closeServerVariant(server)->Promise.then(() => {
+      switch closedResolve.contents {
+      | Some(r) => r()
+      | None => ()
+      }
+      Promise.resolve()
+    })
+  })
+
+  closed
+}
+
+// ---------------------------------------------------------------------------
+// startServer — orchestrates HTTP/HTTPS server creation and handler wiring.
+// ~60 lines. Calls makeRequestHandler, makeUpgradeHandler, and attachShutdown.
+// Signal handlers remain in Httpath.res (not here).
+// ---------------------------------------------------------------------------
 
 let startServer = (
   ~port: int,
@@ -511,253 +639,24 @@ let startServer = (
     }
   }
 
-  // 'request' event — normal HTTP/HTTPS. Build request, apply gate, call handler, write response.
-  let requestHandler = async (req, res) => {
-    let socketIp = try {
-      incomingSocket(req)->socketRemoteAddress
-    } catch {
-    | _ => "unknown"
-    }
-    let startMs = Date.now()
-    let request = buildRequest(~trustProxy, ~socketIp, ~trustedCidrs=config.trustedProxies, req)
-    // Apply gate before handler — gate returns decision; we write once.
-    if config.lan {
-      let decision = gate(
-        ~config,
-        ~authEntries,
-        ~rateLimiter,
-        ~clientIp=request.clientIp,
-        ~req=request,
-      )
-      switch decision {
-      | Rejected({status, headers, body}) => {
-          // Write the rejection response (single writeHead — no double-write)
-          let r: Types.response = {
-            status,
-            headers,
-            body: Types.Html(body),
-          }
-          // Emit access log with the real rejection status
-          switch accessLogDest {
-          | Some(dest) =>
-            let ts = Date.make()->Date.toISOString
-            let durationMs = Float.toInt(Date.now() -. startMs)
-            let entry: AccessLog.line = {
-              timestamp: ts,
-              requestId: request.requestId,
-              ip: request.clientIp,
-              method: request.method,
-              path: request.path,
-              status,
-              bytes: String.length(body),
-              duration_ms: durationMs,
-            }
-            try {
-              AccessLog.emit(dest, entry)
-            } catch {
-            | _ => ()
-            }
-          | None => ()
-          }
-          let _ = await writeResponse(r, res, ~requestId=request.requestId)
-        }
-      | Allowed => {
-          let outcome = try {
-            await handler(request)
-          } catch {
-          | _ =>
-            Types.Respond({
-              status: 500,
-              headers: [("content-type", "text/plain; charset=utf-8")],
-              body: Types.Empty,
-            })
-          }
-          // Emit access log
-          switch (outcome, accessLogDest) {
-          | (Types.Respond(r), Some(dest)) =>
-            let ts = Date.make()->Date.toISOString
-            let durationMs = Float.toInt(Date.now() -. startMs)
-            // File bytes: Handler.serveFile already sets Content-Length for non-HTML files.
-            // We read it from the response headers here. This is exact for non-range responses.
-            // TODO (range roadmap): if range support is added, Content-Length will be the
-            // remaining range length, not the full file — revisit this branch at that time.
-            let bytes = switch r.body {
-            | Types.Html(s) => String.length(s)
-            | Types.Empty => 0
-            | Types.File(_) =>
-              let rec findContentLength = (i: int): int => {
-                if i >= Array.length(r.headers) {
-                  0
-                } else {
-                  switch r.headers[i] {
-                  | Some(("content-length", v)) =>
-                    switch Belt.Int.fromString(v) {
-                    | Some(n) => n
-                    | None => 0
-                    }
-                  | _ => findContentLength(i + 1)
-                  }
-                }
-              }
-              findContentLength(0)
-            }
-            let entry: AccessLog.line = {
-              timestamp: ts,
-              requestId: request.requestId,
-              ip: request.clientIp,
-              method: request.method,
-              path: request.path,
-              status: r.status,
-              bytes,
-              duration_ms: durationMs,
-            }
-            try {
-              AccessLog.emit(dest, entry)
-            } catch {
-            | _ => ()
-            }
-          | _ => ()
-          }
-          switch outcome {
-          | Types.Respond(r) => {
-              let _ = await writeResponse(r, res, ~requestId=request.requestId)
-            }
-          | Types.WsUpgrade => ()
-          }
-        }
-      }
-    } else {
-      let outcome = try {
-        await handler(request)
-      } catch {
-      | _ =>
-        Types.Respond({
-          status: 500,
-          headers: [("content-type", "text/plain; charset=utf-8")],
-          body: Types.Empty,
-        })
-      }
-      // Emit access log (not gated on lan — accessLogDest controls emission)
-      switch (outcome, accessLogDest) {
-      | (Types.Respond(r), Some(dest)) =>
-        let ts = Date.make()->Date.toISOString
-        let durationMs = Float.toInt(Date.now() -. startMs)
-        let bytes = switch r.body {
-        | Types.Html(s) => String.length(s)
-        | Types.Empty => 0
-        | Types.File(_) => 0
-        }
-        let entry: AccessLog.line = {
-          timestamp: ts,
-          requestId: request.requestId,
-          ip: request.clientIp,
-          method: request.method,
-          path: request.path,
-          status: r.status,
-          bytes,
-          duration_ms: durationMs,
-        }
-        try {
-          AccessLog.emit(dest, entry)
-        } catch {
-        | _ => ()
-        }
-      | _ => ()
-      }
-      switch outcome {
-      | Types.Respond(r) => {
-          let _ = await writeResponse(r, res, ~requestId=request.requestId)
-        }
-      | Types.WsUpgrade => ()
-      }
-    }
+  let deps = {
+    config,
+    authEntries,
+    rateLimiter,
+    handler,
+    onWsUpgrade,
+    accessLogDest,
+    trustProxy,
+    tlsCertKey,
+    serverTimeouts,
+    signal,
   }
 
-  // 'upgrade' event — WS upgrades. Build request, apply gate, call handler, delegate to onWsUpgrade.
-  let upgradeHandler = async (req, socket, head) => {
-    let socketIp = try {
-      socketRemoteAddress(socket)
-    } catch {
-    | _ => "unknown"
-    }
-    let startMs = Date.now()
-    let request = buildRequest(~trustProxy, ~socketIp, ~trustedCidrs=config.trustedProxies, req)
-    // Apply gate before handler — gate writes rejection directly to socket if denied
-    let outcome = if config.lan {
-      let gateAllowed = ref(false)
-      gateWs(
-        ~config,
-        ~authEntries,
-        ~rateLimiter,
-        ~clientIp=request.clientIp,
-        ~req=request,
-        ~socket,
-        ~continue=() => { gateAllowed := true },
-      )
-      if !gateAllowed.contents {
-        // Gate wrote the rejection to socket; still need a valid outcome to satisfy switch.
-        Types.Respond({status: 0, headers: [], body: Types.Empty})
-      } else {
-        try {
-          await handler(request)
-        } catch {
-        | _ =>
-          Types.Respond({
-            status: 500,
-            headers: [("content-type", "text/plain; charset=utf-8")],
-            body: Types.Empty,
-          })
-        }
-      }
-    } else {
-      try {
-        await handler(request)
-      } catch {
-      | _ =>
-        Types.Respond({
-          status: 500,
-          headers: [("content-type", "text/plain; charset=utf-8")],
-          body: Types.Empty,
-        })
-      }
-    }
-    switch outcome {
-    | Types.WsUpgrade => {
-        // Emit access log for WS upgrade (status 101, bytes 0)
-        let ts = Date.make()->Date.toISOString
-        let durationMs = Float.toInt(Date.now() -. startMs)
-        switch accessLogDest {
-        | Some(dest) =>
-          let entry: AccessLog.line = {
-            timestamp: ts,
-            requestId: request.requestId,
-            ip: request.clientIp,
-            method: request.method,
-            path: request.path,
-            status: 101,
-            bytes: 0,
-            duration_ms: durationMs,
-          }
-          try {
-            AccessLog.emit(dest, entry)
-          } catch {
-          | _ => ()
-          }
-        | None => ()
-        }
-        let _ = await onWsUpgrade(request, socket, head)
-      }
-    | Types.Respond(_) => {
-        // Defer destroy to next tick so res.end() data reaches the kernel before
-        // the socket is closed. Without this, socket.destroy() can abort the
-        // response mid-flight causing ECONNRESET on the client side.
-        let _ = _setTimeout(() => socketDestroy(socket), 50)
-      }
-    }
-  }
+  // Build handlers
+  let requestHandler = makeRequestHandler(deps)
+  let upgradeHandler = makeUpgradeHandler(deps)
 
-  // Create HTTP or HTTPS server based on tlsCertKey.
-  // Both server types register the same handlers; only the createServer call differs.
+  // Create HTTP or HTTPS server
   let serverVariant: serverVariant = switch tlsCertKey {
   | Some({cert, key}) =>
     let httpsServ = _createHttpsServer(
@@ -779,39 +678,16 @@ let startServer = (
     HttpServer(httpServ)
   }
 
-  // closed — resolved by the abort handler after the server is closed.
-  // This is the promise Httpath awaits before calling Process.exit.
-  let closedResolve = ref((None: option<unit => unit>))
-  let closed: promise<unit> = Promise.make((resolve, _reject) => {
-    closedResolve := Some(resolve)
-  })
+  // Wire shutdown via abort signal (owned by Httpath.res)
+  let closed = attachShutdown(~server=serverVariant, ~signal)
 
-  // Close on abort signal; resolve closed after closeServer completes.
-  let _ = setOnAbort(signal, () => {
-    // Close only idle sockets so in-flight requests can drain before shutdown.
-    // closeIdleConnections is Node ≥22.
-    switch serverVariant {
-    | HttpServer(s) => closeIdleConnections(s)
-    | HttpsServer(s) => httpsCloseIdleConnections(s)
-    }
-    let _ = closeServerVariant(serverVariant)->Promise.then(() => {
-      switch closedResolve.contents {
-      | Some(r) => r()
-      | None => ()
-      }
-      Promise.resolve()
-    })
-  })
-
-  // Listen and return the server handle.
-  // The listen promise is fire-and-forget (listen happens async);
-  // the server is usable immediately. closed resolves on abort.
-  let _listenPromise = Promise.make((resolve, _reject) => {
+  // Listen — fire-and-forget; server is usable immediately
+  let listening = Promise.make((resolve, _reject) => {
     switch serverVariant {
     | HttpServer(s) => ignore(_listen(s, port, hostname, () => resolve()))
     | HttpsServer(s) => ignore(_httpsListen(s, port, hostname, () => resolve()))
     }
   })
 
-  {server: serverVariant, closed, listening: _listenPromise}
+  {server: serverVariant, closed, listening}
 }

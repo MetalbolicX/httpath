@@ -2,6 +2,7 @@
 // Faithful port of src/server/http.mts:256-490 per REQ-HANDLER-1..13.
 
 module NodePath = Node_Path
+module UHeaders = HttpHeaders
 module Probes = Probes
 
 // probes — initialized lazily inside make() once per handler instance.
@@ -25,53 +26,6 @@ let respond = (
     headers: withSec,
     body,
   })
-}
-
-// ---------------------------------------------------------------------------
-// content-length header lookup helper
-// ---------------------------------------------------------------------------
-
-let getContentLength = (headers: array<(string, string)>): option<int> => {
-  let rec find = (i: int): option<int> => {
-    if i >= Array.length(headers) {
-      None
-    } else {
-      switch headers[i] {
-      | Some(("content-length", v)) => {
-          let parsed = Belt.Int.fromString(v)
-          switch parsed {
-          | Some(n) =>
-            if n > 0 {
-              Some(n)
-            } else {
-              None
-            }
-          | None => None
-          }
-        }
-      | _ => find(i + 1)
-      }
-    }
-  }
-  find(0)
-}
-
-// ---------------------------------------------------------------------------
-// upgrade header lookup helper
-// ---------------------------------------------------------------------------
-
-let getUpgradeHeader = (headers: array<(string, string)>): option<string> => {
-  let rec find = (i: int): option<string> => {
-    if i >= Array.length(headers) {
-      None
-    } else {
-      switch headers[i] {
-      | Some(("upgrade", v)) => Some(v)
-      | _ => find(i + 1)
-      }
-    }
-  }
-  find(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -321,7 +275,397 @@ let serveDirectory = (
 }
 
 // ---------------------------------------------------------------------------
-// handle: the main handler pipeline
+// requestCtx — shared context passed through all sub-handlers.
+// Keeps sub-handlers from reaching into module-level mutable state.
+// ---------------------------------------------------------------------------
+
+type requestCtx = {
+  config: Config.t,
+  probes: Probes.probeHandlers,
+  request: Types.request,
+  upperMethod: string,
+}
+
+// ---------------------------------------------------------------------------
+// handle413 — reject requests with a non-zero content-length body.
+// REQ-HANDLER-2
+// ---------------------------------------------------------------------------
+
+let handle413 = (ctx: requestCtx): option<promise<Types.outcome>> => {
+  switch UHeaders.getContentLength(ctx.request.headers) {
+  | Some(_) =>
+    Some(
+      Promise.resolve(
+        respond(
+          ~status=413,
+          ~headers=[("content-type", "text/plain; charset=utf-8")],
+          ~body=Types.Empty,
+          ~logLevel=Logger.Error,
+          ~logMsg="413 Payload Too Large: " ++ ctx.request.path,
+        ),
+      ),
+    )
+  | None => None
+  }
+}
+
+// ---------------------------------------------------------------------------
+// handle405 — reject non-GET/HEAD methods with 405 + Allow header.
+// REQ-HANDLER-3
+// ---------------------------------------------------------------------------
+
+let handle405 = (ctx: requestCtx): option<promise<Types.outcome>> =>
+  if ctx.upperMethod != "GET" && ctx.upperMethod != "HEAD" {
+    Some(
+      Promise.resolve(
+        respond(
+          ~status=405,
+          ~headers=[("content-type", "text/plain; charset=utf-8"), ("allow", "GET, HEAD")],
+          ~body=Types.Empty,
+          ~logLevel=Logger.Info,
+          ~logMsg="405 Method Not Allowed: " ++ ctx.upperMethod ++ " " ++ ctx.request.path,
+        ),
+      ),
+    )
+  } else {
+    None
+  }
+
+// ---------------------------------------------------------------------------
+// handleUriDecode — decode the URI path; 400 on invalid percent-encoding.
+// REQ-HANDLER-4
+// Returns Some(Promise) with 400 on failure, None to continue.
+// ---------------------------------------------------------------------------
+
+let handleUriDecode = (ctx: requestCtx): option<promise<Types.outcome>> => {
+  let decodedOr400: result<string, Types.outcome> = try {
+    Ok(decodeURIComponent(ctx.request.path))
+  } catch {
+  | _ =>
+    Error(
+      respond(
+        ~status=400,
+        ~headers=[("content-type", "text/plain; charset=utf-8")],
+        ~body=Types.Empty,
+        ~logLevel=Logger.Error,
+        ~logMsg="400 Bad Request: " ++ ctx.request.path,
+      ),
+    )
+  }
+  switch decodedOr400 {
+  | Error(r) => Some(Promise.resolve(r))
+  | Ok(_) => None
+  }
+}
+
+// ---------------------------------------------------------------------------
+// handleProbe — intercept /healthz, /readyz, and WS upgrade.
+// Returns Some(outcome) if a probe path was matched, None to continue.
+// ---------------------------------------------------------------------------
+
+let handleProbe = (ctx: requestCtx, ~decodedPath: string): option<promise<Types.outcome>> => {
+  if decodedPath == "/healthz" {
+    Some(ctx.probes.healthz(ctx.request))
+  } else if decodedPath == "/readyz" {
+    Some(ctx.probes.readyz(ctx.request))
+  } else if ctx.config.enableLiveReload &&
+             decodedPath == Types.liveReloadEndpoint &&
+             UHeaders.getUpgradeHeader(ctx.request.headers) == Some("websocket") {
+    // NO origin check per design Q3a
+    Some(Promise.resolve(Types.WsUpgrade))
+  } else {
+    None
+  }
+}
+
+// ---------------------------------------------------------------------------
+// handleSafePath — resolve the decoded path against the config directory.
+// Returns Some(403) on traversal attempt, None to continue with safePath.
+// REQ-HANDLER-6
+// ---------------------------------------------------------------------------
+
+let handleSafePath = (ctx: requestCtx, ~decodedPath: string): option<(string, promise<Types.outcome>)> => {
+  switch Path.resolveSafePath(~base=ctx.config.directory, ~requested=decodedPath) {
+  | None =>
+    Logger.log(Logger.Error, "403 Forbidden: path traversal blocked " ++ ctx.request.path)
+    Some((
+      "",
+      Promise.resolve(
+        respond(
+          ~status=403,
+          ~headers=[("content-type", "text/plain; charset=utf-8")],
+          ~body=Types.Empty,
+          ~logLevel=Logger.Error,
+          ~logMsg="403 Forbidden: " ++ ctx.request.path,
+        ),
+      ),
+    ))
+  | Some(safePath) => None
+  }
+}
+
+// ---------------------------------------------------------------------------
+// handleIgnorePattern — check whether the resolved path matches an ignore rule.
+// Returns Some(403) if matched, None to continue.
+// REQ-HANDLER-7
+// ---------------------------------------------------------------------------
+
+let handleIgnorePattern = (ctx: requestCtx, ~safePath: string): option<promise<Types.outcome>> => {
+  let relPath = NodePath.relative(ctx.config.directory, safePath)
+  let normalized = String.replaceRegExp(relPath, /\\/g, "/")
+  if Path.matchesPattern(~path=normalized, ~patterns=ctx.config.ignorePatterns) {
+    Logger.log(Logger.Debug, "403 Forbidden: ignored path " ++ ctx.request.path)
+    Some(
+      Promise.resolve(
+        respond(
+          ~status=403,
+          ~headers=[("content-type", "text/plain; charset=utf-8")],
+          ~body=Types.Empty,
+          ~logLevel=Logger.Debug,
+          ~logMsg="403 Forbidden (ignored): " ++ ctx.request.path,
+        ),
+      ),
+    )
+  } else {
+    None
+  }
+}
+
+// ---------------------------------------------------------------------------
+// handleSymlinkCheck — verify no symlink appears in the resolved path.
+// Returns Some(403) if a symlink is found, None to continue.
+// REQ-HANDLER-8
+// ---------------------------------------------------------------------------
+
+let handleSymlinkCheck = (ctx: requestCtx, ~safePath: string): promise<option<Types.outcome>> => {
+  Path.hasSymlinkPrefix(~base=ctx.config.directory, ~target=safePath)
+  ->Promise.then(hasSymlink => {
+    if hasSymlink {
+      Logger.log(Logger.Error, "403 Forbidden: symlink in path " ++ ctx.request.path)
+      Promise.resolve(
+        Some(
+          respond(
+            ~status=403,
+            ~headers=[("content-type", "text/plain; charset=utf-8")],
+            ~body=Types.Empty,
+            ~logLevel=Logger.Error,
+            ~logMsg="403 Forbidden (symlink): " ++ ctx.request.path,
+          ),
+        ),
+      )
+    } else {
+      Fs.lstat(safePath)
+      ->Promise.then(lstatInfo => {
+        if Fs.statIsSymlink(lstatInfo) {
+          Logger.log(Logger.Error, "403 Forbidden: symlink target " ++ ctx.request.path)
+          Promise.resolve(
+            Some(
+              respond(
+                ~status=403,
+                ~headers=[("content-type", "text/plain; charset=utf-8")],
+                ~body=Types.Empty,
+                ~logLevel=Logger.Error,
+                ~logMsg="403 Forbidden (symlink target): " ++ ctx.request.path,
+              ),
+            ),
+          )
+        } else {
+          Promise.resolve(None)
+        }
+      })
+      ->Promise.catch(fsError => {
+        // classifyFsError maps ENOENT -> 404, other -> 500.
+        // Original (pre-035) behavior: missing lstat target -> 404, not 500.
+        let code = classifyFsError(fsError)
+        Promise.resolve(
+          Some(
+            respond(
+              ~status=code,
+              ~headers=[("content-type", "text/plain; charset=utf-8")],
+              ~body=Types.Empty,
+              ~logLevel=Logger.Error,
+              ~logMsg=if code == 404 {
+                "404 Not Found: " ++ ctx.request.path
+              } else {
+                "500 Internal Server Error: " ++ ctx.request.path
+              },
+            ),
+          ),
+        )
+      })
+    }
+  })
+  ->Promise.catch(_fsError => {
+    // hasSymlinkPrefix already swallows ENOENT internally (returns false);
+    // this catch is for genuine failures from Path.resolve etc. -> 500.
+    Promise.resolve(
+      Some(
+        respond(
+          ~status=500,
+          ~headers=[("content-type", "text/plain; charset=utf-8")],
+          ~body=Types.Empty,
+          ~logLevel=Logger.Error,
+          ~logMsg="500 Internal Server Error: symlink check failed " ++ ctx.request.path,
+        ),
+      ),
+    )
+  })
+}
+
+// ---------------------------------------------------------------------------
+// handleFsError — classify a filesystem error as 404 or 500 and emit response.
+// REQ-HANDLER-9
+// ---------------------------------------------------------------------------
+
+let handleFsError = (ctx: requestCtx, ~fsError: exn): promise<Types.outcome> => {
+  let code = classifyFsError(fsError)
+  if code == 404 {
+    Logger.log(Logger.Error, "404 Not Found: " ++ ctx.request.path)
+  } else {
+    Logger.log(Logger.Error, "500 Internal Server Error: " ++ errorMsg(fsError))
+  }
+  Promise.resolve(
+    respond(
+      ~status=code,
+      ~headers=[("content-type", "text/plain; charset=utf-8")],
+      ~body=Types.Empty,
+      ~logLevel=Logger.Error,
+      ~logMsg=if code == 404 {
+        "404 Not Found: " ++ ctx.request.path
+      } else {
+        "500 Internal Server Error: " ++ ctx.request.path
+      },
+    ),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// handleNotFound — the resolved path exists but is neither a file nor a directory.
+// REQ-HANDLER-9
+// ---------------------------------------------------------------------------
+
+let handleNotFound = (ctx: requestCtx): promise<Types.outcome> =>
+  Promise.resolve(
+    respond(
+      ~status=404,
+      ~headers=[("content-type", "text/plain; charset=utf-8")],
+      ~body=Types.Empty,
+      ~logLevel=Logger.Error,
+      ~logMsg="404 Not Found: " ++ ctx.request.path,
+    ),
+  )
+
+// ---------------------------------------------------------------------------
+// handleServe — stat the safePath; dispatch to serveFile or serveDirectory.
+// Owns the index.html fallback logic and all fs-error mapping.
+// REQ-HANDLER-9
+// ---------------------------------------------------------------------------
+
+let handleServe = (ctx: requestCtx, ~safePath: string, ~decodedPath: string): promise<Types.outcome> =>
+  Fs.stat(safePath)
+  ->Promise.then(
+    statInfo => {
+      if Fs.statIsFile(statInfo) {
+        // serveFile
+        serveFile(
+          ~method=ctx.upperMethod,
+          ~safePath,
+          ~enableLiveReload=ctx.config.enableLiveReload,
+          ~port=ctx.config.port,
+          ~tls=ctx.config.tls,
+        )
+      } else if Fs.statIsDirectory(statInfo) {
+        if ctx.config.enableDirectoryListing {
+          serveDirectory(
+            ~method=ctx.upperMethod,
+            ~safePath,
+            ~urlPath=decodedPath,
+            ~enableLiveReload=ctx.config.enableLiveReload,
+            ~port=ctx.config.port,
+            ~ignorePatterns=ctx.config.ignorePatterns,
+            ~tls=ctx.config.tls,
+          )
+        } else {
+          // Try index.html fallback
+          let indexPath = NodePath.join(safePath, "index.html")
+          Fs.lstat(indexPath)
+          ->Promise.then(
+            indexInfo => {
+              if Fs.statIsSymlink(indexInfo) {
+                Logger.log(
+                  Logger.Error,
+                  "403 Forbidden: index.html is symlink " ++ ctx.request.path,
+                )
+                Promise.resolve(
+                  respond(
+                    ~status=403,
+                    ~headers=[("content-type", "text/plain; charset=utf-8")],
+                    ~body=Types.Empty,
+                    ~logLevel=Logger.Error,
+                    ~logMsg="403 Forbidden (index symlink): " ++ ctx.request.path,
+                  ),
+                )
+              } else {
+                Fs.stat(indexPath)
+                ->Promise.then(
+                  _ => {
+                    serveFile(
+                      ~method=ctx.upperMethod,
+                      ~safePath=indexPath,
+                      ~enableLiveReload=ctx.config.enableLiveReload,
+                      ~port=ctx.config.port,
+                      ~tls=ctx.config.tls,
+                    )
+                  },
+                )
+                ->Promise.catch(
+                  _ => {
+                    Logger.log(
+                      Logger.Debug,
+                      "403 Directory listing disabled: " ++ ctx.request.path,
+                    )
+                    Promise.resolve(
+                      respond(
+                        ~status=403,
+                        ~headers=[("content-type", "text/plain; charset=utf-8")],
+                        ~body=Types.Empty,
+                        ~logLevel=Logger.Debug,
+                        ~logMsg="403 Directory listing disabled: " ++ ctx.request.path,
+                      ),
+                    )
+                  },
+                )
+              }
+            },
+          )
+          ->Promise.catch(
+            _ => {
+              Logger.log(
+                Logger.Debug,
+                "403 Directory listing disabled: " ++ ctx.request.path,
+              )
+              Promise.resolve(
+                respond(
+                  ~status=403,
+                  ~headers=[("content-type", "text/plain; charset=utf-8")],
+                  ~body=Types.Empty,
+                  ~logLevel=Logger.Debug,
+                  ~logMsg="403 Directory listing disabled: " ++ ctx.request.path,
+                ),
+              )
+            },
+          )
+        }
+      } else {
+        handleNotFound(ctx)
+      }
+    },
+  )
+  ->Promise.catch(fsError => handleFsError(ctx, ~fsError))
+
+// ---------------------------------------------------------------------------
+// handle: the main handler pipeline dispatcher (~40 lines)
+// Orchestrates the sub-handlers in specification order.
 // REQ-HANDLER-2..13
 // ---------------------------------------------------------------------------
 
@@ -330,65 +674,45 @@ let handle = (
   ~config: Config.t,
   ~request: Types.request,
 ): promise<Types.outcome> => {
-  // REQ-HANDLER-2: 413 — content-length > 0
-  switch getContentLength(request.headers) {
-  | Some(_) =>
-    Promise.resolve(
-      respond(
-        ~status=413,
-        ~headers=[("content-type", "text/plain; charset=utf-8")],
-        ~body=Types.Empty,
-        ~logLevel=Logger.Error,
-        ~logMsg="413 Payload Too Large: " ++ request.path,
-      ),
-    )
+  let upperMethod = String.toUpperCase(request.method)
+  let ctx: requestCtx = {config, probes, request, upperMethod}
+
+  // 413 — content-length check
+  switch handle413(ctx) {
+  | Some(r) => r
   | None =>
-    // REQ-HANDLER-3: method check (GET/HEAD only)
-    let upperMethod = String.toUpperCase(request.method)
-    if upperMethod != "GET" && upperMethod != "HEAD" {
-      // RFC 7231 §6.5.5: 405 responses include Allow with the permitted methods
-      let headers = [("content-type", "text/plain; charset=utf-8"), ("allow", "GET, HEAD")]
-      Promise.resolve(
-        respond(
-          ~status=405,
-          ~headers,
-          ~body=Types.Empty,
-          ~logLevel=Logger.Info,
-          ~logMsg="405 Method Not Allowed: " ++ upperMethod ++ " " ++ request.path,
-        ),
-      )
-    } else {
-      // REQ-HANDLER-4: URI decode (400 on throw)
-      let decodedOr400: result<string, Types.outcome> = try {
+    // 405 — method check
+    switch handle405(ctx) {
+    | Some(r) => r
+    | None =>
+      // URI decode — build decodedPath for downstream use
+      let decodedPathOr400: result<string, promise<Types.outcome>> = try {
         Ok(decodeURIComponent(request.path))
       } catch {
       | _ =>
         Error(
-          respond(
-            ~status=400,
-            ~headers=[("content-type", "text/plain; charset=utf-8")],
-            ~body=Types.Empty,
-            ~logLevel=Logger.Error,
-            ~logMsg="400 Bad Request: " ++ request.path,
+          Promise.resolve(
+            respond(
+              ~status=400,
+              ~headers=[("content-type", "text/plain; charset=utf-8")],
+              ~body=Types.Empty,
+              ~logLevel=Logger.Error,
+              ~logMsg="400 Bad Request: " ++ request.path,
+            ),
           ),
         )
       }
-      switch decodedOr400 {
-      | Error(r) => Promise.resolve(r)
+      switch decodedPathOr400 {
+      | Error(r) => r
       | Ok(decodedPath) =>
-        // Probe intercept: /healthz and /readyz checked before liveReload or safe-path.
-        if decodedPath == "/healthz" {
-          probes.healthz(request)
-        } else if decodedPath == "/readyz" {
-          probes.readyz(request)
-        } else if config.enableLiveReload && decodedPath == Types.liveReloadEndpoint && getUpgradeHeader(request.headers) == Some("websocket") {
-          // NO origin check per design Q3a
-          Promise.resolve(Types.WsUpgrade)
-        } else {
-          // REQ-HANDLER-6: safe-path
+        // Probe intercept — /healthz, /readyz, WS upgrade
+        switch handleProbe(ctx, ~decodedPath) {
+        | Some(r) => r
+        | None =>
+          // Safe-path resolution
           switch Path.resolveSafePath(~base=config.directory, ~requested=decodedPath) {
           | None =>
-            Logger.log(Logger.Error, "403 Forbidden: path traversal blocked " ++ request.path)
+            // Traversal blocked
             Promise.resolve(
               respond(
                 ~status=403,
@@ -398,231 +722,20 @@ let handle = (
                 ~logMsg="403 Forbidden: " ++ request.path,
               ),
             )
-          | Some(safePath) => {
-              // REQ-HANDLER-7: ignore pattern
-              let relPath = NodePath.relative(config.directory, safePath)
-              let normalized = String.replaceRegExp(relPath, /\\/g, "/")
-              if Path.matchesPattern(~path=normalized, ~patterns=config.ignorePatterns) {
-                Logger.log(Logger.Debug, "403 Forbidden: ignored path " ++ request.path)
-                Promise.resolve(
-                  respond(
-                    ~status=403,
-                    ~headers=[("content-type", "text/plain; charset=utf-8")],
-                    ~body=Types.Empty,
-                    ~logLevel=Logger.Debug,
-                    ~logMsg="403 Forbidden (ignored): " ++ request.path,
-                  ),
-                )
-              } else {
-                // REQ-HANDLER-8: symlink check
-                Path.hasSymlinkPrefix(~base=config.directory, ~target=safePath)
-                ->Promise.then(hasSymlink => {
-                  if hasSymlink {
-                    Logger.log(Logger.Error, "403 Forbidden: symlink in path " ++ request.path)
-                    Promise.resolve(
-                      respond(
-                        ~status=403,
-                        ~headers=[("content-type", "text/plain; charset=utf-8")],
-                        ~body=Types.Empty,
-                        ~logLevel=Logger.Error,
-                        ~logMsg="403 Forbidden (symlink): " ++ request.path,
-                      ),
-                    )
-                  } else {
-                    // lstat on the target
-                    Fs.lstat(safePath)
-                    ->Promise.then(lstatInfo => {
-                      if Fs.statIsSymlink(lstatInfo) {
-                        Logger.log(Logger.Error, "403 Forbidden: symlink target " ++ request.path)
-                        Promise.resolve(
-                          respond(
-                            ~status=403,
-                            ~headers=[("content-type", "text/plain; charset=utf-8")],
-                            ~body=Types.Empty,
-                            ~logLevel=Logger.Error,
-                            ~logMsg="403 Forbidden (symlink target): " ++ request.path,
-                          ),
-                        )
-                      } else {
-                        // REQ-HANDLER-9: stat
-                        Fs.stat(safePath)
-                        ->Promise.then(
-                          statInfo => {
-                            if Fs.statIsFile(statInfo) {
-                              // serveFile
-                              serveFile(
-                                ~method=upperMethod,
-                                ~safePath,
-                                ~enableLiveReload=config.enableLiveReload,
-                                ~port=config.port,
-                                ~tls=config.tls,
-                              )
-                            } else if Fs.statIsDirectory(statInfo) {
-                              if config.enableDirectoryListing {
-                                serveDirectory(
-                                  ~method=upperMethod,
-                                  ~safePath,
-                                  ~urlPath=decodedPath,
-                                  ~enableLiveReload=config.enableLiveReload,
-                                  ~port=config.port,
-                                  ~ignorePatterns=config.ignorePatterns,
-                                  ~tls=config.tls,
-                                )
-                              } else {
-                                // Try index.html fallback
-                                let indexPath = NodePath.join(safePath, "index.html")
-                                Fs.lstat(indexPath)
-                                ->Promise.then(
-                                  indexInfo => {
-                                    if Fs.statIsSymlink(indexInfo) {
-                                      Logger.log(
-                                        Logger.Error,
-                                        "403 Forbidden: index.html is symlink " ++ request.path,
-                                      )
-                                      Promise.resolve(
-                                        respond(
-                                          ~status=403,
-                                          ~headers=[("content-type", "text/plain; charset=utf-8")],
-                                          ~body=Types.Empty,
-                                          ~logLevel=Logger.Error,
-                                          ~logMsg="403 Forbidden (index symlink): " ++ request.path,
-                                        ),
-                                      )
-                                    } else {
-                                      Fs.stat(indexPath)
-                                      ->Promise.then(
-                                        _ => {
-                                          serveFile(
-                                            ~method=upperMethod,
-                                            ~safePath=indexPath,
-                                            ~enableLiveReload=config.enableLiveReload,
-                                            ~port=config.port,
-                                            ~tls=config.tls,
-                                          )
-                                        },
-                                      )
-                                      ->Promise.catch(
-                                        _ => {
-                                          Logger.log(
-                                            Logger.Debug,
-                                            "403 Directory listing disabled: " ++ request.path,
-                                          )
-                                          Promise.resolve(
-                                            respond(
-                                              ~status=403,
-                                              ~headers=[
-                                                ("content-type", "text/plain; charset=utf-8"),
-                                              ],
-                                              ~body=Types.Empty,
-                                              ~logLevel=Logger.Debug,
-                                              ~logMsg="403 Directory listing disabled: " ++
-                                              request.path,
-                                            ),
-                                          )
-                                        },
-                                      )
-                                    }
-                                  },
-                                )
-                                ->Promise.catch(
-                                  _ => {
-                                    Logger.log(
-                                      Logger.Debug,
-                                      "403 Directory listing disabled: " ++ request.path,
-                                    )
-                                    Promise.resolve(
-                                      respond(
-                                        ~status=403,
-                                        ~headers=[("content-type", "text/plain; charset=utf-8")],
-                                        ~body=Types.Empty,
-                                        ~logLevel=Logger.Debug,
-                                        ~logMsg="403 Directory listing disabled: " ++ request.path,
-                                      ),
-                                    )
-                                  },
-                                )
-                              }
-                            } else {
-                              // Not a file or directory
-                              Promise.resolve(
-                                respond(
-                                  ~status=404,
-                                  ~headers=[("content-type", "text/plain; charset=utf-8")],
-                                  ~body=Types.Empty,
-                                  ~logLevel=Logger.Error,
-                                  ~logMsg="404 Not Found: " ++ request.path,
-                                ),
-                              )
-                            }
-                          },
-                        )
-                        ->Promise.catch(
-                          fsError => {
-                            let code = classifyFsError(fsError)
-                            if code == 404 {
-                              Logger.log(Logger.Error, "404 Not Found: " ++ request.path)
-                            } else {
-                              Logger.log(
-                                Logger.Error,
-                                "500 Internal Server Error: " ++ errorMsg(fsError),
-                              )
-                            }
-                            Promise.resolve(
-                              respond(
-                                ~status=code,
-                                ~headers=[("content-type", "text/plain; charset=utf-8")],
-                                ~body=Types.Empty,
-                                ~logLevel=Logger.Error,
-                                ~logMsg=if code == 404 {
-                                  "404 Not Found: " ++ request.path
-                                } else {
-                                  "500 Internal Server Error: " ++ request.path
-                                },
-                              ),
-                            )
-                          },
-                        )
-                      }
-                    })
-                    ->Promise.catch(fsError => {
-                      let code = classifyFsError(fsError)
-                      if code == 404 {
-                        Logger.log(Logger.Error, "404 Not Found: " ++ request.path)
-                      } else {
-                        Logger.log(Logger.Error, "500 Internal Server Error: " ++ errorMsg(fsError))
-                      }
-                      Promise.resolve(
-                        respond(
-                          ~status=code,
-                          ~headers=[("content-type", "text/plain; charset=utf-8")],
-                          ~body=Types.Empty,
-                          ~logLevel=Logger.Error,
-                          ~logMsg=if code == 404 {
-                            "404 Not Found: " ++ request.path
-                          } else {
-                            "500 Internal Server Error: " ++ request.path
-                          },
-                        ),
-                      )
-                    })
-                  }
-                })
-                ->Promise.catch(_fsError => {
-                  Logger.log(
-                    Logger.Error,
-                    "500 Internal Server Error: symlink check failed " ++ request.path,
-                  )
-                  Promise.resolve(
-                    respond(
-                      ~status=500,
-                      ~headers=[("content-type", "text/plain; charset=utf-8")],
-                      ~body=Types.Empty,
-                      ~logLevel=Logger.Error,
-                      ~logMsg="500 Internal Server Error: " ++ request.path,
-                    ),
-                  )
-                })
-              }
+          | Some(safePath) =>
+            // Ignore-pattern check
+            switch handleIgnorePattern(ctx, ~safePath) {
+            | Some(r) => r
+            | None =>
+              // Symlink check
+              handleSymlinkCheck(ctx, ~safePath)
+              ->Promise.then(
+                symlinkResult =>
+                  switch symlinkResult {
+                  | Some(r) => Promise.resolve(r)
+                  | None => handleServe(ctx, ~safePath, ~decodedPath)
+                  },
+              )
             }
           }
         }
