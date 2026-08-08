@@ -24,6 +24,8 @@ type t = {
   rateLimitMax: int,
   rateLimitWindow: int,
   rateLimitEnabled: bool,
+  authMaxFailures: int,
+  authLockoutMs: int,
   accessLog: option<string>,
   readOnly: bool,
   user: option<string>,   // privilege-drop target user (plan 026)

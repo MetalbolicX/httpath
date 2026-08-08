@@ -75,6 +75,8 @@ let testConfigBase: Config.t = {
   rateLimitMax: 0,
   rateLimitWindow: 0,
   rateLimitEnabled: false,
+  authMaxFailures: 5,
+  authLockoutMs: 30000,
   accessLog: None,
   readOnly: false,
   user: None,

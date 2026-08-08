@@ -56,6 +56,8 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   let tlsKey = ref((None: option<string>))
   let rateLimitMax = ref((None: option<int>))
   let rateLimitWindow = ref((None: option<int>))
+  let authMaxFailures = ref((None: option<int>))
+  let authLockoutMs = ref((None: option<int>))
   let accessLog = ref((None: option<string>))
   let readOnly = ref(false)
   let user = ref((None: option<string>))
@@ -149,6 +151,26 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
         } else {
           // Convert seconds to milliseconds.
           rateLimitWindow := Some(n * 1000)
+        }
+      }),
+    },
+    {
+      names: ["--auth-max-failures"],
+      kind: TakesInt(n => {
+        if n < 0 {
+          parseError := Some(ParseError.InvalidRateLimit("auth-max-failures", n))
+        } else {
+          authMaxFailures := Some(n)
+        }
+      }),
+    },
+    {
+      names: ["--auth-lockout-ms"],
+      kind: TakesInt(n => {
+        if n <= 0 {
+          parseError := Some(ParseError.InvalidRateLimit("auth-lockout-ms", n))
+        } else {
+          authLockoutMs := Some(n)
         }
       }),
     },
@@ -342,6 +364,14 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
             rateLimitMax: effectiveRateLimitMax,
             rateLimitWindow: effectiveRateLimitWindow,
             rateLimitEnabled: effectiveRateLimitEnabled,
+            authMaxFailures: switch authMaxFailures.contents {
+            | Some(n) => n
+            | None => 5
+            },
+            authLockoutMs: switch authLockoutMs.contents {
+            | Some(n) => n
+            | None => 30000
+            },
             accessLog: accessLog.contents,
             readOnly: effectiveReadOnly,
             user: user.contents,

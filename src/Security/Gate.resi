@@ -25,6 +25,7 @@ let evaluateGate: (
   ~rateLimiter: option<RateLimit.t>,
   ~clientIp: string,
   ~req: Types.request,
+  ~authGate: option<AuthGate.t>,
 ) => gateDecision
 
 let checkOrigin: (~headers: array<(string, string)>, ~host: option<string>) => gateDecision

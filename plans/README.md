@@ -199,7 +199,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 035 | Decompose `Handler.handle` into sub-handlers | P1 | L | 030, 031 | DONE |
 | 036 | Decompose `Http.startServer` into requestHandler/upgradeHandler/attachShutdown | P1 | L | 031 | DONE |
 | 037 | WebSocket Origin validation under `--lan` | P1 | S | — | DONE |
-| 038 | Auth brute-force throttling (exponential backoff) | P1 | M | — | TODO |
+| 038 | Auth brute-force throttling (exponential backoff) | P1 | M | — | DONE |
 | 039 | `--allow-cidr` IP allowlist | P2 | M | — | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).

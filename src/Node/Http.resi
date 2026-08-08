@@ -45,6 +45,7 @@ let startServer: (
   ~accessLog: option<string>,
   ~config: Config.t,
   ~rateLimiter: option<RateLimit.t>,
+  ~authGate: option<AuthGate.t>,
   ~authEntries: option<array<Basic.entry>>,
   ~tlsCertKey: option<Tls.certKeyPair>,
   ~serverTimeouts: serverTimeouts,

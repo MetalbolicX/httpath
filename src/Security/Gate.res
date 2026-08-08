@@ -72,6 +72,7 @@ let evaluateGate = (
   ~rateLimiter: option<RateLimit.t>,
   ~clientIp: string,
   ~req: Types.request,
+  ~authGate: option<AuthGate.t>,
 ): gateDecision => {
   // Auth exemption: exact probe paths /healthz and /readyz bypass auth
   // (rate-limit still applies; probes reveal only "up/draining", not content)
@@ -97,9 +98,30 @@ let evaluateGate = (
     Allowed
   }
 
+  // Auth-failure throttling (plan 038): runs between rate-limit and auth-verify.
+  // When locked, the request is rejected with 429 before password verification.
+  let authGateDecision: gateDecision = switch rateDecision {
+  | Rejected(_) => rateDecision
+  | Allowed =>
+    switch authGate {
+    | None => Allowed
+    | Some(gate) =>
+      switch AuthGate.check(gate, clientIp) {
+      | AuthGate.Allow => Allowed
+      | AuthGate.Locked({retryAfterSeconds}) =>
+        Rejected({
+          status: 429,
+          headers: [("Retry-After", Int.toString(retryAfterSeconds))],
+          body: `{"error":"Too many auth failures"}`,
+          reason: "auth_lockout",
+        })
+      }
+    }
+  }
+
   // Auth check — skipped for exact probe paths (rate-limit still applies above)
-  switch rateDecision {
-  | Rejected(_) => rateDecision // already rejected by rate-limit
+  switch authGateDecision {
+  | Rejected(_) => authGateDecision // already rejected by rate-limit or auth-gate
   | Allowed =>
     if isProbe {
       // Auth-exempt: probes reveal only "up/draining", not content
@@ -118,8 +140,15 @@ let evaluateGate = (
         })
       | Some(entries) =>
         switch extractCredentials(~authHeader, ~entries) {
-        | Found(_) => Allowed
+        | Found(_) =>
+          switch authGate {
+          | Some(gate) => AuthGate.recordSuccess(gate, clientIp)
+          | None => ()
+          }
+          Allowed
         | MissingHeader =>
+          // Missing header is not a credential failure — don't increment
+          // the failure counter (only WrongCredentials records a failure).
           Rejected({
             status: 401,
             headers: [("WWW-Authenticate", `Basic realm="httpath"`)],
@@ -127,6 +156,10 @@ let evaluateGate = (
             reason: "auth_required",
           })
         | WrongCredentials =>
+          switch authGate {
+          | Some(gate) => AuthGate.recordFailure(gate, clientIp)
+          | None => ()
+          }
           Rejected({
             status: 401,
             headers: [("WWW-Authenticate", `Basic realm="httpath"`)],

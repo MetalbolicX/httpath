@@ -36,7 +36,7 @@
     "prepare": "pnpm run build",
     "prepublishOnly": "pnpm run build && pnpm test",
     "test:unit": "pnpm run build && node_modules/.bin/retest 'tests/unit/**/*.res.mjs' && node --env-file=retest.env.js tests/unit/restart_test.mjs",
-    "test:integration": "node --test --test-concurrency=1 tests/integration/ws_hub.test.js tests/integration/entrypoint.test.js tests/integration/lan_auth.test.mjs tests/integration/lan_read_only.test.mjs tests/integration/lan_tls.test.mjs tests/integration/lan_e2e.test.mjs tests/integration/graceful_shutdown.test.js tests/integration/static_handler.test.js tests/integration/server_timeouts.test.js tests/integration/protected_dir.test.js tests/integration/health_probes.test.js tests/integration/logging_json.test.js tests/integration/lan_ws_ratelimit.test.mjs tests/integration/lan_accesslog.test.mjs tests/integration/ws_origin_check.test.mjs",
+    "test:integration": "node --test --test-concurrency=1 tests/integration/ws_hub.test.js tests/integration/entrypoint.test.js tests/integration/lan_auth.test.mjs tests/integration/lan_read_only.test.mjs tests/integration/lan_tls.test.mjs tests/integration/lan_e2e.test.mjs tests/integration/graceful_shutdown.test.js tests/integration/static_handler.test.js tests/integration/server_timeouts.test.js tests/integration/protected_dir.test.js tests/integration/health_probes.test.js tests/integration/logging_json.test.js tests/integration/lan_ws_ratelimit.test.mjs tests/integration/lan_accesslog.test.mjs tests/integration/ws_origin_check.test.mjs tests/integration/auth_brute_force.test.mjs",
     "test": "pnpm run build && pnpm run test:unit && pnpm run test:integration"
   },
   "devDependencies": {

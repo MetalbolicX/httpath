@@ -155,6 +155,7 @@ type serverDeps = {
   config: Config.t,
   authEntries: option<array<Basic.entry>>,
   rateLimiter: option<RateLimit.t>,
+  authGate: option<AuthGate.t>,
   handler: handlerCb,
   onWsUpgrade: upgradeCb,
   accessLogDest: option<AccessLog.dest>,
@@ -314,10 +315,11 @@ let gate = (
   ~config: Config.t,
   ~authEntries: option<array<Basic.entry>>,
   ~rateLimiter: option<RateLimit.t>,
+  ~authGate: option<AuthGate.t>,
   ~clientIp: string,
   ~req: Types.request,
 ): Gate.gateDecision =>
-  Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~clientIp, ~req)
+  Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~authGate, ~clientIp, ~req)
 
 // ---------------------------------------------------------------------------
 // gateWs — WS upgrade gate. Delegates decision to Gate.evaluateGate then
@@ -328,6 +330,7 @@ let gateWs = (
   ~config: Config.t,
   ~authEntries: option<array<Basic.entry>>,
   ~rateLimiter: option<RateLimit.t>,
+  ~authGate: option<AuthGate.t>,
   ~clientIp: string,
   ~req: Types.request,
   ~socket: serverSocket,
@@ -339,7 +342,7 @@ let gateWs = (
   )
   switch originDecision {
   | Gate.Allowed =>
-    switch Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~clientIp, ~req) {
+    switch Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~authGate, ~clientIp, ~req) {
     | Gate.Allowed => continue()
     | Gate.Rejected({status, headers, body}) => {
         let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.joinWith("\r\n")
@@ -378,7 +381,7 @@ let gateWs = (
 // ---------------------------------------------------------------------------
 
 let makeRequestHandler = (deps: serverDeps) => {
-  let {config, authEntries, rateLimiter, handler, accessLogDest, trustProxy} = deps
+  let {config, authEntries, rateLimiter, authGate, handler, accessLogDest, trustProxy} = deps
 
   async (req, res) => {
     let socketIp = try {
@@ -417,6 +420,7 @@ let makeRequestHandler = (deps: serverDeps) => {
         ~config,
         ~authEntries,
         ~rateLimiter,
+        ~authGate,
         ~clientIp=request.clientIp,
         ~req=request,
       ) {
@@ -513,7 +517,7 @@ let makeRequestHandler = (deps: serverDeps) => {
 // ---------------------------------------------------------------------------
 
 let makeUpgradeHandler = (deps: serverDeps) => {
-  let {config, authEntries, rateLimiter, handler, onWsUpgrade, accessLogDest, trustProxy} = deps
+  let {config, authEntries, rateLimiter, authGate, handler, onWsUpgrade, accessLogDest, trustProxy} = deps
 
   async (req, socket, head) => {
     let socketIp = try {
@@ -553,6 +557,7 @@ let makeUpgradeHandler = (deps: serverDeps) => {
         ~config,
         ~authEntries,
         ~rateLimiter,
+        ~authGate,
         ~clientIp=request.clientIp,
         ~req=request,
         ~socket,
@@ -647,6 +652,7 @@ let startServer = (
   ~accessLog: option<string>,
   ~config: Config.t,
   ~rateLimiter: option<RateLimit.t>,
+  ~authGate: option<AuthGate.t>,
   ~authEntries: option<array<Basic.entry>>,
   ~tlsCertKey: option<Tls.certKeyPair>,
   ~serverTimeouts: serverTimeouts,
@@ -669,6 +675,7 @@ let startServer = (
     config,
     authEntries,
     rateLimiter,
+    authGate,
     handler,
     onWsUpgrade,
     accessLogDest,

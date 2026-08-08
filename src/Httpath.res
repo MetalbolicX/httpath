@@ -58,6 +58,23 @@ let start = (
     None
   }
 
+  // Auth-failure throttle (plan 038): only active when auth is enforced
+  // (noAuth=false) and the operator hasn't disabled throttling
+  // (authMaxFailures > 0). Shares the rate-limiter's IP cap so a memory DoS
+  // on either map is bounded together.
+  let authGate: option<AuthGate.t> = if config.noAuth || config.authMaxFailures <= 0 {
+    None
+  } else {
+    Some(
+      AuthGate.make(
+        ~maxFailures=config.authMaxFailures,
+        ~baseLockoutMs=Int.toFloat(config.authLockoutMs),
+        ~maxIps=10000,
+        ~now=() => Date.now(),
+      ),
+    )
+  }
+
   // Initialise WebSocket connection caps from config (plan 033).
   WsHub.init(~maxPerIp=config.wsMaxPerIp, ~maxGlobal=config.wsMaxGlobal)
 
@@ -139,6 +156,7 @@ let start = (
     ~accessLog=config.accessLog,
     ~config,
     ~rateLimiter,
+    ~authGate,
     ~authEntries,
     ~tlsCertKey=tlsKey,
     ~serverTimeouts,

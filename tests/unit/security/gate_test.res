@@ -113,6 +113,9 @@ test("Gate.evaluateGate: rate-limit Allowed + auth Allowed → Allowed", () => {
     ~rateLimiter=Some(limiter),
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => () // expected
@@ -134,6 +137,9 @@ test("Gate.evaluateGate: exhausted rate-limit → Rejected(status=429, Retry-Aft
     ~rateLimiter=Some(limiter),
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected")
@@ -184,6 +190,9 @@ test("Gate.evaluateGate: noAuth=true → Allowed even with no auth entries", () 
     ~rateLimiter=Some(limiter),
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => () // expected
@@ -204,6 +213,9 @@ test("Gate.evaluateGate: noAuth=false + no auth entries → Rejected(status=401,
     ~rateLimiter=None,
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected")
@@ -252,6 +264,9 @@ test("Gate.evaluateGate: valid credentials → Allowed", () => {
     ~rateLimiter=None,
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected for invalid creds")
@@ -288,6 +303,9 @@ test("Gate.evaluateGate: invalid credentials → Rejected(status=401, reason=inv
     ~rateLimiter=None,
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected")
@@ -312,6 +330,9 @@ test("Gate.evaluateGate: /healthz bypasses auth but rate-limit still applies", (
     ~rateLimiter=Some(limiter),
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected for /healthz with exhausted limiter")
@@ -329,6 +350,9 @@ test("Gate.evaluateGate: /healthz bypasses auth but rate-limit still applies", (
     ~rateLimiter=None,
     ~clientIp="192.168.1.1",
     ~req=req2,
+
+  ~authGate=None,
+
   )
   switch result2 {
   | Gate.Allowed => () // expected: /healthz bypasses auth
@@ -351,6 +375,9 @@ test("Gate.evaluateGate: /readyz bypasses auth but rate-limit still applies", ()
     ~rateLimiter=Some(limiter),
     ~clientIp="192.168.1.1",
     ~req,
+
+  ~authGate=None,
+
   )
   switch result {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected for /readyz with exhausted limiter")
@@ -368,6 +395,9 @@ test("Gate.evaluateGate: /readyz bypasses auth but rate-limit still applies", ()
     ~rateLimiter=None,
     ~clientIp="192.168.1.1",
     ~req=req2,
+
+  ~authGate=None,
+
   )
   switch result2 {
   | Gate.Allowed => () // expected: /readyz bypasses auth
@@ -391,6 +421,9 @@ test("Gate.evaluateGate: / with valid credentials → Allowed (probe exemption d
     ~rateLimiter=None,
     ~clientIp="192.168.1.1",
     ~req=reqNoAuth,
+
+  ~authGate=None,
+
   )
   switch result1 {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected for / without auth")
