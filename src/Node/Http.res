@@ -333,11 +333,37 @@ let gateWs = (
   ~socket: serverSocket,
   ~continue: unit => unit,
 ): unit => {
-  switch Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~clientIp, ~req) {
-  | Gate.Allowed => continue()
+  let originDecision = Gate.checkOrigin(
+    ~headers=req.headers,
+    ~host=Types.getHeader(req.headers, "host"),
+  )
+  switch originDecision {
+  | Gate.Allowed =>
+    switch Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~clientIp, ~req) {
+    | Gate.Allowed => continue()
+    | Gate.Rejected({status, headers, body}) => {
+        let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.joinWith("\r\n")
+        let reasonPhrase = status == 429
+          ? "Too Many Requests"
+          : status == 401
+          ? "Unauthorized"
+          : status == 403
+          ? "Forbidden"
+          : "Error"
+        let response = `HTTP/1.1 ${Int.toString(status)} ${reasonPhrase}\r\n${headerLines}\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
+        socketWrite(socket, response)
+        socketDestroy(socket)
+      }
+    }
   | Gate.Rejected({status, headers, body}) => {
       let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.joinWith("\r\n")
-      let reasonPhrase = status == 429 ? "Too Many Requests" : status == 401 ? "Unauthorized" : "Error"
+      let reasonPhrase = status == 429
+        ? "Too Many Requests"
+        : status == 401
+        ? "Unauthorized"
+        : status == 403
+        ? "Forbidden"
+        : "Error"
       let response = `HTTP/1.1 ${Int.toString(status)} ${reasonPhrase}\r\n${headerLines}\r\nContent-Type: application/json\r\nContent-Length: ${Int.toString(String.length(body))}\r\nConnection: close\r\n\r\n${body}`
       socketWrite(socket, response)
       socketDestroy(socket)

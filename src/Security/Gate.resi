@@ -26,3 +26,5 @@ let evaluateGate: (
   ~clientIp: string,
   ~req: Types.request,
 ) => gateDecision
+
+let checkOrigin: (~headers: array<(string, string)>, ~host: option<string>) => gateDecision

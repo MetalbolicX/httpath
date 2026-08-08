@@ -371,7 +371,6 @@ let handleProbe = (ctx: requestCtx, ~decodedPath: string): option<promise<Types.
   } else if ctx.config.enableLiveReload &&
              decodedPath == Types.liveReloadEndpoint &&
              UHeaders.getUpgradeHeader(ctx.request.headers) == Some("websocket") {
-    // NO origin check per design Q3a
     Some(Promise.resolve(Types.WsUpgrade))
   } else {
     None

@@ -5,6 +5,8 @@
 // The two callers in Http.res (gate, gateWs) are thin adapters translating the
 // decision into either a return value or a raw socket write.
 
+module UHeaders = HttpHeaders
+
 type gateDecision =
   | Allowed
   | Rejected({
@@ -136,5 +138,34 @@ let evaluateGate = (
     } else {
       Allowed
     }
+  }
+}
+
+// checkOrigin — CSWSH prevention. Returns Allowed unless both an Origin
+// header is present, a Host header is present, and the Origin's host does
+// not match the Host header. Missing or unparseable Origin/Host values
+// fall through to Allowed (non-browser clients have no Origin to send).
+let checkOrigin = (
+  ~headers: array<(string, string)>,
+  ~host: option<string>,
+): gateDecision => {
+  switch (UHeaders.get(headers)("origin"), host) {
+  | (Some(origin), Some(host)) =>
+    switch Origin.extractOriginHost(origin) {
+    | Some(originHost) =>
+      if originHost == host {
+        Allowed
+      } else {
+        Rejected({
+          status: 403,
+          headers: [],
+          body: `{"error":"Cross-origin WebSocket upgrade rejected"}`,
+          reason: "origin_mismatch",
+        })
+      }
+    | None => Allowed
+    }
+  | (None, _) => Allowed
+  | (_, None) => Allowed
   }
 }

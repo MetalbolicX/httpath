@@ -26,6 +26,20 @@ let getContentLength = (headers: array<(string, string)>): option<int> => {
   find(0)
 }
 
+let get = (headers: array<(string, string)>, name: string): option<string> => {
+  let rec find = (i: int): option<string> => {
+    if i >= Array.length(headers) {
+      None
+    } else {
+      switch headers[i] {
+      | Some((k, v)) if k == name => Some(v)
+      | _ => find(i + 1)
+      }
+    }
+  }
+  find(0)
+}
+
 let getUpgradeHeader = (headers: array<(string, string)>): option<string> => {
   let rec find = (i: int): option<string> => {
     if i >= Array.length(headers) {
