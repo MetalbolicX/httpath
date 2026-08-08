@@ -190,6 +190,7 @@ httpath --lan --no-tls
 | `--rate-limit-window <n>`   | `60000` (LAN default)| Rate limit window in milliseconds                              |
 | `--access-log <path>`       | stdout (LAN default) | Append access log to a file                                    |
 | `--read-only`               | `true` (LAN default) | Reject write methods (POST/PUT/DELETE/PATCH) with `405`        |
+| `--allow-cidr <cidr[,...]>` | `[]`                  | Comma-separated CIDR allowlist (e.g. `10.0.0.0/8,192.168.1.0/24`). When set, only matching client IPs are admitted; non-matching IPs are rejected with `403 {"error":"IP not allowed"}`. Empty allowCidrs (the default) admits every IP and disables the check. Runs before rate-limit and auth so rejected probes do not consume counters. |
 
 > **Note:** Under `--lan`, TLS is enabled by default (auto-generates a self-signed
 > certificate). Use `--no-tls` only for debugging; credentials will be visible in

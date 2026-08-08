@@ -78,6 +78,24 @@ let evaluateGate = (
   // (rate-limit still applies; probes reveal only "up/draining", not content)
   let isProbe = req.path == "/healthz" || req.path == "/readyz"
 
+  // IP allowlist (plan 039): empty allowCidrs means the feature is disabled and
+  // every IP is allowed. When set, only matching CIDR ranges pass — runs first
+  // so that rate-limit and auth counters are not polluted by rejected probes.
+  let allowlistDecision: gateDecision = if Array.length(config.allowCidrs) == 0 {
+    Allowed
+  } else {
+    switch config.allowCidrs->Array.find(cidr => Ip.cidrMatch(clientIp, cidr)) {
+    | Some(_) => Allowed
+    | None =>
+      Rejected({
+        status: 403,
+        headers: [],
+        body: `{"error":"IP not allowed"}`,
+        reason: "ip_not_allowed",
+      })
+    }
+  }
+
   // Rate limit first (cheaper, prevents brute-force on auth)
   let rateDecision: gateDecision = if config.rateLimitEnabled {
     switch rateLimiter {
@@ -100,21 +118,25 @@ let evaluateGate = (
 
   // Auth-failure throttling (plan 038): runs between rate-limit and auth-verify.
   // When locked, the request is rejected with 429 before password verification.
-  let authGateDecision: gateDecision = switch rateDecision {
-  | Rejected(_) => rateDecision
+  let authGateDecision: gateDecision = switch allowlistDecision {
+  | Rejected(_) => allowlistDecision
   | Allowed =>
-    switch authGate {
-    | None => Allowed
-    | Some(gate) =>
-      switch AuthGate.check(gate, clientIp) {
-      | AuthGate.Allow => Allowed
-      | AuthGate.Locked({retryAfterSeconds}) =>
-        Rejected({
-          status: 429,
-          headers: [("Retry-After", Int.toString(retryAfterSeconds))],
-          body: `{"error":"Too many auth failures"}`,
-          reason: "auth_lockout",
-        })
+    switch rateDecision {
+    | Rejected(_) => rateDecision
+    | Allowed =>
+      switch authGate {
+      | None => Allowed
+      | Some(gate) =>
+        switch AuthGate.check(gate, clientIp) {
+        | AuthGate.Allow => Allowed
+        | AuthGate.Locked({retryAfterSeconds}) =>
+          Rejected({
+            status: 429,
+            headers: [("Retry-After", Int.toString(retryAfterSeconds))],
+            body: `{"error":"Too many auth failures"}`,
+            reason: "auth_lockout",
+          })
+        }
       }
     }
   }

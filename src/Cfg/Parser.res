@@ -48,6 +48,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
   // LAN security flags
   let trustProxy = ref(false)
   let trustedProxies = ref([])
+  let allowCidrs = ref([])
   let authFile = ref((None: option<string>))
   let noAuth = ref(false)
   let noTls = ref(false)
@@ -125,6 +126,14 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
         let parts = Js.String.split(",", v)
         let cidrs = Js.Array.map(s => String.trim(s), parts)
         trustedProxies := cidrs
+      }),
+    },
+    {
+      names: ["--allow-cidr"],
+      kind: TakesString(v => {
+        let parts = Js.String.split(",", v)
+        let cidrs = Js.Array.map(s => String.trim(s), parts)
+        allowCidrs := cidrs
       }),
     },
     {names: ["--auth-file"], kind: TakesString(v => authFile := Some(v))},
@@ -355,6 +364,7 @@ let parse = (args: array<string>): result<Config.t, ParseError.t> => {
             allowProtectedDir: allowProtectedDir.contents,
             trustProxy: trustProxy.contents,
             trustedProxies: trustedProxies.contents,
+            allowCidrs: allowCidrs.contents,
             authFile: authFile.contents,
             noAuth: noAuth.contents,
             noTls: noTls.contents,
