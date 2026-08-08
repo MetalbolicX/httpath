@@ -133,6 +133,28 @@ via the existing `shutdown()` instead of crashing; `.env`, `.httpath-auth`, and
 `.npmrc` are hidden from listings and serving by default. Each plan:
 `pnpm run build` 0 warnings, full `pnpm test` green. See each plan file.
 
+### Phase 8 — Hostile/public-network hardening (post-Phase-7 security audit)
+
+**Phase Objective:** Close the three highest-ROI security gaps for users who
+may expose the server on untrusted/public networks (coffee-shop Wi-Fi, shared
+guest networks). Audited at commit `fafbb2f`. The primary target remains
+trusted WLAN for personal/small-team use; these plans add the controls needed
+so the tool is survivable when a user inadvertently deploys on a hostile
+network.
+
+| Plan | Title | Methodology | Effort | Risk | Depends on |
+|------|-------|-------------|--------|------|------------|
+| 037 | Validate WebSocket Origin header under `--lan` (CSWSH prevention) | `[TDD]` | S | LOW | — |
+| 038 | Throttle Basic Auth brute-force attempts (exponential backoff) | `[TDD]` | M | MED | — |
+| 039 | Add `--allow-cidr` IP allowlist for network access control | `[TDD]` | M | LOW | — |
+
+**Methodology counts for Phase 8:** TDD 3 (037–039).
+
+**Deliverable & Success Criteria:** WebSocket upgrades from mismatched origins
+get 403; after 5 wrong passwords an IP is locked with exponential backoff;
+`--allow-cidr` rejects unauthorized IPs at the gate before auth. Each plan:
+`pnpm run build` clean, full `pnpm test` green. See each plan file.
+
 ## Execution order & status
 
 Execute in order unless dependencies say otherwise. Within a phase, independent
@@ -176,6 +198,9 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 034 | Move test binding out of WsHub via register callback injection | P2 | S | — | DONE |
 | 035 | Decompose `Handler.handle` into sub-handlers | P1 | L | 030, 031 | DONE |
 | 036 | Decompose `Http.startServer` into requestHandler/upgradeHandler/attachShutdown | P1 | L | 031 | DONE |
+| 037 | WebSocket Origin validation under `--lan` | P1 | S | — | DONE |
+| 038 | Auth brute-force throttling (exponential backoff) | P1 | M | — | TODO |
+| 039 | `--allow-cidr` IP allowlist | P2 | M | — | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
@@ -233,6 +258,13 @@ plans.
   proxy on the LAN. Direct-LAN deployments can defer it without exposure.
 - **025 is the highest-value LAN DoS fix**: a rogue/compromised LAN host is the
   realistic threat; per-IP + global WS caps close the only unbounded resource.
+
+### Phase 8 ordering
+
+- 037, 038, 039 are mutually independent; all three can execute in parallel.
+- 037 is the smallest (S) and highest leverage — land it first.
+- 038 and 039 both touch `Gate.res`; if executed in parallel, coordinate the
+  `evaluateGate` signature change in 038 (adds `~authGate` parameter).
 
 ## Findings considered and rejected
 
