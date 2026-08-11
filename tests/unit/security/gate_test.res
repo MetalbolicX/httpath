@@ -214,12 +214,12 @@ test("Gate.evaluateGate: noAuth=false + no auth entries → Rejected(status=401,
     ~clientIp="192.168.1.1",
     ~req,
 
-  ~authGate=None,
+    ~authGate=None,
 
   )
   switch result {
   | Gate.Allowed => JsError.throwWithMessage("expected Rejected")
-  | Gate.Rejected({status, headers, body, reason}) =>
+  | Gate.Rejected({status, headers, body: _body, reason}) =>
     assertion(
       ~message="status is 401",
       ~operator="=",

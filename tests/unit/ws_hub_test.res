@@ -134,7 +134,7 @@ test("WsHub.unregister is idempotent — unknown socket leaves size unchanged", 
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
   let counter = getCounter()
-  let before = WsHub._testGetRegisteredCount()
+  let _before = WsHub._testGetRegisteredCount()
   let _ = WsHub.register(~socket=sock, ~clientIp="4.4.4.4", ~onLifecycle=incrementHubListenerCounter)
   let registeredCount = WsHub._testGetRegisteredCount()
 
@@ -189,7 +189,7 @@ test("WsHub.unregister is idempotent — unknown socket leaves size unchanged", 
   let fake = createFakeSocket()
   let sock = asServerSocket(fake)
   let counter = getCounter()
-  let before = WsHub._testGetRegisteredCount()
+  let _before = WsHub._testGetRegisteredCount()
   let _ = WsHub.register(~socket=sock, ~clientIp="5.5.5.5", ~onLifecycle=incrementHubListenerCounter)
   let registeredCount = WsHub._testGetRegisteredCount()
 

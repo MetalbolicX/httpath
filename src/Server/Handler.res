@@ -337,7 +337,7 @@ let handle405 = (ctx: requestCtx): option<promise<Types.outcome>> =>
 // Returns Some(Promise) with 400 on failure, None to continue.
 // ---------------------------------------------------------------------------
 
-let handleUriDecode = (ctx: requestCtx): option<promise<Types.outcome>> => {
+let _handleUriDecode = (ctx: requestCtx): option<promise<Types.outcome>> => {
   let decodedOr400: result<string, Types.outcome> = try {
     Ok(decodeURIComponent(ctx.request.path))
   } catch {
@@ -383,7 +383,7 @@ let handleProbe = (ctx: requestCtx, ~decodedPath: string): option<promise<Types.
 // REQ-HANDLER-6
 // ---------------------------------------------------------------------------
 
-let handleSafePath = (ctx: requestCtx, ~decodedPath: string): option<(string, promise<Types.outcome>)> => {
+let _handleSafePath = (ctx: requestCtx, ~decodedPath: string): option<(string, promise<Types.outcome>)> => {
   switch Path.resolveSafePath(~base=ctx.config.directory, ~requested=decodedPath) {
   | None =>
     Logger.log(Logger.Error, "403 Forbidden: path traversal blocked " ++ ctx.request.path)
@@ -399,7 +399,7 @@ let handleSafePath = (ctx: requestCtx, ~decodedPath: string): option<(string, pr
         ),
       ),
     ))
-  | Some(safePath) => None
+  | Some(_safePath) => None
   }
 }
 

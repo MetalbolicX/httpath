@@ -345,7 +345,7 @@ let gateWs = (
     switch Gate.evaluateGate(~config, ~authEntries, ~rateLimiter, ~authGate, ~clientIp, ~req) {
     | Gate.Allowed => continue()
     | Gate.Rejected({status, headers, body}) => {
-        let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.joinWith("\r\n")
+        let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.join("\r\n")
         let reasonPhrase = status == 429
           ? "Too Many Requests"
           : status == 401
@@ -359,7 +359,7 @@ let gateWs = (
       }
     }
   | Gate.Rejected({status, headers, body}) => {
-      let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.joinWith("\r\n")
+      let headerLines = headers->Array.map(((k, v)) => `${k}: ${v}`)->Array.join("\r\n")
       let reasonPhrase = status == 429
         ? "Too Many Requests"
         : status == 401
