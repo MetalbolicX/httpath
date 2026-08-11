@@ -1,5 +1,5 @@
 {
-  "name": "httpath",
+  "name": "@metalbolicx/httpath",
   "sources": [
     {
       "dir": "src",
