@@ -38,10 +38,10 @@ published package (`dist/httpath.mjs`) has zero runtime dependencies.
 
 ```sh
 # Run via pnpm (no install)
-npx httpath
+npx @metalbolicx/httpath
 
 # Install globally
-pnpm install -g httpath
+pnpm install -g @metalbolicx/httpath
 
 # From source (this repo)
 git clone https://github.com/metalbolicx/httpath.git && cd httpath && pnpm install && pnpm run build
@@ -54,13 +54,13 @@ node dist/httpath.mjs
 
 ```sh
 # Serve current directory on default port 8080
-npx httpath
+npx @metalbolicx/httpath
 
 # Specific directory and port
-npx httpath -d ./my-project -p 3000
+npx @metalbolicx/httpath -d ./my-project -p 3000
 
 # Disable live reload and directory listing
-npx httpath --no-live-reload --no-listing
+npx @metalbolicx/httpath --no-live-reload --no-listing
 ```
 
 ---
