@@ -1,5 +1,5 @@
 {
-  "name": "@metalbolicx/httpath-rescript",
+  "name": "httpath",
   "version": "0.1.0",
   "description": "ReScript rewrite of httpath",
   "license": "MIT",
