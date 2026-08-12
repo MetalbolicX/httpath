@@ -155,6 +155,25 @@ get 403; after 5 wrong passwords an IP is locked with exponential backoff;
 `--allow-cidr` rejects unauthorized IPs at the gate before auth. Each plan:
 `pnpm run build` clean, full `pnpm test` green. See each plan file.
 
+### Phase 9 — Deno/JSR distribution (npm publication blocked)
+
+**Phase Objective:** Discover whether the existing Node bundle runs under
+Deno's Node compatibility layer before committing to native adapter work. The
+output is a compatibility evidence matrix that feeds an SDD cycle for the
+minimal adapter scope. npm publication is blocked by an account-side registry
+restriction; JSR provides an alternative distribution path for Deno users.
+
+| Plan | Title | Methodology | Effort | Risk | Depends on |
+|------|-------|-------------|--------|------|------------|
+| 040 | Deno compat-first discovery (JSR path) | `[SDD]` | M | MED | — |
+
+**Methodology counts for Phase 9:** SDD 1 (040).
+
+**Deliverable & Success Criteria:** Compatibility evidence matrix with
+WORKS/COMPAT/BREAKS classification for CLI help, HTTP, WS, file watching,
+restart, TLS, and privilege drop. SDD spec scenarios drafted. No source files
+modified — discovery only.
+
 ## Execution order & status
 
 Execute in order unless dependencies say otherwise. Within a phase, independent
@@ -201,6 +220,7 @@ tasks may run in parallel (e.g. 001/002/003/006 in Phase 1).
 | 037 | WebSocket Origin validation under `--lan` | P1 | S | — | DONE |
 | 038 | Auth brute-force throttling (exponential backoff) | P1 | M | — | DONE |
 | 039 | `--allow-cidr` IP allowlist | P2 | M | — | DONE |
+| 040 | Deno compat-first discovery (JSR path) | P1 | M | — | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
 
