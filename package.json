@@ -30,7 +30,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "rescript && rolldown -c rolldown.config.mjs",
+    "build": "rescript && rolldown -c rolldown.config.mjs && chmod +x dist/httpath.mjs",
     "dev": "rescript build -watch",
     "start": "node bin.mjs",
     "prepare": "pnpm run build",
@@ -40,9 +40,9 @@
     "test": "pnpm run build && pnpm run test:unit && pnpm run test:integration"
   },
   "devDependencies": {
-    "@rescript/runtime": "^12.3.0",
-    "rescript": "^12.3.0",
+    "@rescript/runtime": "^12.3.1",
+    "rescript": "^12.3.1",
     "rescript-test": "8.0.1",
-    "rolldown": "^1.2.3"
+    "rolldown": "^1.2.14"
   }
 }
